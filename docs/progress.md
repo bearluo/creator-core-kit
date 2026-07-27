@@ -19,7 +19,7 @@
 - [x] 架构总纲 — `docs/design/2026-07-24-architecture-overview.md`（草案，待评审）
 - [ ] monorepo 骨架 — 根+core+engine、test/typecheck/build/lint 全绿；剩 demo 消费 core 待建 demo 验证
 - [x] 第 1 批 · 地基（DI ✅ Logger ✅ EventBus ✅ ITimer ✅ Bootstrap ✅(core+engine) 测试脚手架+cc mock ✅）
-- [ ] 第 2 批 · 核心设施（ObjectPool ✅ SceneFlow ✅ SaveManager+IStorage ✅(core 半) · Asset/Bundle/UI/Audio/i18n/Config 待做）
+- [ ] 第 2 批 · 核心设施（ObjectPool ✅ SceneFlow ✅ SaveManager+IStorage ✅ i18n ✅ ConfigTable ✅(core 半) · Asset/Bundle/UI/Audio 待做）
 - [ ] 第 3 批 · 进阶
 
 ## 模块状态
@@ -40,8 +40,8 @@
 | 2 设施 | SaveManager（`IStorage`） | core/engine | 已实现（core 半，22 测试, 覆盖 100%/branch 98.6%；cc.sys.localStorage 适配走 engine/apps/demo） | `packages/core/docs/modules/save-manager.md` | — |
 | 2 设施 | ObjectPool | core | 已实现（11 测试, 覆盖 100%） | `packages/core/docs/modules/object-pool.md` | — |
 | 2 设施 | AudioService（`IAudioService`） | engine | 未开始 | — | — |
-| 2 设施 | i18n 多语言 | core/engine | 未开始 | — | — |
-| 2 设施 | ConfigTable（Excel→JSON） | core/tools | 未开始 | — | — |
+| 2 设施 | i18n 多语言 | core/engine | 已实现（core 半，18 测试, 覆盖 100%；字体/资源加载/语言持久化走 engine/app） | `packages/core/docs/modules/i18n.md` | — |
+| 2 设施 | ConfigTable（Excel→JSON） | core/tools/engine | 已实现（core 半，14 测试, 覆盖 100%；Excel→JSON 走 tools、JSON 加载走 engine） | `packages/core/docs/modules/config-table.md` | — |
 | 3 进阶 | HotUpdateService（三种热统一入口） | engine | 未开始 | — | — |
 | 3 进阶 | Network / 协议层（`INetwork`） | core/engine | 未开始 | — | — |
 | 3 进阶 | ECS 模块（可选） | core | 未开始 | — | — |
