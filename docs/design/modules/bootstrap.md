@@ -1,7 +1,7 @@
 ---
 模块: bootstrap
 所在包: packages/core（组合根，纯编排） + packages/engine（cc 适配：CcLogger + 帧驱动 + 引导入口）
-状态: 已实现（core 半）｜ engine 半待做
+状态: 已实现
 摘要: 把 DI/Logger/EventBus/ITimer（及后续模块）串成确定性、幂等的启动链；core 纯编排可测，engine 供 cc 适配与每帧驱动。
 何时读: 接入框架写启动代码、加新模块进启动链、排查启动顺序/生命周期问题时。
 日期: 2026-07-27
@@ -179,6 +179,19 @@ export function bootCoreKit(opts?: { modules?: KitModule[] }): Promise<Kit>;
   - `coreModule({eventBus?,timer?})`：`hasLocal` 守卫下注册 EVENT_BUS / TIMER；timer 实例由调用方持有以拿 driver（消费/驱动分离）。
   - 拓扑：DFS 后序（`topoSort`），重名 / 缺依赖 / 成环分别抛错，错误信息含成环路径。
 - **测试结果 / 覆盖率**：20 用例全绿；`bootstrap.ts` **100%**（stmts/branch/funcs/lines）。core 全量 95 测试通过，`tsc -b` 与 `eslint .` 干净。
-- **engine 半（待下轮，配 cc mock 脚手架）**：`CcLogger`（`ILogger` 的 cc 实现）、`loggerModule`、`cc.director.EVENT_UPDATE → timer.tick(dt)` 驱动、空引导场景上的 `CckBootstrap` 组件 / `bootCoreKit()` 入口。
-- **commit / PR**：待提交。
+- **commit / PR**：`b0b2bfc`（feat）+ `a50a291`（docs）。
 - **遗留 Minors**：无。
+
+## 实现记录（engine 半，2026-07-27）
+
+- **落地文件**：`packages/engine/src/cc-logger.ts`（`createCcLogger`/`ccSink`）、`packages/engine/src/bootstrap.ts`（`driveWithDirector`/`loggerModule`/内部 `directorDriveModule`/`bootCoreKit`）、`index.ts`；`packages/engine/test/mocks/cc.ts`（cc 测试替身，单一真源）；`packages/engine/src/__tests__/`（cc-logger 4 + bootstrap 7 = 11 用例）。配置：`packages/engine/tsconfig.json`（`rootDir:"."` + `paths:{cc→mock}` + `references:[core]`）、根 `vitest.config.ts`（`resolve.alias` 把 `cc`→mock、`@cck/core`→core src）。
+- **测试策略定稿**：纯 JS（vitest node）+ 封顶 cc mock，禁止 mock 引擎行为，重 cc 走集成——见 **ADR-0002**。cc mock 单一真源：tsconfig `paths` 与 vitest `alias` 双指同一 `test/mocks/cc.ts`，签名逐字对齐 Creator 真 `cc.d.ts`。真 cc 权威校验下沉 apps/demo。
+- **最终 API**：
+  - `createCcLogger(opts?)` = 薄壳：复用 core `createConsoleLogger`，仅把 `LogSink` 换成 cc 版（`debug→cc.debug`、`info→cc.log`（cc 无 info）、`warn→cc.warn`、`error→cc.error`）；level/child/prefix 逻辑全在 core，不重写。
+  - `driveWithDirector(driver): Disposer` = 订阅 `Director.EVENT_AFTER_UPDATE`（引擎+组件 update 之后），每帧读 `game.deltaTime` 调 `driver.tick(dt)`；返回解绑器。
+  - `loggerModule(logger?)` = `hasLocal(LOGGER)` 守卫下注册 `LOGGER→CcLogger`。
+  - `bootCoreKit(opts?)` = 造 `timer` → `boot([loggerModule, coreModule({timer}), directorDriveModule(timer), ...user])`；帧驱动经内部 `directorDriveModule` 纳入生命周期，`kit.shutdown()` 自动解绑。
+  - **与设计偏差**：帧驱动事件由设计初稿假设的 `EVENT_UPDATE` 改为 **`EVENT_AFTER_UPDATE`**（实证 cc Director 无 `EVENT_UPDATE`）；`CckBootstrap` cc.Component **按定稿缓做**（避免 `experimentalDecorators` + mock 扩面，无实质可测价值），空引导场景入口暂由 `bootCoreKit()` 承担，组件留下轮随 apps/demo。
+- **测试结果**：engine 11 用例全绿（含帧驱动触发/解绑、CcLogger 级别映射与过滤、loggerModule 尊重预注册、bootCoreKit 端到端注册 + 帧驱动 + shutdown 解绑）；全量 106 测试通过，`tsc -b`/`eslint .` 干净。engine 按 ADR-0002 不计入 core coverage 硬门槛。
+- **commit / PR**：待提交。
+- **遗留 Minors**：`CckBootstrap` 组件与 apps/demo 真 cc 端到端校验留下一轮。
