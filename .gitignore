@@ -4,6 +4,7 @@
 # Node / pnpm monorepo
 node_modules/
 dist/
+dist-types/
 coverage/
 *.tsbuildinfo
 *.log

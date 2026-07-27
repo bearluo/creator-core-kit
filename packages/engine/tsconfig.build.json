@@ -6,7 +6,13 @@
   "compilerOptions": {
     "composite": false,
     "incremental": false,
-    "declarationMap": false
+    "declarationMap": false,
+    // 覆盖父配置的 paths：**构建时** @cck/core 走 node_modules（core 的 tsup dist，external），
+    // 不引 core 源码（否则源码在 engine rootDir 外触发 TS6059）。父配置的 @cck/core→core/src
+    // 仅供 typecheck 用。cc 仍映射到 mock 供 dts 解析类型。
+    "paths": {
+      "cc": ["./test/mocks/cc.ts"]
+    }
   },
   "references": []
 }

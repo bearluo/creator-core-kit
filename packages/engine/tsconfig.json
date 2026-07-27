@@ -2,14 +2,16 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "dist",
-    "tsBuildInfoFile": "dist/.tsbuildinfo",
-    // dist/index.js 归 tsup 独占；tsc -b(typecheck) 只出 .d.ts，绝不写 .js 覆盖 tsup 单包
-    // （同 core，见 ADR-0003 决策 #2 的 footgun）。
+    // tsc 的 .d.ts 出到 dist-types，dist 归 tsup 独占（同 core，见 ADR-0003/0004 的 dist footgun）。
+    "outDir": "dist-types",
+    "tsBuildInfoFile": "dist-types/.tsbuildinfo",
     "emitDeclarationOnly": true,
     "types": [],
     "paths": {
-      "cc": ["./test/mocks/cc.ts"]
+      "cc": ["./test/mocks/cc.ts"],
+      // typecheck 时 @cck/core 解析到 core **源码**（永远最新、完整），与 tsup 产的 dist 解耦，
+      // 使 `pnpm typecheck` 不依赖「先 build core」。运行期/Cocos 仍走 node_modules 的 dist（external）。
+      "@cck/core": ["../core/src/index.ts"]
     }
   },
   "references": [{ "path": "../core" }],
