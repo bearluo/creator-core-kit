@@ -1,0 +1,24 @@
+{
+  "name": "@cck/core",
+  "version": "0.0.0",
+  "description": "creator-core-kit 内核层：纯 TS，零 cc 依赖，可脱离 Cocos Creator 单测",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -b"
+  }
+}

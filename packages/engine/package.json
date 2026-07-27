@@ -1,0 +1,13 @@
+{
+  "name": "@cck/engine",
+  "version": "0.0.0",
+  "description": "creator-core-kit 适配层：cc 薄壳 + Core 接口的 cc 实现，作为 Cocos assets 下源码 bundle",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@cck/core": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc -b"
+  }
+}

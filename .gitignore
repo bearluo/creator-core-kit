@@ -1,0 +1,22 @@
+# 不上传的实验 / 摸底项目（专用于验证 Cocos 特性，结论回填 docs/research）
+/spike/
+
+# Node / pnpm monorepo
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+.pnpm-store/
+
+# Cocos Creator 工程生成物（apps/demo 等）
+**/library/
+**/temp/
+**/local/
+**/build/
+**/profiles/
+**/native/
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
