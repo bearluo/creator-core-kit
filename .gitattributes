@@ -1,0 +1,19 @@
+# 统一换行为 LF，跨平台一致（消除 Windows CRLF diff 噪音）
+* text=auto eol=lf
+
+# Cocos 的 .meta 是文本，需提交且统一 LF
+*.meta text eol=lf
+
+# 二进制资源：不做换行/diff 转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.bmp  binary
+*.ttf  binary
+*.otf  binary
+*.mp3  binary
+*.ogg  binary
+*.wav  binary
+*.mp4  binary
