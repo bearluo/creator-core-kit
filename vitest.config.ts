@@ -1,6 +1,15 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // engine 测试：cc → 测试替身（单一真源，见 packages/engine/test/mocks/cc.ts / ADR-0002）
+      cc: fileURLToPath(new URL('./packages/engine/test/mocks/cc.ts', import.meta.url)),
+      // engine 测试直跑 core 源码，免去「改完 core 必须先 build 才跑 engine 测」
+      '@cck/core': fileURLToPath(new URL('./packages/core/src/index.ts', import.meta.url)),
+    },
+  },
   test: {
     include: ['packages/*/src/**/*.{test,spec}.ts'],
     environment: 'node',
