@@ -1,0 +1,12 @@
+{
+  // 仅供 tsup 发布构建（JS + d.ts）使用。关掉 composite/incremental：
+  // tsup 的 dts 步骤与 project-references 的 composite 不兼容（barrel index 会被判为
+  // “不在工程文件列表”触发 TS6307）。typecheck 走 tsconfig.json（composite:true，
+  // project references 需要），二者互不干扰。
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false,
+    "declarationMap": false
+  }
+}
