@@ -53,7 +53,7 @@ creator-core-kit/
 |---|---|---|---|---|
 | 1 | 包管理/工作区 | npm / yarn / **pnpm workspace** | **pnpm workspace** | 磁盘省、workspace:* 本地链、生态主流；CLAUDE.md 已定 |
 | 2 | node_modules 布局 | 默认 symlink / **hoisted** | **`node-linker=hoisted`** | Cocos 解析器对 pnpm 深层 symlink 支持存疑，扁平化更像传统 npm，最大化 Cocos 兼容 |
-| 3 | core 构建 | tsc / **tsup** / 不构建 | **tsup**（出 ESM 自包含单包 + d.ts） | core 要可发 npm；tsup 零配置出 ESM+类型；**`dist/` 由 tsup 独占**，typecheck 的 `tsc -b` 设 `emitDeclarationOnly` 只出 `.d.ts`（否则 tsc 的多文件 `index.js` 会覆盖 tsup 单包，令 Cocos 消费到的 `dist/index.js` 随「谁最后跑」漂移） |
+| 3 | core 构建 | tsc / **tsup** / 不构建 | **tsup**（出 ESM 自包含单包 + d.ts） | core 要可发 npm；tsup 零配置出 ESM+类型；**`dist/` 由 tsup 独占**（Cocos/其它包消费），**`tsc -b` 出 `.d.ts` 到独立的 `dist-types/`**（供 typecheck/composite），二者不共用 dist——否则 tsup 的 `clean` 抹掉 tsc 的子 `.d.ts`、tsc 增量又拒绝重生成，barrel 再导出全落空（footgun 变种，2026-07-27 修）。engine typecheck 用 `paths: @cck/core→core/src` 对最新源码，与 dist 解耦 |
 | 4 | 测试 | jest / **vitest** | **vitest** | 已定；`--watch` 秒级反馈支撑"逻辑热重载" |
 | 5 | TS 组织 | 各自独立 / **project references** | **project references** | 增量编译、跨包类型跳转、强制依赖方向 |
 | 6 | core 禁 cc 强制 | 口头约定 / **eslint no-restricted-imports** / dependency-cruiser | **eslint no-restricted-imports**（首版） | 零新依赖、CI 可跑；不够再上 dependency-cruiser |
@@ -114,3 +114,10 @@ creator-core-kit/
 - **新增/改动**：`packages/engine/{tsup.config.ts,tsconfig.build.json}`（新增）、`packages/engine/{package.json,tsconfig.json}`（加 main/exports/build 脚本 + emitDeclarationOnly）、`apps/demo/package.json`（加 `@cck/engine` 依赖）、`apps/demo/assets/scripts/DemoBoot.ts`（追加 engine 验证段）。
 - **对齐 bearluo/ccc-framework-monorepo**：其 `@ccc/fw`（依赖 cc、rollup `external:['cc']`）同样作 workspace 包被 game-template 从 node_modules 消费（3.8.8）——互为佐证。
 - **全绿复验**：`pnpm typecheck` ✅ / `pnpm test` **192 passed（13 文件）** ✅ / `pnpm build`（core+engine tsup 单包，engine dist 保留 bare `cc`/`@cck/core`）✅ / 真 cc 预览 ✅。
+
+### 2026-07-27 · 修 dist footgun 变种：tsc `.d.ts` 迁出到 `dist-types/`（决策 #3 细化）
+
+- **症状**：加 core 新模块（bundle/asset）后 `pnpm typecheck` 报 engine 侧 `@cck/core` **无任何导出**（连老的 `boot`/`LogSink` 都找不到）。
+- **根因**：core 的 `dist/` 被 **tsup 与 tsc 共用**——`tsup --clean` 抹掉 dist 后写自包含单包；`tsc -b`（`emitDeclarationOnly`）又往 dist 写**多文件** `.d.ts`（`index.d.ts` barrel + 各子目录 `.d.ts`）。tsup 的 clean 删掉 tsc 的子 `.d.ts`，而 tsc 增量缓存以为「已 emit」故**拒绝重生成** → barrel `export * from './bootstrap'` 等指向**空子文件** → 消费方拿到空导出。`emitDeclarationOnly`（ADR-0003 决策 #2）只挡住 tsc 覆盖 `index.js`，没解决 `.d.ts` 的 clean↔增量冲突。
+- **根治**：**tsc 的 `.d.ts` 出到独立目录 `dist-types/`**（core+engine 的 `tsconfig.json` 改 `outDir`/`tsBuildInfoFile`），`dist/` 由 tsup 独占，二者不再互踩。另给 engine `tsconfig.json` 加 `paths: { "@cck/core": ["../core/src/index.ts"] }`——typecheck 直接对 core **源码**（永远最新、完整），使 `pnpm typecheck` 不依赖「先 build core」；`tsconfig.build.json` 覆盖回该 path（构建时 `@cck/core` 走 node_modules/external，避免把 core 源码拉进 engine `rootDir` 触发 TS6059）。`.gitignore` / eslint `ignores` 补 `dist-types/`。
+- **全绿复验**：`pnpm build` ✅（core/engine tsup 单包，engine dist 保留 4 处 bare `cc`/`@cck/core`）/ `pnpm typecheck` ✅ / `pnpm test` **232 passed（15 文件）** ✅ / `pnpm lint` ✅。
