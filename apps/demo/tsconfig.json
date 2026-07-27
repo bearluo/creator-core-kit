@@ -1,0 +1,15 @@
+{
+  /* Base configuration. Do not edit this field. */
+  "extends": "./temp/tsconfig.cocos.json",
+
+  /* Add your custom configuration here. */
+  "compilerOptions": {
+    "strict": false,
+    "baseUrl": ".",
+    // 不配 @cck/core 的 paths：类型与运行期解析都走 node_modules
+    // (apps/demo/node_modules/@cck/core -> packages/core，按 package.json
+    //  types->dist/index.d.ts、main->dist/index.js)。与 bearluo game-template 一致，
+    //  且最忠于 Creator 运行期实际解析（paths 只是 IDE 别名，Creator 打包不看）。
+    "paths": {}
+  }
+}

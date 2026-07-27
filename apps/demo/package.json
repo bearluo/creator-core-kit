@@ -1,0 +1,10 @@
+{
+  "name": "demo",
+  "uuid": "cfbff063-cf50-4c63-9449-7a6a0942d88c",
+  "creator": {
+    "version": "3.8.7"
+  },
+  "dependencies": {
+    "@cck/core": "workspace:*"
+  }
+}

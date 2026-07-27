@@ -17,6 +17,12 @@ coverage/
 **/profiles/
 **/native/
 
+# funplay-cocos MCP 编辑器扩展（第三方 dev 工具，装在 demo 工程内实测，不入库；
+# 源码在 spike/bundle-probe/extensions 或 npm i -g funplay-cocos-mcp）
+/apps/demo/extensions/funplay-cocos-mcp/
+# funplay MCP 扩展运行时生成的本地配置（含端口/工具开关，因人而异，不入库）
+/apps/demo/funplay-cocos-mcp.config.json
+
 # 系统 / 编辑器
 .DS_Store
 Thumbs.db

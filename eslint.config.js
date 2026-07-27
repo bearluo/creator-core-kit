@@ -13,6 +13,10 @@ export default tseslint.config(
       '**/build/**',
       '**/library/**',
       '**/temp/**',
+      // apps/* 是 Cocos Creator 工程（自带 Creator 编译基线 + 第三方编辑器扩展如
+      // funplay-cocos-mcp 的 Node/CJS 代码），不进 monorepo 根 lint 契约；根 lint 只管
+      // packages/core+engine 的铁律与风格。demo 脚本若需 lint，另在 apps/demo 自配。
+      'apps/**',
     ],
   },
   js.configs.recommended,

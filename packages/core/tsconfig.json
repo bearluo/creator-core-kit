@@ -3,7 +3,11 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "tsBuildInfoFile": "dist/.tsbuildinfo"
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    // typecheck(tsc -b) 只出 .d.ts；dist/index.js 由 tsup 独占产出（自包含单包，供 Creator/
+    // 其它包按 package.json main 消费）。否则 tsc 的多文件 index.js 会覆盖 tsup 单包，
+    // 导致 Creator 消费到的 dist/index.js 随「谁最后跑」漂移。
+    "emitDeclarationOnly": true
   },
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts", "src/**/__tests__/**"]
