@@ -1,13 +1,29 @@
 {
   "name": "@cck/engine",
   "version": "0.0.0",
-  "description": "creator-core-kit 适配层：cc 薄壳 + Core 接口的 cc 实现，作为 Cocos assets 下源码 bundle",
+  "description": "creator-core-kit 适配层：cc 薄壳 + Core 接口的 cc 实现。作为 workspace npm 包被 Cocos 从 node_modules 消费（dist 里 cc / @cck/core 为 external，由 Cocos 运行期解析）。",
   "private": true,
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": false,
   "dependencies": {
     "@cck/core": "workspace:*"
   },
   "scripts": {
+    "build": "tsup",
     "typecheck": "tsc -b"
   }
 }

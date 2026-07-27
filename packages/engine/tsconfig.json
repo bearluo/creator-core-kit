@@ -4,6 +4,9 @@
     "rootDir": ".",
     "outDir": "dist",
     "tsBuildInfoFile": "dist/.tsbuildinfo",
+    // dist/index.js 归 tsup 独占；tsc -b(typecheck) 只出 .d.ts，绝不写 .js 覆盖 tsup 单包
+    // （同 core，见 ADR-0003 决策 #2 的 footgun）。
+    "emitDeclarationOnly": true,
     "types": [],
     "paths": {
       "cc": ["./test/mocks/cc.ts"]

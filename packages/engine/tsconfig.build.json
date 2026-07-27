@@ -1,0 +1,12 @@
+{
+  // 仅供 tsup 消费构建（JS + d.ts）。关掉 composite/incremental：tsup 的 dts 步骤与
+  // project-references 的 composite 不兼容（TS6307）。清空 references（dts 走 node_modules
+  // 解析 @cck/core，不用 build 编排）。typecheck 走 tsconfig.json（composite:true）。
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false,
+    "declarationMap": false
+  },
+  "references": []
+}

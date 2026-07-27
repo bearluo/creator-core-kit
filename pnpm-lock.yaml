@@ -38,6 +38,9 @@ importers:
       '@cck/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cck/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
 
   packages/core: {}
 

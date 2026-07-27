@@ -5,6 +5,7 @@
     "version": "3.8.7"
   },
   "dependencies": {
-    "@cck/core": "workspace:*"
+    "@cck/core": "workspace:*",
+    "@cck/engine": "workspace:*"
   }
 }
