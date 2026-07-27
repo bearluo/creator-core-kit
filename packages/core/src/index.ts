@@ -13,6 +13,11 @@ export * from './eventbus';
 export * from './timer';
 export * from './bootstrap';
 
+// —— 第 2 批 · 核心设施 ——
+export * from './pool';
+export * from './sceneflow';
+export * from './save';
+
 /** 骨架示例纯函数：可脱离 Creator 在 node 环境单测的最小证明。第 1 批地基落地后移除。 */
 export function hello(name: string): string {
   return `hello, ${name} from @cck/core`;
