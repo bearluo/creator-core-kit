@@ -4,7 +4,7 @@
 摘要: 类型安全 EventBus 的横向调研——对照 godot-core-kit event_bus + 市面 JS/TS 事件库（Node EventEmitter / mitt / eventemitter3 / typed-emitter / RxJS Subject / cc.EventTarget / oops.message），沉淀 creator-core-kit EventBus v1 的选型依据。
 何时读: 设计 / 评审 EventBus 模块，或想知道"为什么这样设计事件总线"时。
 日期: 2026-07-27
-依赖: 无（为 docs/design/modules/eventbus.md 提供选型佐证）
+依赖: 无（为 packages/core/docs/modules/eventbus.md 提供选型佐证）
 ---
 
 # 类型安全 EventBus 横评（CC/TS）
@@ -80,4 +80,4 @@ godot `event_published` signal / mitt `'*'` 对调试面板、埋点有用，但
 
 ## 4. 对 creator-core-kit 的最终建议
 
-自研纯 TS `EventBus`：**`EventMap` 泛型（类型安全灵魂）+ 单 payload + on 返回 disposer + off/offAll(owner) + once + 幂等去重 + 同步快照 FIFO 派发 + 错误隔离经 ILogger + `EVENT_BUS` token/`getEventBus()` 便捷**。语义骨架照抄经 godot 验证的 event_bus，类型安全用 TS 泛型补足 GDScript 缺的编译期校验，生命周期清理用 `offAll(owner)` 替 godot 的 GC 惰性剔除。详见 `docs/design/modules/eventbus.md`。
+自研纯 TS `EventBus`：**`EventMap` 泛型（类型安全灵魂）+ 单 payload + on 返回 disposer + off/offAll(owner) + once + 幂等去重 + 同步快照 FIFO 派发 + 错误隔离经 ILogger + `EVENT_BUS` token/`getEventBus()` 便捷**。语义骨架照抄经 godot 验证的 event_bus，类型安全用 TS 泛型补足 GDScript 缺的编译期校验，生命周期清理用 `offAll(owner)` 替 godot 的 GC 惰性剔除。详见 `packages/core/docs/modules/eventbus.md`。

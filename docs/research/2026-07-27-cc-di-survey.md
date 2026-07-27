@@ -3,7 +3,7 @@
 摘要: 市面 Cocos/TS DI 方案横评（godot-core-kit / tsyringe / InversifyJS / oops-framework / typescript-ioc）+ 对 cck DI 设计的启示。
 何时读: 评审/修订 di-container 设计、质疑 DI 技术选型时。
 日期: 2026-07-27
-依赖: docs/design/modules/di-container.md；ADR-0001
+依赖: packages/core/docs/modules/di-container.md；ADR-0001
 ---
 
 # Cocos / TS 依赖注入方案横评

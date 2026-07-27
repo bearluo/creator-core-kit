@@ -54,24 +54,28 @@ docs/design       设计文档
 
 ## 文档维护约定
 
-所有项目文档放 `docs/`，**随代码提交**（doc-as-code），与实现在同一分支/PR 更新，保持文档与代码一致。
+文档**随代码提交**（doc-as-code），与实现在同一分支/PR 更新。**归属按范围分两层**：跨包 / 跨项目的放顶层 `docs/`；**单模块设计文档随包**放 `packages/<pkg>/docs/modules/<module>.md`（文档跟包走——core 发 npm 时自带文档，对齐姊妹框架 godot-core-kit 把文档放包内的做法）。
 
 ```
-docs/
-├─ README.md                        文档地图（渐进式披露入口，先读这个）
-├─ research/YYYY-MM-DD-<topic>.md   调研（带日期，快照性质）
+docs/                                        顶层 = 跨包 / 跨项目
+├─ README.md                                 文档地图（渐进式披露入口，先读这个）
+├─ research/YYYY-MM-DD-<topic>.md            调研横评（带日期，快照性质）
 ├─ design/
-│  ├─ <topic>-overview.md           跨模块 / 总纲设计
-│  └─ modules/<module>.md           单模块设计文档（设计→实现记录，一份到底）
-├─ progress.md                      模块状态看板（每次开工/完工更新）
-└─ adr/NNNN-<slug>.md               重大 / 不可逆决策，一条一记、追加不改
+│  ├─ <topic>-overview.md                    跨模块 / 总纲设计
+│  └─ modules/{_TEMPLATE,monorepo-scaffold}.md  共享模板 + 跨包骨架（仅跨包留此）
+├─ progress.md                               全仓模块状态看板（每次开工/完工更新）
+└─ adr/NNNN-<slug>.md                        重大 / 不可逆决策，一条一记、追加不改
+
+packages/<pkg>/docs/modules/<module>.md      单模块设计文档（随包，设计→实现记录一份到底）
+                                             core 模块归 core、engine 专属归 engine；
+                                             跨 core+engine 的按「逻辑主场」归属（多在 core），适配层作文档内小节
 ```
 
 - **渐进式披露 + AI 友好**：入口是 `docs/README.md`（地图）→ 主题文档 → 细节，逐层深入。每个文档顶部用统一头部 `状态 / 摘要 / 何时读 / 依赖`，让人和 AI 扫头部即可判断相关性、按需深入，不必一次性加载全部；`CLAUDE.md` 作为 L0 常驻保持精炼，细节推到 `docs/`。
 - **模块文档骨架**见 `docs/design/modules/_TEMPLATE.md`：Purpose / Public API（TS 精确签名）/ Behavior & data flow / Key decisions（决策表）/ Platform / Testable seams + 测试计划 / Open Questions / 实现记录。
 - **状态标记**（文档顶部）：`草案 → 评审中 → 已定稿 → 已实现`。
 - **每个模块的流程**：
-  1. 动工前先出 `docs/design/modules/<module>.md` 并评审**定稿**；
+  1. 动工前先出 `packages/<pkg>/docs/modules/<module>.md` 并评审**定稿**；
   2. 定稿后才 TDD 实现；
   3. 实现完成 → 更新 `docs/progress.md` 状态 + 在模块文档补「实现记录」（最终 API、与设计偏差、测试结果、commit）；
   4. 重大 / 不可逆技术决策 → 追加一条 `docs/adr/`。

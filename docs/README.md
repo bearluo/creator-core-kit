@@ -9,7 +9,7 @@
 |---|---|
 | 上手项目 / 遵守开发约定 | `CLAUDE.md`（L0 常驻铁律） |
 | 了解架构全貌与关键决策 | `docs/design/2026-07-24-architecture-overview.md` |
-| 设计 / 使用某个模块 | `docs/design/modules/<module>.md` |
+| 设计 / 使用某个模块 | `packages/<pkg>/docs/modules/<module>.md`（随包，如 `packages/core/docs/modules/`） |
 | 看整体进度、谁在做什么 | `docs/progress.md` |
 | 了解选型依据（MCP / 框架 / 热更调研） | `docs/research/2026-07-24-cocos-ecosystem-survey.md` |
 | 追溯某个重大技术决策 | `docs/adr/`（按需建立） |
@@ -27,7 +27,7 @@
 1. `CLAUDE.md` 的「核心铁律」+「仓库结构」
 2. 本地图
 3. 架构总纲 §1–3（目标 / 主线原则 / 分层）
-4. 要动哪个模块，再读对应 `modules/<module>.md`
+4. 要动哪个模块，再读对应 `packages/<pkg>/docs/modules/<module>.md`
 
 ## 文档头部规范（所有 docs 统一）
 

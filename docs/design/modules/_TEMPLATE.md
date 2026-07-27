@@ -10,7 +10,7 @@
 
 # <模块名> 设计文档
 
-> 复制本模板到 `docs/design/modules/<module>.md` 后填写。删除本引用行。
+> 复制本模板到 `packages/<pkg>/docs/modules/<module>.md`（模块设计文档随包，见 CLAUDE.md「文档维护约定」）后填写。删除本引用行。
 
 ## TL;DR
 

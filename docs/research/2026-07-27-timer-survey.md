@@ -4,7 +4,7 @@
 摘要: ITimer（定时器/帧回调抽象）横向调研——对标 godot-core-kit frame_scheduler/game_clock + Cocos scheduler/director + setTimeout + Unity Time + tween.js，沉淀 creator-core-kit ITimer v1 的选型依据（核心：外部 tick(dt) 驱动的纯逻辑 TimerService）。
 何时读: 设计 / 评审 ITimer 模块，或想知道"为什么计时器要外部 tick 驱动"时。
 日期: 2026-07-27
-依赖: 无（为 docs/design/modules/timer.md 提供选型佐证）
+依赖: 无（为 packages/core/docs/modules/timer.md 提供选型佐证）
 ---
 
 # ITimer（定时器 / 帧回调）横评（CC/TS）
@@ -69,4 +69,4 @@
 
 ## 4. 对 creator-core-kit 的最终建议
 
-core 自研 **`ITimer` 接口 + 外部 `tick(dt)` 驱动的 `TimerService` 默认实现**：能力 = `delay/interval/onFrame/now` + `timeScale/pause`，退订 disposer、tick 快照重入安全、错误隔离经 ILogger、`TIMER` token/`getTimer()`。engine 用 `cc.director` EVENT_AFTER_UPDATE 转发 dt。frame_scheduler 的降频/预算队列与 game_clock 的世界日历留独立模块后续。详见 `docs/design/modules/timer.md`。
+core 自研 **`ITimer` 接口 + 外部 `tick(dt)` 驱动的 `TimerService` 默认实现**：能力 = `delay/interval/onFrame/now` + `timeScale/pause`，退订 disposer、tick 快照重入安全、错误隔离经 ILogger、`TIMER` token/`getTimer()`。engine 用 `cc.director` EVENT_AFTER_UPDATE 转发 dt。frame_scheduler 的降频/预算队列与 game_clock 的世界日历留独立模块后续。详见 `packages/core/docs/modules/timer.md`。

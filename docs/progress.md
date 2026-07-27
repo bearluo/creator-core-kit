@@ -19,7 +19,7 @@
 - [x] 架构总纲 — `docs/design/2026-07-24-architecture-overview.md`（草案，待评审）
 - [ ] monorepo 骨架 — 根+core+engine、test/typecheck/build/lint 全绿；剩 demo 消费 core 待建 demo 验证
 - [x] 第 1 批 · 地基（DI ✅ Logger ✅ EventBus ✅ ITimer ✅ Bootstrap ✅(core+engine) 测试脚手架+cc mock ✅）
-- [ ] 第 2 批 · 核心设施
+- [ ] 第 2 批 · 核心设施（ObjectPool ✅ SceneFlow ✅ SaveManager+IStorage ✅(core 半) · Asset/Bundle/UI/Audio/i18n/Config 待做）
 - [ ] 第 3 批 · 进阶
 
 ## 模块状态
@@ -27,18 +27,18 @@
 | 批次 | 模块 | 包 | 状态 | 设计文档 | commit |
 |---|---|---|---|---|---|
 | 骨架 | monorepo（pnpm workspace + vitest + lint 依赖约束） | 根 | 实现中（demo 消费待验） | `docs/design/modules/monorepo-scaffold.md` | — |
-| 1 地基 | DI 容器 / ServiceLocator | core | 已实现（22 测试, 覆盖 100%/branch 95.6%） | `docs/design/modules/di-container.md` | — |
-| 1 地基 | EventBus（类型安全） | core | 已实现（19 测试, 覆盖 100%） | `docs/design/modules/eventbus.md` | — |
-| 1 地基 | Logger（`ILogger`） | core | 已实现（13 测试, 覆盖 100%/branch 97%） | `docs/design/modules/logger.md` | — |
-| 1 地基 | ITimer 抽象 | core | 已实现（21 测试, 覆盖 100%） | `docs/design/modules/timer.md` | — |
-| 1 地基 | Bootstrap 启动流程（组合根 `boot`/`coreModule` + engine `bootCoreKit`/帧驱动） | core/engine | 已实现（core 20 测试覆盖 100% + engine 11 测试） | `docs/design/modules/bootstrap.md` | — |
+| 1 地基 | DI 容器 / ServiceLocator | core | 已实现（22 测试, 覆盖 100%/branch 95.6%） | `packages/core/docs/modules/di-container.md` | — |
+| 1 地基 | EventBus（类型安全） | core | 已实现（19 测试, 覆盖 100%） | `packages/core/docs/modules/eventbus.md` | — |
+| 1 地基 | Logger（`ILogger`） | core | 已实现（13 测试, 覆盖 100%/branch 97%） | `packages/core/docs/modules/logger.md` | — |
+| 1 地基 | ITimer 抽象 | core | 已实现（21 测试, 覆盖 100%） | `packages/core/docs/modules/timer.md` | — |
+| 1 地基 | Bootstrap 启动流程（组合根 `boot`/`coreModule` + engine `bootCoreKit`/帧驱动） | core/engine | 已实现（core 20 测试覆盖 100% + engine 11 测试） | `packages/core/docs/modules/bootstrap.md` | — |
 | 1 地基 | 测试脚手架 + `cc` mock | 根/engine | 已实现（vitest 随骨架；cc mock 单一真源 tsconfig paths + vitest alias，见 ADR-0002） | `docs/adr/0002-engine-test-strategy-capped-cc-mock.md` | — |
 | 2 设施 | AssetManager（`IAssetLoader`） | engine | 未开始 | — | — |
 | 2 设施 | BundleManager（按需分包） | engine | 未开始 | — | — |
 | 2 设施 | UIManager（层级/栈/生命周期） | engine | 未开始 | — | — |
-| 2 设施 | SceneFlow（流程状态机） | core/engine | 未开始 | — | — |
-| 2 设施 | SaveManager（`IStorage`） | core/engine | 未开始 | — | — |
-| 2 设施 | ObjectPool | core | 未开始 | — | — |
+| 2 设施 | SceneFlow（流程状态机） | core/engine | 已实现（core 半，21 测试, 覆盖 100%/branch 95.9%；真实切场景走 engine/apps/demo） | `packages/core/docs/modules/sceneflow.md` | — |
+| 2 设施 | SaveManager（`IStorage`） | core/engine | 已实现（core 半，22 测试, 覆盖 100%/branch 98.6%；cc.sys.localStorage 适配走 engine/apps/demo） | `packages/core/docs/modules/save-manager.md` | — |
+| 2 设施 | ObjectPool | core | 已实现（11 测试, 覆盖 100%） | `packages/core/docs/modules/object-pool.md` | — |
 | 2 设施 | AudioService（`IAudioService`） | engine | 未开始 | — | — |
 | 2 设施 | i18n 多语言 | core/engine | 未开始 | — | — |
 | 2 设施 | ConfigTable（Excel→JSON） | core/tools | 未开始 | — | — |
