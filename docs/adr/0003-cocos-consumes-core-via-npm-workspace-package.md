@@ -2,6 +2,7 @@
 状态: 已接受
 日期: 2026-07-27
 依赖: docs/design/modules/monorepo-scaffold.md
+更新: 收尾「engine 不适用本 ADR / 仍走 assets 源码 bundle」那一条已被 ADR-0004 纠正——engine 与 core 同走 workspace npm 包（cc external）。本 ADR 关于 core 的决策不变。
 ---
 
 # ADR-0003：Cocos 消费 core 走 workspace npm 包（node_modules 直连），非把 core 拷进 assets

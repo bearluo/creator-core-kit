@@ -1,7 +1,7 @@
 ---
 模块: monorepo-scaffold
 所在包: 根
-状态: 已实现（骨架 4/4 验收通过；core 消费方案①在真 Cocos Creator 3.8.7 验证跑通）  # 草案 → 评审中 → 已定稿 → 已实现
+状态: 已实现（骨架 4/4 验收通过；core + engine 消费均在真 Cocos Creator 3.8.7 验证跑通）  # 草案 → 评审中 → 已定稿 → 已实现
 摘要: monorepo 骨架——pnpm workspace(core/engine/demo) + vitest + TS project references + core 禁 import cc 的 lint 约束 + Cocos 消费集成。
 何时读: 搭建/调整仓库骨架、加新包、排查 Cocos 吃不进 core、配置测试或依赖约束时。
 日期: 2026-07-24
@@ -12,7 +12,7 @@
 
 ## TL;DR
 
-用 pnpm workspace 立起 `packages/core`（纯 TS，vitest 在 node 测，可发 npm）、`packages/engine`（cc 适配，作为 demo `assets/` 下源码 bundle）、`apps/demo`（Cocos 3.8 工程）。根配 vitest + ESLint（**强制 core 不许 import `cc`**）+ TS project references。**唯一真实风险**：Cocos 3.8 能否解析 pnpm symlink 式 node_modules 里的 `@cck/core`——用 `.npmrc` 的 `node-linker=hoisted` 降风险，并以一个 spike（demo import core 函数并预览成功）作为骨架验收前置。
+用 pnpm workspace 立起 `packages/core`（纯 TS，vitest 在 node 测，可发 npm）、`packages/engine`（cc 适配，作为 workspace npm 包供 demo 消费，见决策 #7）、`apps/demo`（Cocos 3.8 工程）。根配 vitest + ESLint（**强制 core 不许 import `cc`**）+ TS project references。**唯一真实风险**：Cocos 3.8 能否解析 pnpm symlink 式 node_modules 里的 `@cck/core`——用 `.npmrc` 的 `node-linker=hoisted` 降风险，并以一个 spike（demo import core 函数并预览成功）作为骨架验收前置。
 
 ## Purpose（目标与定位）
 
@@ -57,11 +57,11 @@ creator-core-kit/
 | 4 | 测试 | jest / **vitest** | **vitest** | 已定；`--watch` 秒级反馈支撑"逻辑热重载" |
 | 5 | TS 组织 | 各自独立 / **project references** | **project references** | 增量编译、跨包类型跳转、强制依赖方向 |
 | 6 | core 禁 cc 强制 | 口头约定 / **eslint no-restricted-imports** / dependency-cruiser | **eslint no-restricted-imports**（首版） | 零新依赖、CI 可跑；不够再上 dependency-cruiser |
-| 7 | engine 被 Cocos 消费 | npm 包 / **assets 下源码 bundle** | **assets 源码 bundle** | engine import 'cc'，只有工程内编译才有 cc，无法走 node_modules |
+| 7 | engine 被 Cocos 消费 | **npm 包（cc/@cck/core external）** / assets 源码 bundle | **npm 包（同 core）** | ~~engine import 'cc' 无法走 node_modules~~ **实证纠正（2026-07-27，见 ADR-0004）**：node_modules 包 dist 里残留的 `import 'cc'` Cocos 3.8.7 QuickPack 能解析（tsup `external:['cc','@cck/core']` 保留 bare import）；与 core 统一路子。assets 映射降为兜底 |
 
 ## 关键集成方案：Cocos 3.8 如何消费 core / engine（最大风险点）
 
-**engine（依赖 cc）**：物理位置在 `packages/engine/src`，通过 **symlink 或 Cocos 多资源目录**映射到 `apps/demo/assets/engine`，由 Cocos 当项目脚本编译（从而拿到 `cc`）。跨项目复用 = 复制/submodule 这个目录。
+**engine（依赖 cc）——同 core 走 workspace npm 包（✅ 2026-07-27 真 cc 3.8.7 验证，见 ADR-0004）**：demo 依赖 `@cck/engine: workspace:*`，`node-linker=hoisted` 落在 `apps/demo/node_modules/@cck/engine`（symlink→`packages/engine`）。engine 用 tsup 出 ESM 自包含单包，`external: ['cc', '@cck/core']`——dist 里保留 bare `import from 'cc'` / `'@cck/core'`，交给 Cocos QuickPack 运行期解析（cc→真引擎，`@cck/core`→node_modules 里被 demo/engine 共享的同一实例）。**实证：node_modules 包 dist 内残留的 `cc` import，3.8.7 能解析**，故 engine 不必映射进 assets。兜底：若某 Cocos 版本认不了 node_modules 里的 `cc`，再退**assets 源码 bundle 映射**（symlink / 多资源目录把 `packages/engine/src` 映射进 `apps/demo/assets/engine`，工程内编译拿 cc）。
 
 **core（不依赖 cc）** 有三条路，按优先级验证：
 1. **npm 包（首选，✅ 已在真 cc 3.8.7 验证）**：demo `package.json` 依赖 `@cck/core: workspace:*`，`node-linker=hoisted` 让它落在 `apps/demo/node_modules/@cck/core`（symlink→`packages/core`），Cocos QuickPack 按第三方 npm 模块 `import from '@cck/core'` 解析（走 package.json `main`→`dist/index.js`）。—— **实证成立**：DemoBoot bare import、预览打出 `[CCK-DEMO]` 全部 OK（详见实现记录 2026-07-27）。**Cocos 3.8.7 认 workspace 链接包（hoisted symlink），无需 import-map。**
@@ -83,7 +83,7 @@ creator-core-kit/
 1. ~~**core 被 Cocos 消费方案**：先按"方案 1 npm 包"试，失败即退方案 3 复制？~~ **已定（2026-07-27）：方案 1 npm 包在真 cc 3.8.7 跑通，采纳为正式机制。** 方案 2/3 仅作 symlink 不可用时的退路。姊妹项目 bearluo/ccc-framework-monorepo（npm workspace，3.8.8）同样走 npm 包直连，互为佐证。
 2. **包名 scope**：`@cck/*` 是否 OK（creator-core-kit 缩写），还是换成 `@creator-core-kit/*` 或公司 scope？
 3. **demo 工程谁来建**：我用 MCP/CLI 生成 Cocos 3.8 空工程，还是你在 Creator 里新建后我接管配置？（Cocos 工程结构最好由编辑器生成，避免手写 meta 出错。）
-4. engine↔assets 用 symlink 还是 Cocos「多资源目录」配置——留到 spike 时按 Windows 实测定。
+4. ~~engine↔assets 用 symlink 还是 Cocos「多资源目录」配置~~ **已定（2026-07-27）：engine 改走 workspace npm 包直连（同 core），不映射进 assets，见 ADR-0004。assets 映射仅作 `cc` 认不了时的兜底。**
 
 ---
 
@@ -103,4 +103,14 @@ creator-core-kit/
 - **踩坑纠错（重要）**：早先一度误判"Cocos 消费不了 workspace npm 包"——实为①给 `apps/demo` 加 `@cck/core` 依赖后**没重跑 `pnpm install`**（node_modules 里根本没有该包）、②转而绕路把 tsup 产物当 `.ts` 注入 `assets/vendor`、③中途删 `temp/programming` 把编辑器 QuickPack 状态搞乱。与消费机制本身无关。清理：删除 `assets/vendor/*`，重启编辑器清 QuickPack 陈旧入口后一次跑通。
 - **eslint 扫描范围修正**：`apps/demo` 落地后 `eslint .` 扫进了 funplay 第三方扩展（Node/CJS 代码）报 796 个 `no-undef`/`no-require-imports`（flat config 不读 `.gitignore`）。给 `eslint.config.js` `ignores` 加 `'apps/**'`——Cocos 工程自带 Creator 编译基线、不属 monorepo 根 lint 契约（根 lint 只管 packages/core+engine）。修正后 lint 复绿。
 - **全绿复验**：`pnpm typecheck` ✅ / `pnpm test` **192 passed（13 文件）** ✅ / `pnpm lint` ✅ / `pnpm build`（tsup 单包）✅。
-- **engine 消费（决策 #7）仍待做**：engine 依赖 `cc`，按 assets 源码 bundle 映射进 `apps/demo/assets/engine`，下一阶段验证。
+- **engine 消费（决策 #7）→ 见下节**：原计划 assets 源码 bundle；实证后改走 workspace npm 包（同 core），记录见下节。
+
+### 2026-07-27 · engine 薄壳在真 cc 3.8.7 验证（决策 #7 纠正为 npm 包，ADR-0004）
+
+- **结果**：`DemoBoot.ts` 同时 bare import `@cck/core` 与 `@cck/engine`；gameView 预览 `project.log` 打出 engine 段全部行——`[ENGINE] createCcLogger → cc.log 打通` / `→ cc.warn 打通`（cc.warn 附栈是编辑器正常行为）、`bootCoreKit ok → modules = [logger, core, director-drive]`、`director 帧驱动 onFrame 已触发 3 帧 → engine driveWithDirector OK`、`✅ engine (cc 薄壳) consumed & running under real cc`。**cc-logger（LogSink→cc.log/warn）、Bootstrap 组合根、cc.director 帧驱动（EVENT_AFTER_UPDATE→driver.tick→ITimer.onFrame 真的在推进）三处适配层全部在真 cc 跑通。**
+- **消费机制（决策 #7 纠正）**：engine 与 core **同路子**——workspace npm 包 + node_modules 直连。给 engine 配 tsup（`external: ['cc', '@cck/core']`）出自包含单包 `dist/index.js`，dist 里保留两个 bare specifier。demo 加 `@cck/engine: workspace:*`，`pnpm install` 后 `apps/demo/node_modules/@cck/engine`→symlink→`packages/engine`。**Cocos 3.8.7 QuickPack 能解析 node_modules 包 dist 内残留的 `import from 'cc'`**——这推翻了决策 #7 的旧依据「engine import cc 无法走 node_modules」（同 core 那次误判同源：想当然假设未实证）。`@cck/core` 也 external，故 demo 与 engine 共享 node_modules 里同一份 core（DI 容器 / KIT 单实例得证：DemoBoot 从 `kit.container` 取 TIMER 且 onFrame 生效）。
+- **同 core 的两条隐性契约**：① engine `tsconfig.json` 加 `emitDeclarationOnly: true`（`tsc -b` 只出 `.d.ts`，`dist/index.js` 归 tsup，防 footgun）；② 打开 Creator 前须先 `pnpm build`（core→engine 拓扑序，dist 不入库）。
+- **cc 类型来源**：engine dts 构建走 `tsconfig.build.json`（继承 `paths: { cc → test/mocks/cc.ts }` 供 tsc 解析 cc 类型）；tsup `external` 优先级高于 tsconfig paths，故 JS 产物仍是 bare `cc`（已 grep 复核：dist 无相对 import、无 mock 泄漏）。engine 公共 API 不暴露 cc 类型，dist/index.d.ts 只引用 `@cck/core` 类型。
+- **新增/改动**：`packages/engine/{tsup.config.ts,tsconfig.build.json}`（新增）、`packages/engine/{package.json,tsconfig.json}`（加 main/exports/build 脚本 + emitDeclarationOnly）、`apps/demo/package.json`（加 `@cck/engine` 依赖）、`apps/demo/assets/scripts/DemoBoot.ts`（追加 engine 验证段）。
+- **对齐 bearluo/ccc-framework-monorepo**：其 `@ccc/fw`（依赖 cc、rollup `external:['cc']`）同样作 workspace 包被 game-template 从 node_modules 消费（3.8.8）——互为佐证。
+- **全绿复验**：`pnpm typecheck` ✅ / `pnpm test` **192 passed（13 文件）** ✅ / `pnpm build`（core+engine tsup 单包，engine dist 保留 bare `cc`/`@cck/core`）✅ / 真 cc 预览 ✅。
