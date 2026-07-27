@@ -16,8 +16,9 @@
 - [x] Bootstrap 组合根横评 — `docs/research/2026-07-27-bootstrap-survey.md`（已定稿）
 - [x] engine 半 Bootstrap + cc mock 横评 — `docs/research/2026-07-27-engine-bootstrap-and-cc-mock-survey.md`（已定稿）
 - [x] ADR-0002 engine 测试策略：纯 JS + 封顶 cc mock，禁 mock 引擎行为 — `docs/adr/0002-engine-test-strategy-capped-cc-mock.md`（已接受）
+- [x] ADR-0003 Cocos 消费 core 走 workspace npm 包（node_modules 直连，非拷进 assets）— `docs/adr/0003-cocos-consumes-core-via-npm-workspace-package.md`（已接受，真 cc 3.8.7 实证）
 - [x] 架构总纲 — `docs/design/2026-07-24-architecture-overview.md`（草案，待评审）
-- [ ] monorepo 骨架 — 根+core+engine、test/typecheck/build/lint 全绿；剩 demo 消费 core 待建 demo 验证
+- [x] monorepo 骨架 — 根+core+engine、test/typecheck/build/lint 全绿；**demo 消费 core 已在真 cc 3.8.7 验证**（bare `import '@cck/core'` 经 node_modules，预览打出 `[CCK-DEMO]` 全绿）
 - [x] 第 1 批 · 地基（DI ✅ Logger ✅ EventBus ✅ ITimer ✅ Bootstrap ✅(core+engine) 测试脚手架+cc mock ✅）
 - [ ] 第 2 批 · 核心设施（ObjectPool ✅ SceneFlow ✅ SaveManager+IStorage ✅ i18n ✅ ConfigTable ✅(core 半) · Asset/Bundle/UI/Audio 待做）
 - [ ] 第 3 批 · 进阶
@@ -26,7 +27,7 @@
 
 | 批次 | 模块 | 包 | 状态 | 设计文档 | commit |
 |---|---|---|---|---|---|
-| 骨架 | monorepo（pnpm workspace + vitest + lint 依赖约束） | 根 | 实现中（demo 消费待验） | `docs/design/modules/monorepo-scaffold.md` | — |
+| 骨架 | monorepo（pnpm workspace + vitest + lint 依赖约束） | 根 | 已实现（4/4 验收；demo 消费 core 在真 cc 3.8.7 验证） | `docs/design/modules/monorepo-scaffold.md` | — |
 | 1 地基 | DI 容器 / ServiceLocator | core | 已实现（22 测试, 覆盖 100%/branch 95.6%） | `packages/core/docs/modules/di-container.md` | — |
 | 1 地基 | EventBus（类型安全） | core | 已实现（19 测试, 覆盖 100%） | `packages/core/docs/modules/eventbus.md` | — |
 | 1 地基 | Logger（`ILogger`） | core | 已实现（13 测试, 覆盖 100%/branch 97%） | `packages/core/docs/modules/logger.md` | — |
