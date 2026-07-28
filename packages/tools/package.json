@@ -1,0 +1,18 @@
+{
+  "name": "@cck/tools",
+  "version": "0.0.0",
+  "description": "creator-core-kit 出包期工具：热更 manifest 生成/校验（后续 Excel→JSON、脚手架）。纯 node stdlib，零 cc。",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "cck-manifest": "./dist/cli.cjs"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -b"
+  }
+}

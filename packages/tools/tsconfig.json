@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    // 纯 node 工具：.d.ts 出 dist-types（dist 归 tsup），只为满足 project-reference 的 composite。
+    "outDir": "dist-types",
+    "tsBuildInfoFile": "dist-types/.tsbuildinfo",
+    "emitDeclarationOnly": true,
+    // 零 cc：类型只吃 node（不引 @cocos/creator-types）。fs/crypto/path/util 由 @types/node 提供。
+    "types": ["node"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts", "src/**/__tests__/**"]
+}

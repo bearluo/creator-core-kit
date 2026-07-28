@@ -1,0 +1,147 @@
+---
+模块: hot-update-manifest
+所在包: packages/tools
+状态: 已实现          # 草案 → 评审中 → 已定稿 → 已实现
+摘要: 出包期 node 工具——遍历 native 构建产物算 md5+size，生成 Cocos 标准 `project.manifest` + `version.manifest`，喂给 engine 的 native.AssetsManager 后端。
+何时读: 要给原生热更产出/更新 manifest、或搭 CI 热更打包流水线时。
+日期: 2026-07-28
+依赖: 无（纯 node stdlib：fs/crypto/path/util）。下游消费方 = [[hotupdate-service]] 的 engine 半 native.AssetsManager 后端。
+---
+
+# hot-update-manifest 设计文档
+
+## TL;DR
+
+`buildManifest(opts)` 遍历 native 构建数据目录（`src/ assets/ jsb-adapter/`），对每个文件算 **md5(hex) + size**，产出 Cocos 标准 manifest 对象；`writeManifests(opts)` 派生 `version.manifest`（删 `assets`+`searchPaths`）并把两份落盘。附一个 `cck-manifest` CLI（`util.parseArgs`，零依赖）。**格式严格对齐 Cocos 官方 `version_generator.js`**（一手源见决策表），这样 [[hotupdate-service]] 的 native 后端 `native.AssetsManager.create(manifestUrl, storagePath)` 能直接消费。纯 node、零 cc、vitest 指向临时 fixture 目录即可测。
+
+## Purpose（目标与定位）
+
+- **做什么**：把「native 构建产物目录」变成一对热更清单文件——`project.manifest`（全量：URL 配置 + 每文件 md5/size + searchPaths，随包内置且托管到远程）与 `version.manifest`（精简：仅 URL + 版本，远程放着供廉价版本探测）。这是 HotUpdate native 后端唯一缺的**输入产物**（`hotupdate-service.md:135` 明确记为 tools 后置模块）。
+- **定位/取舍**：**出包期/CI 的 node 工具**，跑在开发机或流水线，不进运行时、零 cc。是 `packages/tools` 的第一个模块（该包此前空缺）。
+- **YAGNI（首版故意砍）**：
+  - 只管 **native**（iOS/Android/PC）热更；Web/小游戏走 bundle 版本化（`assetManager.loadBundle({version})`，另一套机制），**不在本工具范围**。
+  - 不做**差量/增量**清单、不做 zip 压缩打包（`compressed` 字段照官方仅按 `.zip` 扩展名标注，不主动压）。
+  - 不做远程上传/CDN 推送；只产文件，推送交给流水线既有手段。
+  - 不校验「远程 vs 本地」差异（那是运行时 `AssetsManager` 的活）；`verify` 首版只做**自校验**（读回自己产的 manifest，逐条重算 md5 比对），足够抓「产物被改动/漏文件」。
+
+## Public API（TypeScript 精确签名）
+
+```ts
+/** manifest 里单个文件条目（对齐官方：size + md5(hex)，.zip 才带 compressed）。 */
+export interface AssetEntry {
+  size: number;
+  md5: string;
+  compressed?: boolean;
+}
+
+/** Cocos 标准 project.manifest 结构。 */
+export interface Manifest {
+  packageUrl: string;         // 远程资源根 URL（末尾带 /）
+  remoteManifestUrl: string;  // packageUrl + manifestFilename
+  remoteVersionUrl: string;   // packageUrl + versionFilename
+  version: string;
+  assets: Record<string, AssetEntry>;  // key = 相对 root 的 POSIX 路径（正斜杠、URI 编码）
+  searchPaths: string[];
+}
+
+/** version.manifest = Manifest 去掉 assets + searchPaths。 */
+export type VersionManifest = Omit<Manifest, 'assets' | 'searchPaths'>;
+
+export interface ManifestOptions {
+  root: string;                 // native 构建数据根目录（含 src/ assets/ [jsb-adapter/]）
+  packageUrl: string;           // 远程根 URL；内部确保以 / 结尾
+  version: string;
+  dirs?: string[];              // 遍历子目录，默认 ['src','assets','jsb-adapter']（不存在的跳过）
+  manifestFilename?: string;    // 默认 'project.manifest'
+  versionFilename?: string;     // 默认 'version.manifest'
+  searchPaths?: string[];       // 默认 []
+}
+
+/** 遍历 root/dirs 算 md5+size，产出完整 project manifest 对象（读 fs 但不落盘，便于测）。 */
+export function buildManifest(opts: ManifestOptions): Manifest;
+
+/** 派生精简版本清单（删 assets + searchPaths）。 */
+export function toVersionManifest(m: Manifest): VersionManifest;
+
+/** buildManifest + toVersionManifest 后把两份写到 outDir（默认 = root）。返回落盘路径。 */
+export function writeManifests(opts: ManifestOptions & { outDir?: string }): {
+  projectPath: string;
+  versionPath: string;
+  manifest: Manifest;
+};
+
+/** 自校验：读回一份 project.manifest，对 root 下每条 asset 重算 md5/size 比对，返回不符项。 */
+export function verifyManifest(manifestPath: string, root: string): Array<{
+  path: string;
+  reason: 'missing' | 'size-mismatch' | 'md5-mismatch';
+}>;
+```
+
+CLI（`bin: cck-manifest`）：
+```
+cck-manifest --root build/android/data --url http://host/remote-assets/ --version 1.0.0
+             [--out build/android/data] [--dirs src,assets,jsb-adapter] [--search-paths ...]
+cck-manifest verify --root build/android/data --manifest build/android/data/project.manifest
+```
+
+## Behavior & data flow（行为与数据流）
+
+1. `buildManifest`：对 `dirs` 里每个存在的子目录，`fs.readdirSync(..,{recursive})`（或递归 walk）取全部文件；跳过**隐藏文件/目录**（basename 以 `.` 开头，对齐官方）。每文件：
+   - `size = fs.statSync(f).size`；
+   - `md5 = crypto.createHash('md5').update(fs.readFileSync(f)).digest('hex')`（**全文件字节**，对齐官方；构建期非热路径，不做流式）；
+   - key = `path.relative(root, f)` → `.replace(/\\/g,'/')`（POSIX 正斜杠）→ `encodeURI`（对齐官方）；
+   - `compressed: true` **仅当** `path.extname(f) === '.zip'`。
+2. 组装 `remoteManifestUrl = packageUrl + manifestFilename`、`remoteVersionUrl = packageUrl + versionFilename`；`packageUrl` 强制补 `/` 结尾。
+3. `toVersionManifest`：浅拷贝后 `delete assets; delete searchPaths`。
+4. `writeManifests`：两份 `JSON.stringify(m, null, 2)` 写到 `outDir`（默认 root，使 `project.manifest` 随包内置）。
+5. `verifyManifest`：读回 manifest，对每个 `assets` 条目在 `root` 下重算，收集 `missing/size-mismatch/md5-mismatch`。
+- **与 cc 边界**：全程零 cc、纯 node。产物由**运行时** engine 半 `native.AssetsManager` 消费（见 [[hotupdate-service]]），二者只经「manifest 文件格式」这一契约耦合。
+
+## Key design decisions（决策表）
+
+| # | 维度 | 选项 | 推荐默认 | 一句话理由 |
+|---|---|---|---|---|
+| 1 | 复用官方脚本 vs 自写 | 抠 `version_generator.js` / 自写 TS | **自写 ~60 行 TS** | 官方脚本不在本仓、是无类型无测试、需手改硬编码路径的独立 CJS；抠来适配 ≥ 自写，且自写能带类型+vitest。**格式一字不差对齐官方**（下行一手源） |
+| 2 | manifest 格式来源 | 记忆 / 一手源 | **一手源** | 格式错则整条热更链静默崩；已核 Cocos 官方 `version_generator.js`：`crypto md5 hex` + `stat.size` + `.zip→compressed` + 遍历 `src/{src,assets,jsb-adapter}`、正斜杠+`encodeURI`+跳隐藏文件；`version.manifest`=删 `assets`+`searchPaths`。源：github `cocos-creator/tutorial-hot-update/version_generator.js` + docs.cocos.com/creator/3.8 hot-update 教程 |
+| 3 | md5 全文件 vs 流式 | 全读 / stream | **全读** `readFileSync` | 构建期一次性、非热路径；对齐官方；文件超大再谈流式（ponytail 上限） |
+| 4 | 遍历子目录 | 固定 / 可配 | **可配，默认 `['src','assets','jsb-adapter']`** | 3.8 native 产物布局可能无 `jsb-adapter`，不存在则跳过；平台差异用 `--dirs` 覆盖 |
+| 5 | CLI 参数解析 | commander/yargs / stdlib | **`node:util.parseArgs`** | stdlib 够用，零新依赖（ponytail 铁律） |
+| 6 | 打包形态 | tsup dist / tsx 直跑 | **tsup 出 CJS bin**（对齐 engine 既有 tsup 约定） | 是 node CLI 不进 cc，无需 external cc；`bin` 指向 dist |
+| 7 | 校验范围 | 自校验 / 远程 diff | **首版仅自校验** | 抓「产物被改/漏文件」够用；远程 diff 是运行时 AssetsManager 的职责，不重复 |
+| 8 | 本地 remote-assets 托管 | `python -m http.server` / 本机 filebrowser CDN | **本机 filebrowser 分享** | 复用本机常驻 Docker filebrowser（8081，见 skill `filebrowser-cdn`）：绑 `0.0.0.0`，局域网/Tailscale/真机都够得着（http.server 绑 127.0.0.1 真机拿不到），免起进程；分享 base URL 即 `packageUrl`，子目录支持故 `packageUrl + src/xxx.js` 可解析。姊妹项目 [[godot-core-kit-reference]] 同法微信小游戏/Android 实测通过 |
+
+## Platform considerations（全平台 / 小游戏兼容）
+
+- **仅 native**（iOS/Android/PC）：本工具产物服务于 `native.AssetsManager` 线上热更。
+- **Web / 微信·抖音小游戏**：不产 manifest；走 Asset Bundle 版本化，`hotupdate-service` 的 Web 后端（后续）负责，与本工具无关。
+- 与三种「热」：属**线上热更(hotfix)** 的出包期一环。运行时分包/开发期热重载无关。
+
+## Testable seams + test plan（可测接缝 + vitest 用例）
+
+- **可测性**：纯 node、零 cc。测试在 `os.tmpdir()`（或 vitest 临时目录）造 fixture：写几个已知内容的文件（含一个 `.zip`、一个 `.dotfile` 隐藏文件、一层子目录），指向 `buildManifest`/`verifyManifest`。
+- **用例清单**：
+  1. `buildManifest` 对固定内容文件产出的 `md5` 等于独立 `crypto` 重算值、`size` 等于字节数；
+  2. assets 的 key 是**相对 root 的正斜杠路径**（Windows 上也不含 `\`）、经 `encodeURI`；
+  3. `.zip` 文件 `compressed===true`，非 zip 无该字段；
+  4. 隐藏文件（`.xxx`）被跳过、不进 assets；
+  5. `dirs` 里不存在的子目录被静默跳过、不抛；
+  6. `remoteManifestUrl/remoteVersionUrl` = `packageUrl`(补/) + 文件名；`packageUrl` 无尾斜杠时被补上；
+  7. `toVersionManifest` 结果无 `assets`/`searchPaths`、其余字段与 project 一致；
+  8. `writeManifests` 落两份文件、内容可 `JSON.parse` 回来且等值；
+  9. `verifyManifest`：改动某文件内容→`md5-mismatch`；删文件→`missing`；未改→空数组。
+
+## Open Questions（待用户拍板）
+
+1. ~~`packageUrl` 是否必填~~ **已定**（2026-07-28）：**必填**，CLI 缺 `--url` 报错（无远程根的 manifest 没意义，官方那个 `http://localhost` 占位反而埋坑）。dev/test 的真值 = 本机 filebrowser 分享 base URL（决策表 #8），native 端到端热更时才建 share 并托管 `remote-assets/`。
+2. **是否首版就带 Excel→JSON**：本文档只覆盖 manifest 这半（我推荐的最高杠杆项）。Excel→配表转换单独一份 `config-excel.md` 再开，避免一次摊太大。默认这么切，若要一起做说一声。
+
+---
+
+## 实现记录（2026-07-28 完成）
+
+- **最终 API 与设计偏差**：与设计一致，无偏差。`buildManifest / toVersionManifest / writeManifests / verifyManifest` + CLI `cck-manifest`（默认生成 / `verify` 子命令）全部落地。`packageUrl` 必填（Open Q1 已定）；`toVersionManifest` 用显式 4 字段构造而非 destructure-delete（避开 `no-unused-vars` lint 噪声）。
+- **落地文件**：`packages/tools/`——`package.json`（`bin.cck-manifest`→`dist/cli.cjs`）、`tsconfig.json`（`types:["node"]`、`emitDeclarationOnly`、只为满足 project-reference 的 composite）、`tsup.config.ts`（cjs bin + shebang，`dts:false` 绕开 engine 那套 composite/dts 折腾）、`src/hot-update-manifest.ts`、`src/cli.ts`、`src/index.ts`、`src/__tests__/hot-update-manifest.test.ts`；根 `tsconfig.json` references 加 `./packages/tools`。node stdlib 一律 `node:` 前缀（`crypto/fs/path/util`），零第三方依赖。
+- **测试结果**：`hot-update-manifest.test.ts` **8 用例全绿**（md5/size 对齐独立重算、正斜杠子目录 key、`.zip`→compressed、隐藏文件跳过、缺目录不抛、packageUrl 补斜杠+remote 拼接、version 派生删字段、写回+自校验、md5-mismatch/missing）；全仓 **334 passed**（原 326 +8）。四门全绿：typecheck / lint / build（`dist/cli.cjs` 5.12 KB）/ test。
+- **bin 冒烟**：`node dist/cli.cjs` 真跑——生成 3 资源（md5/size 正确、`.zip` 标 compressed、URL 拼接对、`version.manifest` 正确精简）→ verify 通过退出码 0 → 改文件后 `size-mismatch` 退出码 1。
+- **commit**：待提交。
+- **遗留 Minors**：Excel→配表转换（`config-excel.md`）、脚手架另开（YAGNI，用到再写）；native 端到端热更（remote-assets 托管到 filebrowser CDN + 原生构建真跑 `AssetsManager` 更新流程）待后续（决策表 #8 已备存储方案，`packageUrl` 即分享 base URL）。
