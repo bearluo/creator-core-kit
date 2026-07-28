@@ -21,6 +21,8 @@ export * from './i18n';
 export * from './config';
 export * from './bundle';
 export * from './asset';
+export * from './audio';
+export * from './ui';
 
 /** 骨架示例纯函数：可脱离 Creator 在 node 环境单测的最小证明。第 1 批地基落地后移除。 */
 export function hello(name: string): string {
