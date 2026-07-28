@@ -6,6 +6,8 @@
 
 # ADR-0002：engine 层测试策略 —— 纯 JS 单测 + 封顶 cc mock，禁止 mock 引擎行为
 
+> **更新（[ADR-0005](0005-engine-cc-types-via-official-creator-types.md), 2026-07-28）**：决策 4「cc mock 兼类型源、类型与运行时双指同一文件」与决策 6「重 cc 模块撞上再定」已由 ADR-0005 落实/修正——engine typecheck 的 cc 类型改用官方 `@cocos/creator-types`，cc mock 降为**纯运行时行为替身**。防 creep 三类符号规矩（决策 3）不变。
+
 ## 背景
 
 engine 层适配 `cc`。给 engine 写单测面临「怎么在没有 Creator 的 node 里替换 `cc`」的问题。历史经验（作者在 Godot 姊妹框架及本框架前期尝试）：**hand-mock 引擎会 creep —— 随着用到的引擎 API 变多，mock 越滚越大，最终「把整个 cc 搬过来」**，不可维护。可选路线：

@@ -1,0 +1,5 @@
+{
+  "from": "probe-bundle",
+  "ok": true,
+  "note": "BundleManager engine 半端到端验证：load bundle → 在其内加载此资源 → release"
+}

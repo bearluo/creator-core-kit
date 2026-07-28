@@ -1,6 +1,6 @@
 ---
 模块: asset-manager
-所在包: packages/core（AssetLoader 纯逻辑 + IAssetSource 接缝 + IAssetLoader 接口 + 内存 fake，零 cc）；cc.assetManager/Bundle 加载适配走 engine（后续）
+所在包: packages/core（AssetLoader 纯逻辑 + IAssetSource 接缝 + IAssetLoader 接口 + 内存 fake，零 cc）；cc.assetManager/Bundle 加载适配走 engine（engine 半已实现，见文末实现记录）
 状态: 已实现          # 草案 → 评审中 → 已定稿 → 已实现
 摘要: 资源加载 createAssetLoader——load/loadDir/preload/loadRemote/release 以资源为粒度，带引用计数 + 并发去重 + group 批量释放，经异步 IAssetSource 接缝落到引擎。core 定义 IAssetLoader（消费接口）+ IAssetSource（原子 IO 接缝）+ 内存 fake；资源类型用字符串 AssetTypeToken（engine 侧映射 cc 类），零 cc 类型进 core。
 何时读: 需要加载/释放 prefab/贴图/音频/JSON 等资源、按界面或关卡批量回收、或为某平台接资源后端时。
@@ -141,4 +141,20 @@ export function createAssetLoader(opts?: { source?: IAssetSource; logger?: ILogg
   6. 统一 `acquire(key, path, bundle, type, group, countRef, loader)` 内核：load/preload/loadRemote 三入口共用（inflight 去重 + 失败回滚 + 命中缓存）。
 - **测试结果 / 覆盖率**：`asset-loader.test.ts` **24 用例全绿**；`asset-source.ts`、`asset-loader.ts` 均 **100% Stmts/Branch/Funcs/Lines**（全量 232 passed）。
 - **commit / PR**：待提交（与 [[bundle-manager]] 同批）。
-- **遗留 Minors**：engine 侧 `IAssetSource` 的 cc 适配（`bundle.load`/`bundle.loadDir`/`assetManager.loadRemote` + `addRef`/`decRef`）+ `AssetTypeToken → Constructor<Asset>` 映射表 + 注册 `ASSET_SOURCE`（随 apps/demo 集成）；`get()` 与 cc autoRelease 的强一致（引擎回调通知失效）留后续；[[ui-manager]]/[[audio-service]] 直接依赖 `IAssetLoader`（不再各包一层）。
+- **遗留 Minors**：`get()` 与 cc autoRelease 的强一致（引擎回调通知失效）留后续；[[ui-manager]]/[[audio-service]] 直接依赖 `IAssetLoader`（不再各包一层）。engine 侧 `IAssetSource` cc 适配 **已实现**（见下）。
+
+### engine 半适配（IAssetSource 的 cc 实现，2026-07-28）
+
+- **落地文件**：`packages/engine/src/asset-source.ts`（`createCcAssetSource` + `ccAssetModule`）、engine `index.ts` re-export。
+- **实现**：
+  - `loadOne` → `bundle.load(path, TYPE_MAP[type], onProgress, cb)` Promise 化（`cb=(err,asset)`）；
+  - `loadDir` → `bundle.getDirWithPath(dir, ctor)` 先拿 path 清单，再逐个 `bundle.load` 配对成 `DirAssetItem{path,asset}`（cc `loadDir` 回调只给 `asset[]` 不带 path，故这样取 path）；
+  - `loadRemote` → `assetManager.loadRemote(url, null, cb)`（cc 靠 url 扩展名判类型，首版忽略 `type`）；
+  - `releaseOne` → `bundle.release(path, ctor)`；remote / 未加载 bundle → no-op；
+  - `TYPE_MAP`（`AssetTypeToken → Constructor<Asset>`）在 engine，`'asset'`/未知 → 通配 load；bundle 解析：`'resources'`/缺省 → 内置 `resources`，其余 → `assetManager.getBundle(name)`（未加载则 loadOne/loadDir throw）。
+- **接入**：`ccAssetModule()` KitModule 注册 `ASSET_SOURCE → createCcAssetSource()`（模式同 `loggerModule`）；`bootCoreKit({ modules:[ccAssetModule()] })` 后 `getAssetLoader()` 自动拾取 cc source。
+- **类型/测试策略**：这是**第一个「重 cc 模块」**，触发 **[[adr-0005]]**——engine typecheck 的 cc 类型改用官方 `@cocos/creator-types@3.8.7`（去 `paths.cc→mock`），cc mock 降为纯运行时替身；asset-source 的 cc API 被官方真类型**一次校验通过**。运行时行为不 mock（ADR-0002 决策 3），端到端走 apps/demo 真机。
+- **与设计的偏差**：初稿设想 `addRef/decRef`，首版实际用 `bundle.release(path, type)`（更简单，cc 引擎层自管 refcount）。
+- **验证**：`pnpm typecheck`/`build`/`test`(326)/`lint` **四门全绿**；**真机端到端（Creator 3.8.7 gameView 预览）已验证（2026-07-28，经 funplay MCP 自动起停预览 + 读 `project.log`）**——真 cc runtime 打出 `ASSET_SOURCE (cc) registered = true`（`ccAssetModule` 注册进组合根、DI 接入链路通）+ `✅ 真加载 resources/test-config.json via cc AssetSource` 并读出 `JsonAsset.json` 全字段（证 `bundle.load(path, JsonAsset, onProgress, done)` 对真引擎有效）。
+  - **坑（记一笔）**：编辑器 **scene 进程**的 `cc.resources` 是**空壳**（`bundle:""`、`getDirWithPath` 返回 0）——它没有 QuickPack 为预览/构建生成的资源清单，`resources.load` 直接 `Can not parse this input`。故重 cc 模块的真加载**只能在预览 runtime 验，不能在 scene 编辑器上下文验**，印证 [[adr-0002]]「真实引擎行为下沉集成层」。触发 gameView 预览 = `Editor.Message.request('scene', 'editor-preview-set-play', true/false)`。
+- **ponytail 取舍**：`loadDir` 逐个 load 非 cc 批量（量大再换按序 zip）；remote 精确释放未实现（seam 只按 key 释放，需要时补 url→asset 映射）。

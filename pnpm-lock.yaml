@@ -49,6 +49,10 @@ importers:
       '@cck/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@cocos/creator-types':
+        specifier: 3.8.7
+        version: 3.8.7
 
 packages:
 
@@ -75,6 +79,9 @@ packages:
 
   '@bcoe/v8-coverage@0.2.3':
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
+
+  '@cocos/creator-types@3.8.7':
+    resolution: {integrity: sha512-QTtuC+w1s1yQ8DPlgFSiIGS+Pko6v2QdrrQRN8/SttEBo53JjyXEWHXpRkg1lGiHq0u/aadm0cN/Y4jtEmis/w==}
 
   '@esbuild/aix-ppc64@0.21.5':
     resolution: {integrity: sha512-1SDgH6ZSPTlggy1yI6+Dbkiz8xzpHJEVAlF/AM1tHPLsf5STom9rwtjE4hKAF20FfXXNTFqEYXyJNWh1GiZedQ==}
@@ -1475,6 +1482,8 @@ snapshots:
       '@babel/helper-validator-identifier': 7.29.7
 
   '@bcoe/v8-coverage@0.2.3': {}
+
+  '@cocos/creator-types@3.8.7': {}
 
   '@esbuild/aix-ppc64@0.21.5':
     optional: true

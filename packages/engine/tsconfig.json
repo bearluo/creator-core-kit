@@ -6,9 +6,10 @@
     "outDir": "dist-types",
     "tsBuildInfoFile": "dist-types/.tsbuildinfo",
     "emitDeclarationOnly": true,
-    "types": [],
+    // typecheck 的 cc 类型走官方 @cocos/creator-types（全量真类型），不再用 mock 当类型源（见 ADR-0002）。
+    // 运行期 vitest 仍 alias cc → test/mocks/cc.ts（行为替身）。
+    "types": ["@cocos/creator-types/engine"],
     "paths": {
-      "cc": ["./test/mocks/cc.ts"],
       // typecheck 时 @cck/core 解析到 core **源码**（永远最新、完整），与 tsup 产的 dist 解耦，
       // 使 `pnpm typecheck` 不依赖「先 build core」。运行期/Cocos 仍走 node_modules 的 dist（external）。
       "@cck/core": ["../core/src/index.ts"]

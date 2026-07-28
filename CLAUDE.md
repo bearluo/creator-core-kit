@@ -100,3 +100,15 @@ packages/<pkg>/docs/modules/<module>.md      单模块设计文档（随包，�
 ## 常用命令
 
 骨架搭建后补充（pnpm workspace + vitest + lint 依赖约束）。
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues/PRD 走公司自建 GitLab **hlgit**（`glab` CLI）；本仓当前无 remote，需先建仓/push 才生效。详见 `docs/agents/issue-tracker.md`。
+
+### Domain docs
+
+单上下文布局：root `CONTEXT.md`（由 `/domain-modeling` 懒创建）+ `docs/adr/`；本仓另有渐进式披露文档体系（`docs/README.md` 地图 → design/research/progress + 随包 modules）。详见 `docs/agents/domain.md`。

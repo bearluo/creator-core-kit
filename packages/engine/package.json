@@ -25,5 +25,8 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc -b"
+  },
+  "devDependencies": {
+    "@cocos/creator-types": "3.8.7"
   }
 }

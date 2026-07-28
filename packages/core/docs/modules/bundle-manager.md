@@ -1,6 +1,6 @@
 ---
 模块: bundle-manager
-所在包: packages/core（BundleManager 纯逻辑 + IBundleSource 接缝 + 内存 fake，零 cc）；cc.assetManager.loadBundle 适配走 engine（后续）
+所在包: packages/core（BundleManager 纯逻辑 + IBundleSource 接缝 + 内存 fake，零 cc）；cc.assetManager.loadBundle 适配走 engine（已实现，见文末「engine 半适配」）
 状态: 已实现          # 草案 → 评审中 → 已定稿 → 已实现
 摘要: 按需分包管理 createBundleManager——load(name|url)/release(name) 以 bundle 为粒度，带引用计数 + 并发去重 + 版本/远程入口，经异步 IBundleSource 接缝落到引擎。core 定义 IBundleSource（真加载/真释放一个 bundle）+ 内存 fake；engine 后续接 cc.assetManager。
 何时读: 需要运行时按需加载/释放一个功能 bundle、远程 bundle 版本化加载，或为热更留分包接缝时。
@@ -126,4 +126,12 @@ export function getBundleManager(): BundleManager;    // tryResolve(BUNDLE_MANAG
 - **最终 API 与设计偏差**：`IBundleSource.loadBundle` 由设计初稿的 `loadBundle(nameOrUrl, opts)` 调整为 **`loadBundle(name, opts & { url? })`**——名义（name）由 BundleManager 统一决定（本地=nameOrUrl，远程=opts.name）并传入 source 的三个方法，`url` 仅远程加载作 fetch 提示。收益：内存 fake 与 manager 一致按 name 记账，不必重复 name 派生逻辑。其余按定稿（引用计数 + inflight 去重 + 失败回滚 + token/fallback）。
 - **测试结果 / 覆盖率**：`bundle-manager.test.ts` **16 用例全绿**；`bundle-source.ts`、`bundle-manager.ts` 均 **100% Stmts/Branch/Funcs/Lines**（全量 232 passed）。
 - **commit / PR**：待提交（与 [[asset-manager]] 同批）。
-- **遗留 Minors**：engine 侧 `IBundleSource` 的 `cc.assetManager`（`loadBundle`/`getBundle`/`removeBundle`）适配 + 注册 `BUNDLE_SOURCE`（随 apps/demo 集成）；远程 bundle 命名与真实 url 末段解析、版本绑定校验随 HotUpdateService（第 3 批）。
+- **遗留 Minors**：远程 bundle 命名与真实 url 末段解析、版本绑定校验随 HotUpdateService（第 3 批）。（engine 侧 `IBundleSource` cc 适配 + `BUNDLE_SOURCE` 注册**已完成**，见下「engine 半适配」。）
+
+### engine 半适配（IBundleSource 的 cc 实现，2026-07-28）
+
+- **落地文件**：`packages/engine/src/bundle-source.ts`（`createCcBundleSource` + `ccBundleModule`）；engine `index.ts` re-export。与 [[asset-manager]] 的 `asset-source.ts` 同范式（无状态薄壳，account 全在 core）。
+- **实现**：`loadBundle`→`assetManager.loadBundle(opts.url ?? name, opts.version ? {version} : null, cb)`（callback promisify 成 `Promise<void>`）；`releaseBundle`→`getBundle(name)` 后 `bundle.releaseAll()` + `assetManager.removeBundle(bundle)`；`hasBundle`→`!!assetManager.getBundle(name)`。**ponytail**：`onProgress` 忽略——cc `loadBundle` 不暴露 bundle 级进度（只 `options.version`），需要进度走第 3 批 HotUpdateService 的 AssetsManager backend。
+- **接入**：`apps/demo/DemoBoot.ts` 的 `bootCoreKit({ modules: [ccAssetModule(), ccBundleModule()] })`；造真 bundle `assets/bundles/probe-bundle`（meta `userData.isBundle=true`）做端到端。
+- **类型/测试策略**：复用 [[adr-0005]] 的官方 `@cocos/creator-types`，`loadBundle`/`removeBundle`/`releaseAll` cc API **一次校验通过**；重 cc 行为不 mock（ADR-0002 决策 3），无新单测，端到端走 apps/demo 真机。
+- **验证**：`pnpm typecheck`/`build`/`test`(326)/`lint` **四门全绿**；**真机（Creator 3.8.7 gameView 预览）已验证（2026-07-28，经 funplay MCP 自动起停预览 + 读 `project.log`，见 [[funplay-mcp-realmachine-verify]] 操作法）**——真 cc runtime 打出完整生命周期：`BUNDLE_SOURCE (cc) registered = true` → `load('probe-bundle')` 后 `isLoaded = true`（`assetManager.loadBundle` 真加载）→ **在具名 bundle 内 `loader.load('probe', {bundle:'probe-bundle'})` 读出 JSON 全字段**（首次验证 AssetSource 具名 bundle 分支，此前只验过内置 resources）→ `release` 后 `isLoaded = false`（`releaseAll`+`removeBundle` 真释放、`getBundle` 返 null）。

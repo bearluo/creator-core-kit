@@ -6,6 +6,8 @@
 
 # ADR-0004：engine 也走 workspace npm 包消费（`cc` external），纠正决策 #7
 
+> **更新（[ADR-0005](0005-engine-cc-types-via-official-creator-types.md), 2026-07-28）**：决策 3「engine dts/typecheck 的 cc 类型走 `paths: cc→mock`」已由 ADR-0005 改为官方 `@cocos/creator-types`；`external: ['cc']` 与 JS 产物仍是 bare `cc` 不变。
+
 ## 背景
 
 `packages/engine`（cc 适配层：cc 薄壳 + Core 接口的 cc 实现）要被 `apps/demo`（真实 Cocos Creator 3.8 工程）消费。

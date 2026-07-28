@@ -1,6 +1,18 @@
-import { _decorator, Component } from 'cc';
-import { CCK_CORE_VERSION, createI18n, createTable, createPool, TIMER, type ITimer, type Kit } from '@cck/core';
-import { createCcLogger, bootCoreKit } from '@cck/engine';
+import { _decorator, Component, JsonAsset } from 'cc';
+import {
+  CCK_CORE_VERSION,
+  createI18n,
+  createTable,
+  createPool,
+  getAssetLoader,
+  ASSET_SOURCE,
+  getBundleManager,
+  BUNDLE_SOURCE,
+  TIMER,
+  type ITimer,
+  type Kit,
+} from '@cck/core';
+import { createCcLogger, bootCoreKit, ccAssetModule, ccBundleModule } from '@cck/engine';
 
 const { ccclass } = _decorator;
 
@@ -54,7 +66,7 @@ export class DemoBoot extends Component {
     clog.warn('createCcLogger → cc.warn 打通');
 
     // Bootstrap engine 半：组合根 + cc logger + director 帧驱动一键启动
-    this.kit = await bootCoreKit();
+    this.kit = await bootCoreKit({ modules: [ccAssetModule(), ccBundleModule()] });
     console.log(`${tag} bootCoreKit ok → modules = [${this.kit.modules.join(', ')}]`);
 
     // 验证 director 帧驱动确实在 tick：从容器取 TIMER（bootCoreKit 内那只被 director 驱动的实例），挂 onFrame 计帧
@@ -65,6 +77,40 @@ export class DemoBoot extends Component {
       });
     } else {
       console.error(`${tag} TIMER 未注册 —— bootCoreKit 异常`);
+    }
+
+    // —— AssetManager engine 半（IAssetSource 的 cc 实现，经 ccAssetModule 注册 ASSET_SOURCE）——
+    // registered=true 即证明 DI 接入链路通：getAssetLoader 背后是 cc source 而非 memory fallback。
+    console.log(`${tag} ASSET_SOURCE (cc) registered = ${this.kit.container.has(ASSET_SOURCE)}`);
+    const loader = getAssetLoader(); // 先 boot 再取，确保拾取到已注册的 cc source
+    try {
+      const cfg = await loader.load<JsonAsset>('test-config', { type: 'json' });
+      console.log(`${tag} ✅ 真加载 resources/test-config.json via cc AssetSource:`, cfg.json);
+      loader.release('test-config', { type: 'json' });
+    } catch (e) {
+      console.warn(
+        `${tag} （可选真加载）resources/test-config.json 不存在，已跳过；放个该 json 后预览即验证真加载：`,
+        (e as Error).message,
+      );
+    }
+
+    // —— BundleManager engine 半（IBundleSource 的 cc 实现，经 ccBundleModule 注册 BUNDLE_SOURCE）——
+    // 端到端：load 具名 bundle → 在其内加载资源（顺带验 AssetSource 具名 bundle 分支）→ release，全生命周期。
+    console.log(`${tag} BUNDLE_SOURCE (cc) registered = ${this.kit.container.has(BUNDLE_SOURCE)}`);
+    const bundleMgr = getBundleManager();
+    try {
+      await bundleMgr.load('probe-bundle');
+      console.log(`${tag} ✅ 真加载 bundle 'probe-bundle' via cc BundleSource: isLoaded = ${bundleMgr.isLoaded('probe-bundle')}`);
+      const probe = await loader.load<JsonAsset>('probe', { bundle: 'probe-bundle', type: 'json' });
+      console.log(`${tag} ✅ 具名 bundle 内真加载资源（验 AssetSource 具名分支）:`, probe.json);
+      loader.release('probe', { bundle: 'probe-bundle', type: 'json' });
+      bundleMgr.release('probe-bundle');
+      console.log(`${tag} bundle release 后 isLoaded = ${bundleMgr.isLoaded('probe-bundle')}（应为 false）`);
+    } catch (e) {
+      console.warn(
+        `${tag} （可选）bundle 'probe-bundle' 验证跳过（未配置该 bundle）：`,
+        (e as Error).message,
+      );
     }
   }
 
