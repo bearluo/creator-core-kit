@@ -109,4 +109,11 @@ export function getConfigTables(): ConfigTableManager;  // tryResolve(CONFIG_TAB
 - **最终 API 与设计偏差**：完全按定稿，无偏差。
 - **测试结果 / 覆盖率**：`config-table.ts` **Stmts/Branch/Funcs/Lines 全 100%**；14 条用例全绿。
 - **commit / PR**：待提交。
-- **遗留 Minors**：tools 侧 Excel→JSON + 行类型生成；engine 侧 `IAssetLoader` 加载 JSON → register 接线（随 apps/demo）；二级索引 / 范围查询 / 外键校验 / 热重载 diff 按需。
+- **遗留 Minors**：tools 侧 Excel→JSON + 行类型生成；二级索引 / 范围查询 / 外键校验 / 热重载 diff 按需。engine 侧 JSON 加载 → register 接线已实现（见下）。
+
+### engine 半适配（配表 JSON 经 IAssetLoader 加载，2026-07-28）
+
+- **落地文件**：`packages/engine/src/config-loader.ts`——`loadTable<T>(name, path, opts?)`（经 `IAssetLoader` 加载配表 JSON 数组 → `getConfigTables().register`，依赖 AssetManager engine 半）；engine `index.ts` 导出。**无新 DI token**——ConfigTable 消费 AssetManager，不新增接缝。
+- **实现**：`getAssetLoader().load<JsonAsset>(path,{type:'json'})` → `asset.json`（行数组）→ `register<T>(name, rows, tableOpts)`。JSON 内容应为行数组 `[{...}]`；Excel→JSON 由 tools 产出。
+- **类型策略**：官方 `@cocos/creator-types@3.8.7`（ADR-0005）。
+- **验证**：四门全绿；**真机 gameView 预览已验证**：`✅ ConfigTable loadTable via cc AssetLoader: size=2, get(2).name=Bob`（真加载 `resources/heroes.json` 数组 → 主键索引）。

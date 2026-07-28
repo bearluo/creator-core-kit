@@ -1,6 +1,6 @@
 ---
 模块: save-manager
-所在包: packages/core（SaveManager + IStorage 接口 + 内存实现 + JSON 序列化，零 cc）；cc.sys.localStorage 存储适配走 engine（后续）
+所在包: packages/core（SaveManager + IStorage 接口 + 内存实现 + JSON 序列化，零 cc）；cc.sys.localStorage 存储适配走 engine（已实现，见文末 engine 半适配）
 状态: 已实现          # 草案 → 评审中 → 已定稿 → 已实现
 摘要: 存档管理 createSaveManager——按 slot 存/取 JSON 兼容对象，{_v,data} 信封 + 版本迁移链，经异步 IStorage 接缝落盘；save/load/has/delete/list。core 定义 IStorage（异步 string KV）+ 自带内存实现；engine 后续接 cc.sys.localStorage。
 何时读: 需要读写存档/本地持久化数据、做存档版本迁移、或要为某平台接存储后端时。
@@ -113,4 +113,12 @@ export function getSaveManager(): SaveManager;           // tryResolve(SAVE_MANA
 - **最终 API 与设计偏差**：完全按定稿，无偏差。
 - **测试结果 / 覆盖率**：`storage.ts` 全 100%；`save-manager.ts` Stmts/Funcs/Lines **100%**、Branch 98.59%（剩余为 version<1 的 `>=1` 子分支这类防御分支）；22 条用例全绿。
 - **commit / PR**：待提交。
-- **遗留 Minors**：engine 侧 `cc.sys.localStorage` 的 `IStorage` 适配 + 注册到 `STORAGE`（随 apps/demo）；二进制/加密序列化器、存档元数据、自动存档调度留后续。
+- **遗留 Minors**：二进制/加密序列化器、存档元数据、自动存档调度留后续。engine 侧 `IStorage` 的 cc 适配已实现（见下）。
+
+### engine 半适配（IStorage 的 cc 实现，2026-07-28）
+
+- **落地文件**：`packages/engine/src/cc-storage.ts`——`createCcStorage()`（`IStorage` 的 cc 实现）+ `ccStorageModule()`（KitModule，未注册时把 `STORAGE → cc 实现` 装进容器）；engine `index.ts` 导出。
+- **实现**：`cc.sys.localStorage` 背书——`get`=`getItem`、`set`=`setItem`、`remove`=`removeItem`、`keys`=遍历 `key(i)`/`length`；同步 API 包 `Promise.resolve` 满足异步 IStorage 接缝。Web 等价 window.localStorage、原生（JSB）为 SQLite 背书的等价实现，二者均支持 `key(i)`/`length`。
+- **接入**：`bootCoreKit({ modules:[…, ccStorageModule()] })` 后 `getSaveManager()` 自动拾取 cc `STORAGE`（而非内存 fallback）。
+- **类型策略**：engine typecheck 用官方 `@cocos/creator-types@3.8.7`（`sys.localStorage` 类型为 any）（ADR-0005）。
+- **验证**：typecheck/build/test(326)/lint 四门全绿；**真机 gameView 预览已验证**：`STORAGE registered = true` + `✅ SaveManager 真存档 via cc.sys.localStorage: load={"level":7,"name":"CCK"}, list=["demo"]` + `delete 后 has=false`（save→load→list→delete 全生命周期）。

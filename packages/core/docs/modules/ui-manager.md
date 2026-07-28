@@ -104,4 +104,13 @@ export function createUIManager(opts?: { view?: IUIView; logger?: ILogger }): UI
   3. 加载中 close 的取消经 `Entry.closed` 标记：`close` 先删表 + 置 closed；create 落地在 open 成功分支检查 `entry.closed`（闭包持 entry 引用），为真则 `destroy` 刚建好的 handle、返 false，不回填账本。
 - **测试结果 / 覆盖率**：`ui-manager.test.ts` **15 用例全绿**；`ui-manager.ts`、`ui-view.ts`、`index.ts` 均 **100% Stmts/Branch/Funcs/Lines**（全量 271 passed，含 [[audio-service]]）。
 - **commit / PR**：待提交（与 [[audio-service]] 同批）。
-- **遗留 Minors**：engine 侧 `IUIView` 的 cc 适配（prefab 加载 + instantiate + 层容器 Node + z 序 + 出/退场动画）+ 注册 `UI_VIEW`（随 apps/demo 集成）；隐藏缓存、模态遮罩、返回栈、多实例留后续（YAGNI）。
+- **遗留 Minors**：隐藏缓存、模态遮罩、返回栈、多实例留后续（YAGNI）。engine 侧 `IUIView` 的 cc 适配已实现（见下）。
+
+### engine 半适配（IUIView 的 cc 渲染实现，2026-07-28）
+
+- **落地文件**：`packages/engine/src/cc-ui.ts`——`createCcUIView(opts?)`（`IUIView` 的 cc 实现）+ `ccUIModule()`（注册 `UI_VIEW → cc 实现`）；engine `index.ts` 导出。
+- **实现**：`create(spec)` 经 `IAssetLoader` 加载 `Prefab` → `instantiate` → 挂到层容器 Node → 返 handle；`destroy` 销毁节点并 `release` prefab。层容器：每个 layer 懒建一个子 Node 挂在 UI 根 Canvas 下（子节点挂载顺序即 z 序）；UI 根懒查场景内首个 `Canvas`，缺则兜底新建。窗口栈/去重/生命周期全在 core。
+- **接入**：`bootCoreKit({ modules:[…, ccUIModule()] })` 后 `getUIManager()` 自动拾取 cc `UI_VIEW`。
+- **ceiling（ponytail）**：`spec.args` 透传未接（待约定 UI 脚本基类/接口后在 create 后调 `onShow(args)`）；出/退场动画未做；兜底新建的 Canvas 无 Camera 可能不渲染（正式项目场景应自带 Canvas）。
+- **类型策略**：官方 `@cocos/creator-types@3.8.7`（ADR-0005）。
+- **验证**：四门全绿；**真机 gameView 预览已验证** DI 接入：`UI_VIEW registered = true`、`open(缺prefab)=false` 优雅失败不崩（走 core 的加载失败回滚）。真渲染（prefab 实例化上屏）属 ADR-0002 的引擎真实行为，待 apps/demo 补一份 prefab 资产做端到端渲染验证。

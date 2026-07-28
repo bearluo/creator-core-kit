@@ -114,4 +114,13 @@ export function createAudioService(opts?: { player?: IAudioPlayer }): IAudioServ
   3. core 首版不注入 logger（当前无失败告警路径，空播放器不抛）；出现失败路径再加，对齐 [[save-manager]] 的 logger 用法。
 - **测试结果 / 覆盖率**：`audio-service.test.ts` **24 用例全绿**；`audio-player.ts`、`audio-service.ts`、`index.ts` 均 **100% Stmts/Branch/Funcs/Lines**（全量 271 passed，含 [[ui-manager]]）。
 - **commit / PR**：待提交（与 [[ui-manager]] 同批）。
-- **遗留 Minors**：engine 侧 `IAudioPlayer` 的 cc 适配（BGM 单 AudioSource + 音效池 + AudioClip 加载 + autoplay 解锁 + 切后台）+ 注册 `AUDIO_PLAYER`（随 apps/demo 集成）；淡入淡出、音量持久化、voice 档留后续（YAGNI）。
+- **遗留 Minors**：淡入淡出、音量持久化留后续（YAGNI）。engine 侧 `IAudioPlayer` 的 cc 适配已实现（见下）。
+
+### engine 半适配（IAudioPlayer 的 cc.AudioSource 实现，2026-07-28）
+
+- **落地文件**：`packages/engine/src/cc-audio.ts`——`createCcAudioPlayer()`（`IAudioPlayer` 的 cc 实现）+ `ccAudioModule()`（注册 `AUDIO_PLAYER → cc 实现`）；engine `index.ts` 导出。
+- **实现**：`cc.AudioSource` 出声 + 经 `IAssetLoader` 加载 `AudioClip`。每个可停句柄占一条 voice（宿主节点下子 Node + AudioSource，停后 `busy=false` 复用）；`playOneShot` 走共享 `AudioSource.playOneShot`（一次性不可停）；宿主节点 `addPersistRootNode` 跨场景常驻。`play(spec)` 须同步返回 handle 而 clip 加载异步——先发号、加载落地后若未被 stop 再真播；`resume` 用 `AudioSource.play()`（暂停态续播）。音量/单轨/静音/句柄逻辑全在 core。
+- **接入**：`bootCoreKit({ modules:[…, ccAudioModule()] })` 后 `getAudioService()` 自动拾取 cc `AUDIO_PLAYER`。
+- **ceiling（ponytail）**：voice 池不回收（稳定在峰值并发）；Web autoplay 首次需用户手势（cc 于下次手势自动补播）。
+- **类型策略**：官方 `@cocos/creator-types@3.8.7`（ADR-0005）。
+- **验证**：四门全绿；**真机 gameView 预览已验证** DI 接入：`AUDIO_PLAYER registered = true`、`playOneShot 未抛`。真出声（AudioClip 真播放）属 ADR-0002 的引擎真实行为，待 apps/demo 补一份 audioClip 资产做端到端听感验证。

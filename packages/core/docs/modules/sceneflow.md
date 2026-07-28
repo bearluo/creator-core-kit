@@ -109,4 +109,11 @@ export function createSceneFlow(opts?: SceneFlowOptions): SceneFlow;
 - **最终 API 与设计偏差**：按定稿。一处收敛——`onExit(to)` 不传 `flow`（离开态无需自转，与 godot exit 一致；onEnter 才传 flow）。
 - **测试结果 / 覆盖率**：`sceneflow.ts` Stmts/Funcs/Lines **100%**、Branch **95.89%**（剩余为默认注入 logger / pop 时 current 恒非空这类防御分支，按 batch-1 既定尺度接受）；21 条用例全绿。
 - **commit / PR**：待提交。
-- **遗留 Minors**：engine 侧接 `getTimer().onFrame → flow.update`；真实场景切换 + 过渡遮罩（对标 godot SceneManager）随 apps/demo；async transitionTo 双轨如后续确有需要再评。
+- **遗留 Minors**：过渡遮罩（对标 godot SceneManager）、async transitionTo 双轨如后续确有需要再评。真实场景切换 engine 半已实现（见下）；engine 侧 `getTimer().onFrame → flow.update` 帧驱动接线随项目。
+
+### engine 半适配（director 切场景 promisify，2026-07-28）
+
+- **落地文件**：`packages/engine/src/scene-loader.ts`——`loadScene(name)` / `preloadScene(name)`，把 `cc.director.loadScene` / `preloadScene` promisify；engine `index.ts` 导出。**无 DI token**——切场景是 engine 直接行为，core 的 SceneFlow 是纯状态机，由 `FlowState` 在 `onEnter`/钩子里调本 helpers 发起副作用（对齐 sceneflow.ts「状态自发副作用」设计）。
+- **实现**：`loadScene` 包 `director.loadScene(name, cb)` 的回调为 Promise，`director.loadScene` 返 false（场景未在 build 设置）时 reject 明确错误；`preloadScene` 同理。
+- **类型策略**：官方 `@cocos/creator-types@3.8.7`（`Director.OnSceneLaunched` 等）（ADR-0005）。
+- **验证**：四门全绿；**真机 gameView 预览已验证** 错误路径：`✅ loadScene 未知场景优雅 reject: 场景未找到…`（证明 promisify + false-path）。真切场景（成功加载第二场景）待 apps/demo 加一个第二场景并入 build 设置做端到端验证。

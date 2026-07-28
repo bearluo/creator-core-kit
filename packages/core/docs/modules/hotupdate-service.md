@@ -1,6 +1,6 @@
 ---
 模块: hotupdate-service
-所在包: packages/core（更新状态机 + 版本闸策略 + 内存 fake，零 cc）；jsb.AssetsManager / 远程 bundle 版本化 / game.restart 走 engine backend（后续）
+所在包: packages/core（更新状态机 + 版本闸策略 + 内存 fake，零 cc）；native.AssetsManager / game.restart 的 native 后端已实现（见文末 engine 半适配）；Web·小游戏远程 bundle 版本化后续
 状态: 已实现          # 草案 → 评审中 → 已定稿 → 已实现
 摘要: 线上热更统一入口 createHotUpdateService——check → 版本兼容闸 → download(进度) → apply → restart，三平台一个 API。core 持更新状态机 + VersionGate 兼容策略（默认 semver 安全闸、可 override，承 ADR-0001 防 AOT 缺代码），平台 IO 经 IHotUpdateBackend 下沉 engine（native jsb.AssetsManager / Web·小游戏远程 bundle）。
 何时读: 需要线上补丁下载/版本校验/热更 UI 状态/失败重试，或为某平台接热更后端时。
@@ -119,4 +119,19 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
 - **最终 API 与设计偏差**：无偏差，与定稿一致。`compareVersion` 首版按纯数字段（忽略 pre-release/build 元数据，非数字段容错为 0），需要时再引 semver 库。
 - **测试结果 / 覆盖率**：`version-gate.test.ts` 11 + `hotupdate-service.test.ts` 14（含空后端/裸闸兜底补测）= **25 用例全绿**；`version-gate.ts`、`hotupdate-backend.ts`、`hotupdate-service.ts`、`index.ts` 均 **100% Stmts/Branch/Funcs/Lines**（全量 298 passed）。
 - **commit / PR**：待提交。
-- **遗留 Minors**：engine 侧 `IHotUpdateBackend` 的 native 适配（jsb.AssetsManager 全流程 + game.restart）+ 注册 `HOTUPDATE_BACKEND`（随 apps/demo 集成）；Web/小游戏 backend 随需；**出包期 tools 脚本**（打戳 + 主动校验，见 Open Questions #2）待 tools 包搭建；退避重试/断点续传留后续。
+- **遗留 Minors**：engine 侧 native 后端已实现（见下）；Web/小游戏远程 bundle backend 随需；**出包期 tools 脚本**（打戳 + 主动校验，见 Open Questions #2）待 tools 包搭建；退避重试/断点续传留后续。
+
+### engine 半适配（native.AssetsManager 后端，2026-07-28）
+
+- **落地文件**：`packages/engine/src/hotupdate-backend.ts`——`createCcHotUpdateBackend(opts)`（`IHotUpdateBackend` 的 native 实现）+ `ccHotUpdateModule(opts)`（`sys.isNative` 守门注册 `HOTUPDATE_BACKEND`）+ `CcHotUpdateOptions`；engine `index.ts` 导出。
+- **实现**：包 `native.AssetsManager`（原 `jsb.AssetsManager`，Cocos 3.x 迁入 `native` 命名空间）。`AssetsManager` 只有单事件回调，故 check/download 各把当前分派器挂到 `handler`、用完即卸（单回调多路复用）：
+  - `check()` → `checkUpdate()`，事件 `ALREADY_UP_TO_DATE`→`up-to-date` / `NEW_VERSION_FOUND`→`new-version`（`info.version=getRemoteManifest().getVersion()`，`totalBytes=getTotalBytes()`）/ `ERROR_*_MANIFEST`→reject。
+  - `download(onProgress)` → `update()`，`UPDATE_PROGRESSION`→桥 `{bytesDone/bytesTotal/filesDone/filesTotal}` / `UPDATE_FINISHED`→resolve / `UPDATE_FAILED·ERROR_UPDATING·ERROR_DECOMPRESS`→reject。
+  - `apply()` → 新资源搜索路径置顶（`getSearchPaths().unshift(...getLocalManifest().getSearchPaths())`）+ 持久化 `localStorage[searchPathsKey]` + `setSearchPaths`。
+  - `restart()` → `game.restart()`。
+- **守门**：`ccHotUpdateModule` 用 `sys.isNative`——**仅原生注册真后端**；web/编辑器预览下 `native.AssetsManager` 为 undefined，故 no-op，core 回退空后端（恒 up-to-date），保证预览不崩。
+- **⚠️ native 集成步骤（本 npm 包管不到、须在原生工程侧手动做）**：
+  1. **启动还原**：原生工程 `main.js`（引擎起前、本 bundle 未加载时）须读同一 `localStorage[searchPathsKey]`（默认键 `'HotUpdateSearchPaths'`，对齐官方模板）→ `setSearchPaths` 还原上次 apply 的搜索路径，否则重启不生效。
+  2. **manifest 产物**：`project.manifest` / `version.manifest`（远程 URL + 版本 + 文件 md5）由 tools 出包期生成（后置模块）。
+- **类型策略**：官方 `@cocos/creator-types@3.8.7` 的 `native.AssetsManager`/`native.EventAssetsManager`/`native.fileUtils` 真类型（ADR-0005），无 ambient hack。
+- **验证**：四门全绿；**真机 gameView 预览已验证**（web 侧守门 + 回退）：`sys.isNative=false → HOTUPDATE_BACKEND registered=false` + `HotUpdateService.check()={"kind":"up-to-date"}`（守门 no-op 正确、空后端回退正确、web 下触碰 `native.AssetsManager` 不崩）。**native 真更新全流程（下载/setSearchPaths/restart）待原生构建 + manifest 服务器端到端**（native-only，编辑器预览跑不到，属 ADR-0002 的资产/环境待补类）。

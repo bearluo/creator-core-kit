@@ -115,4 +115,12 @@ export function createNetwork(opts?: NetworkOptions): INetwork;
   2. 心跳判死采「一间隔零入站」单标志实现（`alive`），非 ping/pong 双超时——更简洁可测，检测窗口=intervalSec。
 - **测试结果 / 覆盖率**：`network.test.ts` **28 用例全绿**；`socket.ts`、`codec.ts`、`network.ts`、`index.ts` 均 **100% Stmts/Branch/Funcs/Lines**（全量 326 passed）。
 - **commit / PR**：待提交。
-- **遗留 Minors**：engine 侧 `ISocket` 的平台 WebSocket 适配（Web/native/小游戏）+ 注册 `NETWORK_SOCKET`（随 apps/demo 集成）；HTTP 短请求、发送队列/离线缓冲、协议错误码建模、非缩放 timer 默认留后续（YAGNI）。
+- **遗留 Minors**：engine 侧 WebSocket 适配已实现（见下，覆盖 Web/native；小游戏 wx.connectSocket 后续）；HTTP 短请求、发送队列/离线缓冲、协议错误码建模、非缩放 timer 默认留后续（YAGNI）。
+
+### engine 半适配（WebSocket 的 ISocket 实现，2026-07-28）
+
+- **落地文件**：`packages/engine/src/net-socket.ts`——`createWebSocketSocket()`（`ISocket` 的平台 WebSocket 实现）+ `ccNetworkModule()`（注册 `NETWORK_SOCKET`）；engine `index.ts` 导出。
+- **实现**：把平台 WebSocket 的底层事件桥到 core 挂的回调（`onOpen/onMessage/onClose/onError`）。重连由 core 编排——core 每次调 `connect(url)` 时本壳**新建底层 WebSocket、复用同一组回调**；用 **identity 卫（`ws === sock`）** 忽略被替换掉的旧连接的迟到事件，避免重连时旧 socket 串扰。`close()` 先把 `ws` 置空（identity 卫随即失效 → 本次 close 触发的 `onclose` 不再回传 core，core 已同步收尾）再关底层。`connect` 前 `typeof WebSocket === 'undefined'` 守缺失平台 → `onError`+`onClose` 优雅降级。
+- **覆盖**：Web 浏览器 `WebSocket` + native jsb 提供的 DOM 兼容 `WebSocket` 全局。**ponytail**：小游戏（`wx.connectSocket`）非 DOM WebSocket，不在此壳内，需要时另写 `wxSocket` 适配。
+- **类型策略**：`WebSocket`/`MessageEvent`/`Event` 来自根 `tsconfig.base.json` 的 `lib:["ES2021","DOM"]` 全局（属 DOM 平台全局，非 `cc` 导出，与 ADR-0005 的 creator-types 类型源并存）。
+- **验证**：四门全绿；**真机 gameView 预览已验证**（DI 接入 + 真 echo 端到端往返）：`NETWORK_SOCKET (WebSocket) registered=true` + `WebSocket 全局可用=true`（证明拾取 cc 壳而非 memory socket）。**真 echo 往返闭环**：起本地 `docker run --rm -p 9099:8080 jmalloc/echo-server`，DemoBoot 用 `createNetwork({url:'ws://localhost:9099/'})`（不传 socket → 取 DI 注册的真 WebSocket 适配器）走 `request('echo',{n:42,s:'cck'})`，日志 `body={"n":42,"s":"cck"} → OK`——`connect→onOpen→send(带 seq)→onMessage→seq 匹配→resolve` 全链路经真 WebSocket 适配器打通（echo-server 首条问候语非 JSON，codec.decode 失败被忽略，无害）。DemoBoot 的 echo 块自带 5s 超时，无 echo 服务器时优雅跳过。
