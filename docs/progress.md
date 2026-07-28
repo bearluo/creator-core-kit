@@ -17,6 +17,7 @@
 - [x] engine 半 Bootstrap + cc mock 横评 — `docs/research/2026-07-27-engine-bootstrap-and-cc-mock-survey.md`（已定稿）
 - [x] 资源加载 + 分包（IAssetLoader/Bundle）横评 — `docs/research/2026-07-27-asset-and-bundle-survey.md`（草案，评审中）
 - [x] UIManager / AudioService 横评 — `docs/research/2026-07-27-ui-and-audio-survey.md`（草案，评审中）
+- [x] HotUpdateService（线上热更）横评 — `docs/research/2026-07-28-hotupdate-survey.md`（草案，评审中；含出包期打戳/校验契约）
 - [x] ADR-0002 engine 测试策略：纯 JS + 封顶 cc mock，禁 mock 引擎行为 — `docs/adr/0002-engine-test-strategy-capped-cc-mock.md`（已接受）
 - [x] ADR-0003 Cocos 消费 core 走 workspace npm 包（node_modules 直连，非拷进 assets）— `docs/adr/0003-cocos-consumes-core-via-npm-workspace-package.md`（已接受，真 cc 3.8.7 实证）
 - [x] ADR-0004 engine 亦走 workspace npm 包（`cc`/`@cck/core` external），纠正决策 #7 — `docs/adr/0004-cocos-consumes-engine-via-npm-package-with-cc-external.md`（已接受，真 cc 3.8.7 实证）
@@ -24,7 +25,7 @@
 - [x] monorepo 骨架 — 根+core+engine、test/typecheck/build/lint 全绿；**demo 消费 core + engine 均已在真 cc 3.8.7 验证**（bare `import '@cck/core'` / `'@cck/engine'` 经 node_modules，engine dist 里 `cc` external 也被 QuickPack 解析，预览 `[CCK-DEMO]`/`[ENGINE]` 全绿）
 - [x] 第 1 批 · 地基（DI ✅ Logger ✅ EventBus ✅ ITimer ✅ Bootstrap ✅(core+engine) 测试脚手架+cc mock ✅）
 - [x] 第 2 批 · 核心设施（ObjectPool ✅ SceneFlow ✅ SaveManager+IStorage ✅ i18n ✅ ConfigTable ✅ BundleManager ✅ AssetManager ✅ UIManager ✅ AudioService ✅，均 core 半；engine 适配随 apps/demo）
-- [ ] 第 3 批 · 进阶
+- [ ] 第 3 批 · 进阶（HotUpdateService ✅(core 半) · Network/ECS 进行中）
 
 ## 模块状态
 
@@ -46,7 +47,7 @@
 | 2 设施 | AudioService（`IAudioService`） | core/engine | 已实现（core 半，24 测试, 覆盖 100%；BGM 单轨+双音效路径+三档音量/静音实时下发；engine cc.AudioSource 适配随 apps/demo） | `packages/core/docs/modules/audio-service.md` | — |
 | 2 设施 | i18n 多语言 | core/engine | 已实现（core 半，18 测试, 覆盖 100%；字体/资源加载/语言持久化走 engine/app） | `packages/core/docs/modules/i18n.md` | — |
 | 2 设施 | ConfigTable（Excel→JSON） | core/tools/engine | 已实现（core 半，14 测试, 覆盖 100%；Excel→JSON 走 tools、JSON 加载走 engine） | `packages/core/docs/modules/config-table.md` | — |
-| 3 进阶 | HotUpdateService（三种热统一入口） | engine | 未开始 | — | — |
+| 3 进阶 | HotUpdateService（线上热更统一入口） | core/engine | 已实现（core 半，25 测试, 覆盖 100%；统一状态机 + 版本兼容闸[钩子+安全默认] + 进度/重试；native jsb.AssetsManager backend 随 apps/demo；出包期打戳/校验脚本待 tools） | `packages/core/docs/modules/hotupdate-service.md` | — |
 | 3 进阶 | Network / 协议层（`INetwork`） | core/engine | 未开始 | — | — |
 | 3 进阶 | ECS 模块（可选） | core | 未开始 | — | — |
 | 3 进阶 | MVVM 数据绑定增强 | engine | 未开始 | — | — |
