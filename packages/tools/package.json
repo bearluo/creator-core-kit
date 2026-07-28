@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "bin": {
-    "cck-manifest": "./dist/cli.cjs"
+    "cck-manifest": "./dist/cli.cjs",
+    "cck-excel": "./dist/cli-excel.cjs"
   },
   "files": [
     "dist",
@@ -14,5 +15,8 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
   }
 }

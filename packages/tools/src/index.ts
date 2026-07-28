@@ -16,3 +16,6 @@ export type {
   WriteResult,
   VerifyIssue,
 } from './hot-update-manifest';
+
+export { rowsToTable, parseWorkbook, excelToJson } from './config-excel';
+export type { FieldType, ConventionOptions, ExcelOptions, TableResult } from './config-excel';

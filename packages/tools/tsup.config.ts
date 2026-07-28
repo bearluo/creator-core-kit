@@ -4,7 +4,7 @@ import { defineConfig } from 'tsup';
 // dts:false——无人 import @cck/tools 的类型，省掉 engine 那套 composite/dts 折腾。
 // node 内建（node:fs/crypto/path/util）在 cjs 下自动 external。
 export default defineConfig({
-  entry: ['src/cli.ts'],
+  entry: ['src/cli.ts', 'src/cli-excel.ts'],
   format: ['cjs'],
   target: 'node20',
   dts: false,
