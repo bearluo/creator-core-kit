@@ -1,0 +1,34 @@
+# creator-core-kit CI —— 四门：typecheck / build / test(coverage) / lint
+#
+# 铁律由 lint 强制执行（core 禁 import 'cc'，规则见 eslint.config.js / CLAUDE.md）。
+# runner：hlgit 共享 docker runner（linux/amd64，run_untagged=true，故不加 tags）。
+# node 22 而非 20：pnpm 11.3.0 在 node 20 上启动即崩（ERR_UNKNOWN_BUILTIN_MODULE）。
+
+workflow:
+  rules:
+    # 有 MR 时只跑 MR 流水线，避免 branch + MR 双跑
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+verify:
+  image: node:22-slim
+  variables:
+    COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+    paths:
+      - .pnpm-store
+  before_script:
+    - corepack enable
+    - pnpm install --frozen-lockfile --store-dir .pnpm-store
+  script:
+    - pnpm typecheck
+    - pnpm build
+    - pnpm coverage
+    - pnpm lint
+  # 从 v8 text reporter 的 "All files | xx.xx |" 抓 core 总覆盖率
+  coverage: '/All files\s*\|\s*([\d.]+)/'
