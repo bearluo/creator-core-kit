@@ -1,6 +1,7 @@
-import { _decorator, Component, JsonAsset, sys } from 'cc';
+import { _decorator, Component, JsonAsset, Node, Label, sys } from 'cc';
 import {
   CCK_CORE_VERSION,
+  signal,
   createI18n,
   createTable,
   createPool,
@@ -39,6 +40,9 @@ import {
   loadLocaleTable,
   loadTable,
   loadScene,
+  bindText,
+  bindProp,
+  BindingScope,
 } from '@cck/engine';
 
 const { ccclass } = _decorator;
@@ -250,6 +254,39 @@ export class DemoBoot extends Component {
       net.close();
     } catch (e) {
       console.warn(`${tag} Network echo 验证跳过/失败（需 ws echo 服务器在 localhost:9099）：`, (e as Error).message);
+    }
+
+    // —— reactive engine 半（把响应式值绑到 cc 节点）：代码化 UI smoke，无 prefab ——
+    // core signal + engine bindText/bindProp + BindingScope。验三点：首帧同步刷 → 改 signal 自动刷 → dispose 后冻结。
+    try {
+      const vmName = signal('Jane');
+      const vmHp = signal(100);
+      const vmShown = signal(true);
+      const probeNode = new Node('CCK_ReactiveProbe');
+      const probeLabel = probeNode.addComponent(Label);
+      const binds = new BindingScope();
+      binds.add(bindText(probeLabel, () => `${vmName.value}:${vmHp.value}`)); // 单向，getter 读两个 signal
+      binds.add(bindProp(probeNode, 'active', () => vmShown.value)); // 泛型 bindProp 绑 Node.active(boolean)
+      const s0 = probeLabel.string; // 首帧同步刷 → 'Jane:100'
+      const a0 = probeNode.active; // → true
+      vmName.value = 'Bob';
+      vmHp.value = 42;
+      vmShown.value = false;
+      const s1 = probeLabel.string; // 自动刷 → 'Bob:42'
+      const a1 = probeNode.active; // → false
+      binds.dispose(); // 一行解绑（照抄 onDestroy）
+      vmName.value = 'Zed';
+      vmShown.value = true;
+      const s2 = probeLabel.string; // 已冻结 → 仍 'Bob:42'
+      const a2 = probeNode.active; // 仍 false
+      const pass =
+        s0 === 'Jane:100' && a0 === true && s1 === 'Bob:42' && a1 === false && s2 === 'Bob:42' && a2 === false;
+      console.log(
+        `${tag} 🔗 reactive 绑定 smoke: text '${s0}'→'${s1}'→dispose后'${s2}' | active ${a0}→${a1}→dispose后${a2} → ${pass ? 'PASS' : 'FAIL'}`,
+      );
+      probeNode.destroy();
+    } catch (e) {
+      console.warn(`${tag} reactive 绑定 smoke 异常：`, (e as Error).message);
     }
 
     // —— 戳的运行时读入（app 侧）：读 app 戳 → AppInfo → 注册带 app 的 HotUpdateService，激活 coreApiHash 闸 ——

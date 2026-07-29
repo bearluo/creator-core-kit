@@ -37,3 +37,6 @@ export type { CcHotUpdateOptions } from './hotupdate-backend';
 
 // —— 第 3 批 · 进阶（Network engine 半：ISocket 的 WebSocket 实现）——
 export { createWebSocketSocket, ccNetworkModule } from './net-socket';
+
+// —— 第 3 批 · 进阶（reactive engine 半：把响应式值绑到 cc 节点属性 + BindingScope）——
+export { bindText, bindProp, bindEditBox, bindToggle, BindingScope } from './reactive-bind';
