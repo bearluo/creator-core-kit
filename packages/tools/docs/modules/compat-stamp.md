@@ -91,7 +91,7 @@ cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <p
 ## Open Questions
 
 1. **符号级深校验**（决策表 #4 上限）：需静态分析热更包实际 import 的 `@cck/core`/`cc` 符号集 vs 主包 AOT 保留集，精确报「引用了哪个被裁符号」。首版 hash 级 + 运行时闸兜底足够，用到再上。
-2. **戳如何被运行时读入**（下游 engine/app 集成，非本工具职责）：app 戳随包内置、engine 侧 backend 读它填 `AppInfo.coreApiHash`；更新戳随远程 manifest 托管、check 时拉取填 `UpdateInfo`。同 manifest→AssetsManager 的「工具产出、运行时消费」范式，待 engine 侧接（现 native backend 的 `UpdateInfo` 尚未透传 coreApiHash，闸对该字段暂休眠）。
+2. **戳如何被运行时读入**：✅ **已落地并真机 e2e 验证**（2026-07-29，见 [[adr-0007]]）。app 戳走 `resources/cck-app-compat.json` → `AssetLoader` 读 → `AppInfo`；更新戳走 sidecar `cck-update-compat.json` → engine native backend `check()` 经 `am.getRemoteManifest().getPackageUrl()+compatFilename` XHR 拉 → 并进 `UpdateInfo`（`CcHotUpdateOptions.compatFilename` opt-in；因 `native.AssetsManager` 的 Manifest 绑定不透传自定义字段，走旁挂 sidecar 而非塞 manifest）。模拟器同一 v1 APK 二分实证：远端戳 hash=app 侧 → update-available 放行下 v2；改成不同 hash → `rejected(needFullUpdate)` 不下载/不重启——coreApiHash 闸从休眠**真正激活**。
 
 ---
 
@@ -101,4 +101,5 @@ cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <p
 - **落地文件**：`packages/tools/src/api-stamp.ts`、`src/__tests__/api-stamp.test.ts`；扩 `src/cli.ts`（+`stamp`/`verify-compat` 分支与 `core`/`min-app-version`/`app-stamp`/`update-stamp` 选项）、`src/index.ts`（导出）。node stdlib 一律 `node:` 前缀，零新第三方依赖。
 - **测试结果**：`api-stamp.test.ts` **10 用例全绿**；全仓 **353 passed**（原 343 +10）。四门全绿：typecheck / lint / build（`dist/cli.cjs` 5.12→8.71 KB）/ test。真 bin 冒烟见上「测试计划」末条。
 - **commit**：待提交。
-- **遗留 Minors**：符号级深校验（Open Q1）、戳的运行时读入（Open Q2，engine 侧后置——现 native backend 未透传 coreApiHash，闸对该字段休眠）留后续；脚手架模块 YAGNI 用到再写。
+- **遗留 Minors**：符号级深校验（Open Q1）留后续；脚手架模块 YAGNI 用到再写。
+- **运行时读入已闭环**（2026-07-29，见 [[adr-0007]]）：Open Q2 落地——engine native backend 加 `compatFilename` 拉更新戳 sidecar 并进 `UpdateInfo`，demo 读 app 戳资源填 `AppInfo`；模拟器 e2e 兼容放行 + 不兼容拦截双向 PASS，coreApiHash 闸激活。

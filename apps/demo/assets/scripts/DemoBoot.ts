@@ -18,9 +18,12 @@ import {
   createNetwork,
   NETWORK_SOCKET,
   getHotUpdateService,
+  createHotUpdateService,
   HOTUPDATE_BACKEND,
+  HOTUPDATE_SERVICE,
   TIMER,
   type ITimer,
+  type AppInfo,
   type Kit,
 } from '@cck/core';
 import {
@@ -102,7 +105,7 @@ export class DemoBoot extends Component {
         ccAudioModule(),
         ccUIModule(),
         ccNetworkModule(),
-        ccHotUpdateModule({ manifestUrl: 'project.manifest' }),
+        ccHotUpdateModule({ manifestUrl: 'project.manifest', compatFilename: 'cck-update-compat.json' }),
       ],
     });
     console.log(`${tag} bootCoreKit ok → modules = [${this.kit.modules.join(', ')}]`);
@@ -247,6 +250,24 @@ export class DemoBoot extends Component {
       net.close();
     } catch (e) {
       console.warn(`${tag} Network echo 验证跳过/失败（需 ws echo 服务器在 localhost:9099）：`, (e as Error).message);
+    }
+
+    // —— 戳的运行时读入（app 侧）：读 app 戳 → AppInfo → 注册带 app 的 HotUpdateService，激活 coreApiHash 闸 ——
+    // app 戳 resources/cck-app-compat.json 由 tools 的 `cck-manifest stamp --core <core-dist> --version <appVer>` 出包期生成。
+    // 缺戳 → 用默认 AppInfo{appVersion:'0.0.0'}，闸对 coreApiHash 休眠（单边缺失恒放行，不阻断）。
+    try {
+      const stamp = await loader.load<JsonAsset>('cck-app-compat', { type: 'json' });
+      const j = stamp.json as { version: string; coreApiHash: string };
+      const app: AppInfo = { appVersion: j.version, coreApiHash: j.coreApiHash };
+      this.kit.container.register(
+        HOTUPDATE_SERVICE,
+        { useValue: createHotUpdateService({ app }) },
+        { allowOverride: true },
+      );
+      console.log(`${tag} 🏷️ app 戳读入 → AppInfo: appVersion=${app.appVersion} coreApiHash=${app.coreApiHash}（coreApiHash 闸已激活）`);
+      loader.release('cck-app-compat', { type: 'json' });
+    } catch (e) {
+      console.warn(`${tag} app 戳未读到（缺 resources/cck-app-compat.json），coreApiHash 闸休眠：`, (e as Error).message);
     }
 
     // HotUpdate：ccHotUpdateModule 用 sys.isNative 守门——web 预览下 no-op（HOTUPDATE_BACKEND 不注册），

@@ -158,3 +158,17 @@ BUILD_TAG = v2                    ← game.restart() 同进程热重启（PID �
 5. **原生构建**：Creator 3.8.7 经 builder `add-task` 消息程序化触发（复用运行中的编辑器，无锁冲突），NDK/SDK/JDK 路径直填任务 options（`sdkPath`/`ndkPath`/`javaHome`）绕开偏好设置；ABI 选 **x86_64**（对齐 x86_64 模拟器，原生跑不靠 ARM 转译，Cocos 3.8 支持）；产物 gradle 工程 `gradlew assembleDebug` 编 APK。详见 [[adr-0006]]。
 
 至此「三种热」之**线上热更**在 native 真机端到端闭环验证完成（Web/小游戏远程 bundle backend 仍随需再接）。
+
+### coreApiHash 版本闸激活（戳的运行时读入，2026-07-29 · 真机 e2e PASS）
+
+此前版本闸的 `coreApiHash` 比对**休眠**（`AppInfo`/`UpdateInfo` 都缺该字段 → 单边缺失恒放行）。补齐**读入侧**（详见 [[adr-0007]] + tools [[compat-stamp]]）后，闸首次端到端生效：
+
+- **app 侧**：app 戳 `resources/cck-app-compat.json`（`cck-manifest stamp` 出的 `{version, coreApiHash}`）→ 启动时 `AssetLoader` 读 → `createHotUpdateService({app:{appVersion, coreApiHash}})` 注册覆盖默认（缺戳退回 `0.0.0`、闸休眠不阻断）。
+- **update 侧**：engine native backend `check()` 在发现新版本时经 `am.getRemoteManifest().getPackageUrl() + compatFilename`（`CcHotUpdateOptions.compatFilename` opt-in）拉更新戳 sidecar `cck-update-compat.json` → 把 `coreApiHash`/`minAppVersion` 并进 `UpdateInfo`（`native.AssetsManager` 的 Manifest 绑定不透传自定义字段，故走旁挂 sidecar；拉不到降级放行、不阻断正常热更）。
+
+**同一 v1 APK 二分实证**（真 x86_64 模拟器，远端经 filebrowser 固定链接托管）：
+```
+兼容   远端戳 coreApiHash = app 侧(fc033ce4c4a7) → check()=update-available(info.coreApiHash 已并入) → 下 v2 → restart → BUILD_TAG=v2
+不兼容 远端戳 coreApiHash 改 deadbeefcafe(≠app)   → check()=rejected,reason='core API 不兼容',needFullUpdate=true → 不下载/不重启，停 v1
+```
+闸的放行/拦截仅由远端戳 coreApiHash 决定 → ADR-0001 的 AOT 缺代码防护从「运行时兜底字段」变为**出包期打戳 → 运行时读入 → check 阶段拦截**的完整闭环。

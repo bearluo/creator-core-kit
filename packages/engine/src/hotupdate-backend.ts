@@ -1,6 +1,6 @@
 import { game, native, sys } from 'cc';
 import { HOTUPDATE_BACKEND } from '@cck/core';
-import type { CheckResult, HotUpdateProgress, IHotUpdateBackend, KitModule } from '@cck/core';
+import type { CheckResult, HotUpdateProgress, IHotUpdateBackend, KitModule, UpdateInfo } from '@cck/core';
 
 /**
  * IHotUpdateBackend 的 native 实现 —— HotUpdateService 的「引擎半」薄壳：包 `native.AssetsManager`
@@ -21,6 +21,42 @@ export interface CcHotUpdateOptions {
   storagePath?: string;
   /** apply 后持久化搜索路径的 localStorage 键；原生 main.js 启动还原须读同一键。默认 `'HotUpdateSearchPaths'`（对齐官方模板）。 */
   searchPathsKey?: string;
+  /**
+   * 更新戳 sidecar 文件名（相对远程 packageUrl，由 tools 的 `cck-manifest stamp` 产出）。
+   * 设置后 check() 发现新版本时拉取它，把 `coreApiHash`/`minAppVersion` 并进 `UpdateInfo` → **激活版本闸**
+   * （否则远端无这俩字段，闸单边缺失恒放行）。默认不拉。见 [[compat-stamp]] / hotupdate-service.md。
+   */
+  compatFilename?: string;
+}
+
+/**
+ * 拉更新戳 sidecar（XMLHttpRequest，native jsb / web 皆有）。非 2xx / 解析失败 / 无 XHR → reject，
+ * 由调用方降级为「无兼容字段」（闸放行，不因 sidecar 缺失阻断正常热更）。
+ */
+function fetchCompat(url: string): Promise<{ minAppVersion?: string; coreApiHash?: string }> {
+  return new Promise((resolve, reject) => {
+    if (typeof XMLHttpRequest === 'undefined') {
+      reject(new Error('XMLHttpRequest 不可用'));
+      return;
+    }
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.timeout = 5000;
+    xhr.onload = (): void => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch (e) {
+          reject(e as Error);
+        }
+      } else {
+        reject(new Error(`compat sidecar HTTP ${xhr.status}`));
+      }
+    };
+    xhr.onerror = (): void => reject(new Error('compat sidecar 网络错误'));
+    xhr.ontimeout = (): void => reject(new Error('compat sidecar 超时'));
+    xhr.send();
+  });
 }
 
 export function createCcHotUpdateBackend(opts: CcHotUpdateOptions): IHotUpdateBackend {
@@ -42,13 +78,29 @@ export function createCcHotUpdateBackend(opts: CcHotUpdateOptions): IHotUpdateBa
               handler = undefined;
               resolve({ status: 'up-to-date' });
               break;
-            case E.NEW_VERSION_FOUND:
+            case E.NEW_VERSION_FOUND: {
               handler = undefined;
-              resolve({
-                status: 'new-version',
-                info: { version: am.getRemoteManifest().getVersion(), totalBytes: am.getTotalBytes() },
-              });
+              const info: UpdateInfo = {
+                version: am.getRemoteManifest().getVersion(),
+                totalBytes: am.getTotalBytes(),
+              };
+              // 有 compatFilename → 拉更新戳 sidecar 把 coreApiHash/minAppVersion 并进 info（激活闸）；
+              // 拉不到就用裸 info（闸放行），不因兼容戳缺失阻断正常热更。
+              if (opts.compatFilename) {
+                const url = am.getRemoteManifest().getPackageUrl() + opts.compatFilename;
+                fetchCompat(url).then(
+                  (c) =>
+                    resolve({
+                      status: 'new-version',
+                      info: { ...info, minAppVersion: c.minAppVersion, coreApiHash: c.coreApiHash },
+                    }),
+                  () => resolve({ status: 'new-version', info }),
+                );
+              } else {
+                resolve({ status: 'new-version', info });
+              }
               break;
+            }
             case E.ERROR_NO_LOCAL_MANIFEST:
             case E.ERROR_DOWNLOAD_MANIFEST:
             case E.ERROR_PARSE_MANIFEST:
