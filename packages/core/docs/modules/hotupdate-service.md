@@ -5,7 +5,7 @@
 摘要: 线上热更统一入口 createHotUpdateService——check → 版本兼容闸 → download(进度) → apply → restart，三平台一个 API。core 持更新状态机 + VersionGate 兼容策略（默认 semver 安全闸、可 override，承 ADR-0001 防 AOT 缺代码），平台 IO 经 IHotUpdateBackend 下沉 engine（native jsb.AssetsManager / Web·小游戏远程 bundle）。
 何时读: 需要线上补丁下载/版本校验/热更 UI 状态/失败重试，或为某平台接热更后端时。
 日期: 2026-07-28
-依赖: di（HOTUPDATE_BACKEND/HOTUPDATE_SERVICE token）、logger（告警）、[[adr-0001]]（AOT 缺代码 → 版本绑定）。IHotUpdateBackend 的平台适配走 engine（后续）；出包期打戳/校验脚本走 packages/tools（见 Open Questions）。横评见 docs/research/2026-07-28-hotupdate-survey.md。
+依赖: di（HOTUPDATE_BACKEND/HOTUPDATE_SERVICE token）、logger（告警）、[[adr-0001]]（AOT 缺代码 → 版本绑定）。IHotUpdateBackend 的平台适配走 engine（后续）；出包期打戳/校验（coreApiHash/minAppVersion 的产生侧）走 packages/tools 的 [[compat-stamp]]（已实现）。横评见 docs/research/2026-07-28-hotupdate-survey.md。
 ---
 
 # HotUpdateService（线上热更统一入口）设计文档
@@ -107,7 +107,7 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
 ## Open Questions（已决议 · 2026-07-28）
 
 1. **瘦 core 半 / 钩子+安全默认 / 三平台抽象先实 native**：✅（用户定）。
-2. **出包期打戳/校验脚本（tools 层）— 版本兼容的另一半**（用户 2026-07-28 提出）：运行时闸只**执行**比对，`coreApiHash`/`minAppVersion` 的**产生**在出包期。需 `packages/tools`（`manifest 生成`）配套脚本：**打戳**（出整包算 core API 表面 hash 写进 app；出热更包写进远程 manifest）+ **出包期主动校验**（diff 热更包引用的 API 集合 vs 线上主包 AOT 保留集合，引用被裁符号即 build fail，把 Q4 崩溃提前到 CI）。本 core 半的 `coreApiHash`/`minAppVersion` 字段即对接点，设计不变；脚本是 tools 独立交付物（待 tools 包搭建）。见横评「五·补」。
+2. **出包期打戳/校验脚本（tools 层）— 版本兼容的另一半**：✅ **已实现**（2026-07-29，见 [[compat-stamp]]）。运行时闸只**执行**比对，`coreApiHash`/`minAppVersion` 的**产生**在出包期，落在 tools 的 `compat-stamp`：**打戳**（`computeCoreApiHash` 读 core rolled-up d.ts 算 API 表面 hash + `writeStamp` 造 app 戳/更新戳）+ **出包期主动校验**（`verifyCompat` 同 core gate 语义、shift-left CI、`cck-manifest verify-compat` 退出非 0 拦不兼容）。本 core 半 `coreApiHash`/`minAppVersion` 字段即对接点，设计不变。**首版 hash 级**（表面变没变）；符号级深校验（精确到引用了哪个被裁符号）与「戳的运行时读入」（engine 侧 backend 透传 coreApiHash——现 native backend 尚未透传、闸对该字段暂休眠）为下游后续。见横评「五·补」。
 3. 淡入/断点续传/多补丁排队：backend 内部或后续；core 状态机不涉。
 4. `coreApiHash` 单边缺失时放行（无法证伪不阻断）：文档标注；需严格模式可自定义 gate。
 

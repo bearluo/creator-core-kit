@@ -19,3 +19,12 @@ export type {
 
 export { rowsToTable, parseWorkbook, excelToJson } from './config-excel';
 export type { FieldType, ConventionOptions, ExcelOptions, TableResult } from './config-excel';
+
+export {
+  hashApiSurface,
+  computeCoreApiHash,
+  writeStamp,
+  readStamp,
+  verifyCompat,
+} from './api-stamp';
+export type { CompatStamp, CompatResult } from './api-stamp';
