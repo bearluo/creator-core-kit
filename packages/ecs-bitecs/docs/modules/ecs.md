@@ -1,7 +1,7 @@
 ---
 模块: ecs
 所在包: packages/ecs-bitecs
-状态: 草案（评审中）
+状态: 已实现
 摘要: 把 bitECS v0.3 封装为 kit 扩展包 @cck/ecs-bitecs——re-export bitECS 全套 + 一层极薄 kit 接入胶水（EcsRunner：维护 world.time + pipe 驱动，宿主每帧喂 tick）。性能优先（SoA），示范「第三方高性能能力如何接入 creator-core-kit」，游戏逻辑不跨 bundle。
 何时读: 要用/评审 ECS 扩展、给项目接 ECS、或后续接寻路/碰撞/ORCA 时。
 日期: 2026-07-28
@@ -10,7 +10,7 @@
 
 # ECS 扩展（@cck/ecs-bitecs）设计文档
 
-> **实现状态（2026-07-28）**：设计草案评审中，**实现暂缓**——待 kit 主体完善后再启动。demo 采「多场景 / 多 bundle / 多游戏」策略、用真实游戏反哺 kit，ECS 作其中的高性能扩展样例；kit 未完善前不建包、不做 demo。
+> **实现状态（2026-07-29）**：**已实现**——kit 主体三批地基完工（DI/Bootstrap/ITimer 接缝齐全），本包落地：pin `bitecs@0.3.40`、re-export 全套 + `createEcsWorld`/`createEcsRunner` 薄接入胶水，6 vitest 用例全绿（含「ITimer.onFrame 驱动 runner」的 kit 接入证明），四门全绿（全仓 369）、`dist` 33KB 自包含（noExternal 打进 bitecs）。**demo 的 cc 渲染场景（大量 agent 移动 + Position→cc.Node 同步）仍留后续**——按设计定位「用真实游戏反哺 kit」的增量，需先定玩法 + 真机验证；本包纯逻辑已 node 全测，不阻塞。详见文末「实现记录」。
 
 ## TL;DR
 
@@ -120,15 +120,24 @@ export function createEcsRunner(
 
 ## Open Questions（待用户拍板）
 
-1. **demo 玩法（方向已定，具体待启动时定）**：demo 分多场景 / 多 bundle 承载不同游戏、反哺 kit；ECS 样例的具体玩法（群体避障 / 弹幕 / RTS 小兵）留到实现启动时再定。
+> 三条均为**实现后仍保留的后续项**——首版（re-export + 薄 kit 胶水 + 纯逻辑测试）不涉及，故不阻塞本次落地。
+
+1. **demo 玩法（方向已定，具体待启动时定）**：demo 分多场景 / 多 bundle 承载不同游戏、反哺 kit；ECS 样例的具体玩法（群体避障 / 弹幕 / RTS 小兵）留到 demo 场景启动时再定。
 2. **寻路/碰撞/ORCA 接入次序与形态**：作为本包内的可选 system 子模块，还是各自独立子包？（后续设计，先记）
 3. **网络同步**是否要在本包提供 `defineSerializer` 的 kit 胶水（对接已有 Network 模块的 seq/codec），还是留项目自装？
 
 ---
 
-## 实现记录（完成后补）
+## 实现记录（2026-07-29）
 
 - **最终 API 与设计偏差**：
-- **测试结果 / 覆盖率**：
-- **commit / PR**：
+  - **API 与设计一致**：`export * from 'bitecs'` + `createEcsWorld()` + `createEcsRunner(world, systems) → { world, tick(dtSec) }` + 类型 `EcsWorld`/`EcsSystem`/`EcsRunner`。源码 `src/world.ts`（胶水）+ `src/index.ts`（barrel）。
+  - **偏差①（runner 内部）**：用**有序 `for` loop** 顺序跑 system，替代设计数据流写的 `pipe(...systems)(world)`——三者等价（system 均返回同一 world）、但 loop 类型安全（避开 bitECS `pipe` 的 `(...args:any[])=>any` 签名）、空数组天然安全。bitECS `pipe` 仍 re-export，供项目自行组合 pipeline（决策 #3 的「pipe 够用」不变，只是不下沉进 runner）。
+  - **偏差②（打包）**：bitecs 经 tsup `noExternal:['bitecs']` **打进 dist**（33KB，运行时自包含），非 external——ECS 逻辑不跨 bundle、无 core/cc 的跨 bundle 单例约束（[[adr-0001]]），内联最省事、兑现「一站式」。类型侧 `dist/index.d.ts` 仍 `export * from 'bitecs'`（rollup-plugin-dts 不 inline star re-export，`dts.resolve` 对 `export *` 无效），经 bitecs 传递依赖解析——bitecs 是本包 **pinned dependency**，随本包一并装入，故 TS 侧同样「只需 @cck/ecs-bitecs」。
+  - **版本**：pin `bitecs@0.3.40`（精确、无范围）——最后一个稳定 0.3.x（0.3.16 之后无 alpha 断层，0.3.40 为线尾）；npm `latest` 已是 0.4.0（非平凡重写），但范例取向是「稳定 + 第三方寻路/碰撞/ORCA 示例多为 v0.3 写法、好照抄」，故锁 0.3；精确 pin 防范例漂移（选型见 [survey](../../../../docs/research/2026-07-28-ecs-survey.md) 决策表 Q2）。
+- **测试结果 / 覆盖率**：本包**非 core、非 CI 硬门槛**（vitest coverage.include 仅 `packages/core/src/**`）；`src/__tests__/ecs.test.ts` **6 用例全绿**：① `createEcsWorld` time 初始化 ② 增删组件 + 查询命中/落空（实证 bitECS `removeComponent` 同步更新查询、`removeEntity` 后 `hasComponent`=false）③ movementSystem 秒制积分 `tick(0.5)→x+=v*0.5`（f32 精确）④ `tick` 累加 elapsed、delta 取最近帧 ⑤ 多 system 注册序 ⑥ **接入 kit 帧驱动**：`ITimer.onFrame(dt=>runner.tick(dt))` 驱动（等同 engine `driveWithDirector`→`timer.tick`→onFrame），`dispose()` 后冻结。设计 7 用例合并为 6（固定步长驱动并入 kit 帧驱动、用 `onFrame` 而非 `interval`，更贴真实接线）。**四门全绿**：typecheck 0 / lint 0 / test 369 passed（+6）/ build OK（dist 33KB 自包含）。
+- **commit / PR**：待授权（本次实现完成，尚未提交）。
 - **遗留 Minors**：
+  - **demo 场景（cc 渲染大量 agent 移动）未做**——设计定位为「用真实游戏反哺 kit」的后续增量：需先定玩法 + engine 侧 render system（`Position.x[eid]`→`cc.Node`，在 demo/engine，本包不涉 cc）+ 真机验证。本包纯逻辑已 node 全测，engine 帧接线一行（`director`/`ITimer.onFrame` → `runner.tick(dt)`）已由用例 ⑥ 证明。
+  - 寻路 / 碰撞 / ORCA 等高性能 system + 空间结构（grid/KD-tree）后续增量接，每接一个即一份「高性能系统接入 kit」样板（Open Questions #2）。
+  - 网络同步（bitECS `defineSerializer`/`defineDeserializer` 对接 Network 的 seq/codec）留项目自装，暂不提供 kit 胶水（Open Questions #3）。

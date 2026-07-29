@@ -1,0 +1,31 @@
+{
+  "name": "@cck/ecs-bitecs",
+  "version": "0.0.0",
+  "description": "creator-core-kit 的可选 ECS 扩展包：re-export bitECS v0.3（SoA/高性能）+ 一层极薄 kit 接入胶水（world.time 秒制 + pipeline 每帧驱动）。示范第三方高性能能力如何接入 kit。",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "bitecs": "0.3.40"
+  },
+  "devDependencies": {
+    "@cck/core": "workspace:*"
+  }
+}

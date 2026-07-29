@@ -44,6 +44,16 @@ importers:
 
   packages/core: {}
 
+  packages/ecs-bitecs:
+    dependencies:
+      bitecs:
+        specifier: 0.3.40
+        version: 0.3.40
+    devDependencies:
+      '@cck/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/engine:
     dependencies:
       '@cck/core':
@@ -789,6 +799,9 @@ packages:
 
   binary@0.3.0:
     resolution: {integrity: sha512-D4H1y5KYwpJgK8wk1Cue5LLPgmwHKYSChkbspQg5JtVuR5ulGckxfR62H3AE9UDkdMC8yyXlqYihuz3Aqg2XZg==}
+
+  bitecs@0.3.40:
+    resolution: {integrity: sha512-wAylY4pNfX8IeIH5phtwt1lUNtHKrkoSNrArI7Ris2Y4nEQWFIVvXdgAuqprEg9bq8Wolmlj0gVfeG6MFmtI2Q==}
 
   bl@4.1.0:
     resolution: {integrity: sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w==}
@@ -2331,6 +2344,8 @@ snapshots:
     dependencies:
       buffers: 0.1.1
       chainsaw: 0.1.0
+
+  bitecs@0.3.40: {}
 
   bl@4.1.0:
     dependencies:
