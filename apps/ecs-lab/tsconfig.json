@@ -1,0 +1,12 @@
+{
+  /* Base configuration. Do not edit this field. */
+  "extends": "./temp/tsconfig.cocos.json",
+
+  /* Add your custom configuration here. */
+  "compilerOptions": {
+    "strict": false,
+    "baseUrl": ".",
+    // 不配 @cck/* 的 paths：类型与运行期解析都走 node_modules（对齐 apps/demo）。
+    "paths": {}
+  }
+}

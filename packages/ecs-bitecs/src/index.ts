@@ -15,3 +15,9 @@ export * from 'bitecs';
 // kit 接入胶水：world.time 秒制 + 每帧驱动接缝。
 export { createEcsWorld, createEcsRunner } from './world';
 export type { EcsWorld, EcsSystem, EcsRunner } from './world';
+
+// spatial: 大规模实体的空间/群体运动 systems（寻路/碰撞/避让）。见 docs/modules/spatial.md。
+export * from './spatial/components';
+export * from './spatial/hash';
+export * from './spatial/flow-field';
+export * from './spatial/systems';

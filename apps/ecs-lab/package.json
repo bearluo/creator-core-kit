@@ -1,0 +1,10 @@
+{
+  "name": "ecs-lab",
+  "uuid": "7f3a9c2e-1b5d-4e8a-9c6f-3d2b1a4e5c8d",
+  "creator": {
+    "version": "3.8.7"
+  },
+  "dependencies": {
+    "@cck/ecs-bitecs": "workspace:*"
+  }
+}
