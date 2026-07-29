@@ -56,6 +56,10 @@ export class DemoBoot extends Component {
   async start() {
     const tag = '[CCK-DEMO]';
 
+    // 热更验证锚点：v1 构建为 'v1'，v2 构建改成 'v2'。原生热更 restart 后 logcat 再现本行 = 'v2' 即证热更生效。
+    const BUILD_TAG = 'v1';
+    console.log(`${tag} 🏷️ BUILD_TAG = ${BUILD_TAG}`);
+
     // —— core（纯 TS，node_modules 直连）——
     console.log(`${tag} core version = ${CCK_CORE_VERSION}`);
 
@@ -246,17 +250,33 @@ export class DemoBoot extends Component {
     }
 
     // HotUpdate：ccHotUpdateModule 用 sys.isNative 守门——web 预览下 no-op（HOTUPDATE_BACKEND 不注册），
-    // HotUpdateService 回退空后端 → check() 恒 up-to-date（证明守门正确 + web 下不触碰 native.AssetsManager 不崩）。
+    // HotUpdateService 回退空后端 → check() 恒 up-to-date（web 不触碰 native.AssetsManager 不崩）。
+    // 原生下走「全流程驱动」：check → update(带进度) → apply → restart，真机验证热更闭环。
     console.log(
       `${tag} sys.isNative = ${sys.isNative} → HOTUPDATE_BACKEND registered = ${this.kit.container.has(HOTUPDATE_BACKEND)}（web 应 false）`,
     );
     try {
-      const outcome = await getHotUpdateService().check();
-      console.log(
-        `${tag} ✅ HotUpdateService.check() = ${JSON.stringify(outcome)}（web 走空后端应 up-to-date；native 真后端待原生构建）`,
-      );
+      const hu = getHotUpdateService();
+      const outcome = await hu.check();
+      console.log(`${tag} 🔎 HotUpdateService.check() = ${JSON.stringify(outcome)}`);
+      if (sys.isNative && outcome.kind === 'update-available') {
+        console.log(
+          `${tag} ⬇️ 发现新版本 v${outcome.info.version}（${outcome.info.totalBytes ?? '?'} 字节），开始下载...`,
+        );
+        const up = await hu.update((p) => {
+          console.log(
+            `${tag} ⏳ 热更进度 ${p.filesDone}/${p.filesTotal} 文件 · ${p.bytesDone}/${p.bytesTotal} 字节`,
+          );
+        });
+        console.log(`${tag} 📦 HotUpdateService.update() = ${JSON.stringify(up)}`);
+        if (up.kind === 'ready') {
+          console.log(`${tag} ✅ 热更就绪 → 2 秒后 restart 加载新版本（重启后应见 BUILD_TAG = v2）`);
+          setTimeout(() => hu.restart(), 2000);
+          return; // 等重启，不继续 shutdown
+        }
+      }
     } catch (e) {
-      console.warn(`${tag} HotUpdate 验证异常：`, (e as Error).message);
+      console.warn(`${tag} HotUpdate 驱动异常：`, (e as Error).message);
     }
   }
 

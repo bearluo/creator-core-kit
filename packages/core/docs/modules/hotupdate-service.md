@@ -134,4 +134,27 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
   1. **启动还原**：原生工程 `main.js`（引擎起前、本 bundle 未加载时）须读同一 `localStorage[searchPathsKey]`（默认键 `'HotUpdateSearchPaths'`，对齐官方模板）→ `setSearchPaths` 还原上次 apply 的搜索路径，否则重启不生效。
   2. **manifest 产物**：`project.manifest` / `version.manifest`（远程 URL + 版本 + 文件 md5）由 tools 出包期生成（后置模块）。
 - **类型策略**：官方 `@cocos/creator-types@3.8.7` 的 `native.AssetsManager`/`native.EventAssetsManager`/`native.fileUtils` 真类型（ADR-0005），无 ambient hack。
-- **验证**：四门全绿；**真机 gameView 预览已验证**（web 侧守门 + 回退）：`sys.isNative=false → HOTUPDATE_BACKEND registered=false` + `HotUpdateService.check()={"kind":"up-to-date"}`（守门 no-op 正确、空后端回退正确、web 下触碰 `native.AssetsManager` 不崩）。**native 真更新全流程（下载/setSearchPaths/restart）待原生构建 + manifest 服务器端到端**（native-only，编辑器预览跑不到，属 ADR-0002 的资产/环境待补类）。
+- **验证**：四门全绿；**真机 gameView 预览已验证**（web 侧守门 + 回退）：`sys.isNative=false → HOTUPDATE_BACKEND registered=false` + `HotUpdateService.check()={"kind":"up-to-date"}`（守门 no-op 正确、空后端回退正确、web 下触碰 `native.AssetsManager` 不崩）。
+
+### native 真机 e2e 验证（2026-07-28，真 Android APK · PASS）
+
+**完整热更闭环在真 x86_64 Android 模拟器（`fortune_test`）上跑通**——同一 APK 内 `BUILD_TAG` 从 `v1` 跃迁到 `v2`，铁证下载来的新代码接管：
+
+```
+BUILD_TAG = v1                    ← 首启，APK 内置 v1 代码
+check() = {"kind":"update-available","info":{"version":"1.0.1","totalBytes":17474}}
+⏳ 下载 → 17474/17474 字节（1 文件：assets/main/index.js）
+update() = {"kind":"ready"}
+✅ 就绪 → 2 秒后 restart
+BUILD_TAG = v2                    ← game.restart() 同进程热重启（PID 不变）后，v2 代码接管
+```
+
+**已验证的 native 集成步骤（落实上文「⚠️ native 集成步骤」，可复现）**：
+
+1. **manifestUrl 解析**：`ccHotUpdateModule({ manifestUrl: 'project.manifest' })` 传裸文件名即可——把 `project.manifest` 放构建产物 `data/` 根（APK 内 `assets/` 根，是默认搜索路径），`native.AssetsManager.create('project.manifest', …)` 经 fileUtils 直接解析到。**比官方「导入 `.manifest` 资产取 `nativeUrl`」更省**，因 data 根本就是搜索路径。
+2. **main.js 启动还原**（原生工程侧手动加，见 `apps/demo/build/android/data/main.js` 顶部）：引擎/资源加载前读 `localStorage['HotUpdateSearchPaths']` → `jsb.fileUtils.setSearchPaths(...)`。键须与 backend `searchPathsKey`（默认 `'HotUpdateSearchPaths'`）一致。**冷启动必需**；`game.restart()` 热重启因 apply() 已在内存 `setSearchPaths`，同进程内即便不还原也能加载 v2，但冷启动（进程被杀）只靠这段。生产应放 `build-templates/android/data/main.js` 使其存活于每次构建（demo 为验证直接改生成物）。
+3. **manifest 产物**：`cck-manifest`（tools 半）对 `build/android/data` 生成 `project.manifest`/`version.manifest`——默认走 `src/assets/jsb-adapter` 三子目录（根级 main.js/manifest 自身不纳入，无自引用）；v1 打 `version 1.0.0` 烘进 APK，v2 改一处代码重构建后打 `1.0.1` + 同 `packageUrl` 托管远端。AssetsManager 按 md5 差量：仅变更的 `assets/main/index.js`（md5 `e815…`→`9c40…`）被下载。
+4. **远端托管**：宿主起 http server，模拟器经 `10.0.2.2:<port>`（user-net 网关映射宿主 loopback）直连，免 CDN/鉴权。Cocos 3.8 android 模板 `AndroidManifest.xml` 默认 `android:usesCleartextTraffic="true"`，HTTP 明文开箱可用。
+5. **原生构建**：Creator 3.8.7 经 builder `add-task` 消息程序化触发（复用运行中的编辑器，无锁冲突），NDK/SDK/JDK 路径直填任务 options（`sdkPath`/`ndkPath`/`javaHome`）绕开偏好设置；ABI 选 **x86_64**（对齐 x86_64 模拟器，原生跑不靠 ARM 转译，Cocos 3.8 支持）；产物 gradle 工程 `gradlew assembleDebug` 编 APK。详见 [[adr-0006]]。
+
+至此「三种热」之**线上热更**在 native 真机端到端闭环验证完成（Web/小游戏远程 bundle backend 仍随需再接）。
