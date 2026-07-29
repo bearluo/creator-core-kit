@@ -40,3 +40,6 @@ export { createWebSocketSocket, ccNetworkModule } from './net-socket';
 
 // —— 第 3 批 · 进阶（reactive engine 半：把响应式值绑到 cc 节点属性 + BindingScope）——
 export { bindText, bindProp, bindEditBox, bindToggle, BindingScope } from './reactive-bind';
+
+// —— DI engine 半（KitContext：core 层级容器绑定到 cc.Node 场景树，of/resolve/provide）——
+export { KitContext } from './kit-context';

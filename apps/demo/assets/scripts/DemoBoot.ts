@@ -1,6 +1,8 @@
 import { _decorator, Component, JsonAsset, Node, Label, sys } from 'cc';
 import {
   CCK_CORE_VERSION,
+  createToken,
+  getRootContainer,
   signal,
   createI18n,
   createTable,
@@ -43,6 +45,7 @@ import {
   bindText,
   bindProp,
   BindingScope,
+  KitContext,
 } from '@cck/engine';
 
 const { ccclass } = _decorator;
@@ -287,6 +290,65 @@ export class DemoBoot extends Component {
       probeNode.destroy();
     } catch (e) {
       console.warn(`${tag} reactive 绑定 smoke 异常：`, (e as Error).message);
+    }
+
+    // —— DI engine 半（KitContext：core 层级容器绑定到 cc.Node 场景树）：代码化 node 树 smoke ——
+    // 验真实引擎行为（沿 node.parent/getComponent，mock 测不了）：跨两层 resolve 回退 + shadow + of 命中 + 根兜底 + onDestroy→dispose 级联。
+    try {
+      const TOK = createToken<string>('demo.kctx.svc');
+      // root→child 两层各挂 KitContext，并接到当前活动场景（this.node 子树）使 onDestroy 生命周期真触发。
+      const rootNode = new Node('CCK_KCtxRoot');
+      const childNode = new Node('CCK_KCtxChild');
+      rootNode.addChild(childNode);
+      this.node.addChild(rootNode);
+      const rootCtx = rootNode.addComponent(KitContext);
+      const childCtx = childNode.addComponent(KitContext);
+
+      // root 作用域注册 → 从 child 处 resolve 沿父链回退命中（跨两层真实节点）
+      rootCtx.provide(TOK, { useValue: 'from-root' });
+      const viaFallback = KitContext.resolve<string>(childNode, TOK);
+      // child 作用域 shadow 同名 → child 处命中 child，root 处仍命中 root（互不影响）
+      childCtx.provide(TOK, { useValue: 'from-child' });
+      const viaShadow = KitContext.resolve<string>(childNode, TOK);
+      const viaRoot = KitContext.resolve<string>(rootNode, TOK);
+      // of 命中最近；场景树无 KitContext 的游离节点 → resolve 走全局根兜底
+      const ofNearest = KitContext.of(childNode) === childCtx;
+      const GTOK = createToken<string>('demo.kctx.global');
+      getRootContainer().register(GTOK, { useValue: 'from-global-root' }, { allowOverride: true });
+      const looseNode = new Node('CCK_KCtxLoose');
+      const viaGlobalFallback = KitContext.resolve<string>(looseNode, GTOK);
+      const pass1 =
+        viaFallback === 'from-root' &&
+        viaShadow === 'from-child' &&
+        viaRoot === 'from-root' &&
+        ofNearest &&
+        viaGlobalFallback === 'from-global-root';
+      console.log(
+        `${tag} 🧭 KitContext 场景树解析 smoke: 回退='${viaFallback}' shadow='${viaShadow}' root='${viaRoot}' of命中=${ofNearest} 根兜底='${viaGlobalFallback}' → ${pass1 ? 'PASS' : 'FAIL'}`,
+      );
+
+      // dispose 级联：child 作用域注册 Disposable，销毁 childNode → onDestroy → container.dispose() → Disposable.dispose() 被调。
+      // cc.Node.destroy() 延迟到帧末才跑 onDestroy，故下一帧再断言。
+      let disposed = false;
+      const DTOK = createToken<{ dispose(): void }>('demo.kctx.disposable');
+      childCtx.provide(DTOK, {
+        useValue: {
+          dispose: () => {
+            disposed = true;
+          },
+        },
+      });
+      childNode.destroy();
+      this.scheduleOnce(() => {
+        console.log(
+          `${tag} 🧹 KitContext onDestroy→dispose 级联 smoke: 子树销毁后 Disposable.dispose 被调=${disposed} → ${disposed ? 'PASS' : 'FAIL'}`,
+        );
+        rootNode.destroy();
+        looseNode.destroy();
+        getRootContainer().unregister(GTOK);
+      }, 0);
+    } catch (e) {
+      console.warn(`${tag} KitContext smoke 异常：`, (e as Error).message);
     }
 
     // —— 戳的运行时读入（app 侧）：读 app 戳 → AppInfo → 注册带 app 的 HotUpdateService，激活 coreApiHash 闸 ——

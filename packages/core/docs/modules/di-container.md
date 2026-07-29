@@ -85,17 +85,22 @@ export const cck: {
 
 **错误语义**：`register` 重复且未 `allowOverride` → 抛错；`resolve` 全链 miss → 抛错（含 token 名 + 作用域名）；`useFactory` 抛错原样冒泡；根容器 `dispose()` → 抛错。
 
-### Engine 适配层（`@cck/engine`，依赖 cc；本文档只给形态，随 Bootstrap 单独实现）
+### Engine 适配层（`@cck/engine`，依赖 cc；`packages/engine/src/kit-context.ts`，已实现）
 
 ```ts
-// 把 core 逻辑容器绑定到 cc.Node 场景树，对应 godot KitContext.of/resolve/provide_child。
+// 把 core 逻辑容器绑定到 cc.Node 场景树，对应 godot KitContext.of/resolve/provide。
 export class KitContext extends Component {
-  readonly container: Container;              // onLoad 时 = 最近祖先 KitContext.container.createScope()，否则 getRootContainer().createScope()
-  // onDestroy 时 container.dispose()（关卡/实体子树卸载即回收）
-  static of(node: Node): KitContext | null;   // 沿 cc.Node 父链找最近 KitContext
-  static resolve<T>(node: Node, token: Token<T>): T; // of(node)?.container.resolve ?? 根兜底
+  get container(): Container;                   // 懒建：首访时 = 最近祖先 KitContext.container.createScope()，否则 getRootContainer().createScope()
+  provide<T>(token, provider): void;            // = this.container.register（godot provide 对应物）
+  protected onDestroy(): void;                  // container.dispose()（关卡/实体子树卸载即回收，仅当已懒建）
+  static of(node: Node | null): KitContext | null;   // 沿 cc.Node 父链（含自身）找最近 KitContext
+  static resolve<T>(node: Node, token: Token<T>): T;  // of(node)?.container.resolve ?? 根兜底
 }
 ```
+
+- **container 懒建（关键）**：不在 `onLoad` 建、改首次 `get container` 时建，**规避 Cocos 组件 onLoad 时序坑**（祖先/后代激活顺序）——直接根治 Open Question #1。后代 resolve 触发祖先 `container` 首访，链上作用域按需自底向上建。
+- **无 `@ccclass`（首版）**：运行期 `node.addComponent(KitContext)` 传类引用即可用，契合「空引导场景 + 代码加载」。编辑器菜单挂载 / 存进 scene·prefab 序列化需 `@ccclass`，留后续（且 npm-dist Component 能否被 Creator 编辑器识别序列化尚未验证）。
+- **Node 型服务（godot `provide_child`）无需专用 API**：把「持 cc.Node 的服务」注册成实现 `Disposable`（`dispose()` 里 `node.destroy()`）即可，`scope.dispose()` 级联时自动回收（core 已测）——解 Open Question #2。
 
 ## Behavior & data flow（行为与数据流）
 
@@ -157,8 +162,8 @@ export class KitContext extends Component {
 
 ## Open Questions（待用户拍板）
 
-1. **`subscribe` 时序解析**：godot 用它化解"后代 `_ready` 早于祖先 `provide`"。core 逻辑装配顺序由 Bootstrap 掌控、时序可控，倾向**首版不做**；真正的场景树时序坑在 engine 的 KitContext 组件层，遇到再加。是否认可？
-2. **Node 型服务生命周期（godot `provide_child`）**：确认放 engine 的 KitContext（core 无 Node 概念，只管值/工厂/Disposable）？
+1. ~~**`subscribe` 时序解析**~~ → **已解（2026-07-29）**：engine KitContext 的 `container` 改**懒建 getter**（首访才沿父链建作用域），后代先跑也能触发祖先按需建链，从根上绕开 onLoad 时序坑，无需 `subscribe`。
+2. ~~**Node 型服务生命周期（godot `provide_child`）**~~ → **已解**：无需专用 API；持 Node 的服务注册成 `Disposable`（`dispose` 里 `node.destroy()`），`scope.dispose()` 级联自动回收（core 已测）。
 3. **token key 前缀**：固定 `cck.token.${name}`（防撞名），不做可配。OK？
 4. **根容器多版本共存**：`Symbol.for('cck.di.root')` 固定、首个初始化胜出；多份 core 共存隔离留作 HotUpdate 议题。OK？
 5. ~~是否补 `ContainerScoped` scope~~ → **已定：首版纳入**（每作用域一份，缓存在发起 resolve 的容器）。
@@ -169,7 +174,8 @@ export class KitContext extends Component {
 ## 实现记录
 
 - **落地文件**：`packages/core/src/di/token.ts`（`createToken` + `Token<T>` phantom）、`container.ts`（`Container` 接口 + `ContainerImpl` + `getRootContainer` + `cck` 门面）、`index.ts`（导出）；由 `packages/core/src/index.ts` re-export。
-- **最终 API 与设计偏差**：完全按设计实现，无偏差。三生命周期 singleton（缓存在拥有层）/ transient / containerScoped（缓存在发起 resolve 的容器）；`useToken` alias 带 32 层深度上限防环；`cck` 轻门面每次走 `getRootContainer()` 不缓存实例。**engine 侧 `KitContext`（cc.Node 绑定，godot `of/resolve/provide_child` 对应物）未做**，按设计留到 Bootstrap/engine 接入阶段。
-- **测试结果 / 覆盖率**：`vitest run` **22 passed**（DI 20 + 骨架 hello 2）；`tsc -b` 无错；`eslint` 无告警。core 覆盖率 **Stmts/Lines/Funcs 100%、Branch 95.65%**（container.ts 剩 `createScope` 默认 name 等 3 个防御分支未覆盖）。
-- **commit / PR**：待提交（与骨架 + spike 实证文档一起）。
-- **遗留 Minors**：① engine `KitContext` 组件（Bootstrap 阶段）；② `ContainerScoped`/alias 已含，重门面 `cck.audio` 预置属性待接口清单稳定后加；③ 3 个防御分支未覆盖（默认参数），无功能风险。
+- **最终 API 与设计偏差（core）**：完全按设计实现，无偏差。三生命周期 singleton（缓存在拥有层）/ transient / containerScoped（缓存在发起 resolve 的容器）；`useToken` alias 带 32 层深度上限防环；`cck` 轻门面每次走 `getRootContainer()` 不缓存实例。
+- **测试结果 / 覆盖率（core）**：`vitest run` **22 passed**（DI 20 + 骨架 hello 2）；`tsc -b` 无错；`eslint` 无告警。core 覆盖率 **Stmts/Lines/Funcs 100%、Branch 95.65%**（container.ts 剩 `createScope` 默认 name 等 3 个防御分支未覆盖）。
+- **engine 侧 `KitContext`（2026-07-29 落地）**：`packages/engine/src/kit-context.ts`，`extends cc.Component`，`get container`（懒建，见上）/ `provide` / `onDestroy` dispose / `static of` / `static resolve` 根兜底。相比设计的 `readonly container` 字段改为**懒建 getter**（规避 onLoad 时序，解 Open Q1），并加 `provide` 补齐 godot of/resolve/provide 三件套。**四门全绿**：`pnpm -r typecheck` 0、`pnpm lint` 0、`pnpm --filter @cck/engine build` OK（dist 20.37 KB / d.ts 9.64 KB，`cc` external）；测试数不变。**按 ADR-0002 不 mock 单测**（沿 `cc.Node.parent`/`getComponent` 走场景树属真实引擎行为，进 mock 即被禁的 creep）——改走 **apps/demo 真机 gameView 预览验证，2026-07-29 PASS**：`DemoBoot` 代码化搭 root→child 两层 KitContext 节点树（接 `this.node` 活动子树），实测 `🧭 回退='from-root' shadow='from-child' root='from-root' of命中=true 根兜底='from-global-root' → PASS`（跨两层 resolve 回退 + child shadow + root 不受影响 + `of` 命中最近 + 无 context 根兜底），`🧹 子树销毁后 Disposable.dispose 被调=true → PASS`（`node.destroy()` → `onDestroy` → `container.dispose()` 级联到 Disposable）。懒建 container（靠真 `node.parent` 走链按需建作用域）与无 `@ccclass` 的 `addComponent(KitContext)` 均隐式证实。
+- **commit / PR**：待授权（core 与骨架同批已提；engine KitContext 本次新增，待提交）。
+- **遗留 Minors**：① `@ccclass` 编辑器挂载 + npm-dist Component 序列化识别验证（首版纯 class、代码 addComponent，已真机验证运行期可用）；② `ContainerScoped`/alias 已含，重门面 `cck.audio` 预置属性待接口清单稳定后加；③ core 3 个防御分支未覆盖（默认参数），无功能风险。

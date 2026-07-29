@@ -47,7 +47,7 @@
 | 批次 | 模块 | 包 | 状态 | 设计文档 | commit |
 |---|---|---|---|---|---|
 | 骨架 | monorepo（pnpm workspace + vitest + lint 依赖约束） | 根 | 已实现（4/4 验收；demo 消费 core + engine 均在真 cc 3.8.7 验证，见 ADR-0003/0004） | `docs/design/modules/monorepo-scaffold.md` | — |
-| 1 地基 | DI 容器 / ServiceLocator | core | 已实现（22 测试, 覆盖 100%/branch 95.6%） | `packages/core/docs/modules/di-container.md` | — |
+| 1 地基 | DI 容器 / ServiceLocator | core/engine | 已实现（core 半 22 测试, 覆盖 100%/branch 95.6%；**engine 半 `KitContext`（cc.Node 场景树绑定：懒建作用域 + `of`/`resolve` 根兜底 + `provide` + `onDestroy` dispose 级联）已落地，静态四门全绿；真机 gameView 预览验证 PASS**（回退/shadow/of/根兜底 + onDestroy→dispose 级联双 smoke 全绿），按 ADR-0002 不 mock 单测走真机） | `packages/core/docs/modules/di-container.md` | — |
 | 1 地基 | EventBus（类型安全） | core | 已实现（19 测试, 覆盖 100%） | `packages/core/docs/modules/eventbus.md` | — |
 | 1 地基 | Logger（`ILogger`） | core | 已实现（13 测试, 覆盖 100%/branch 97%） | `packages/core/docs/modules/logger.md` | — |
 | 1 地基 | ITimer 抽象 | core | 已实现（21 测试, 覆盖 100%） | `packages/core/docs/modules/timer.md` | — |
