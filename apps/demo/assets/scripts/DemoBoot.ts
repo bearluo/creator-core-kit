@@ -18,6 +18,7 @@ import {
   getI18n,
   getAudioService,
   getUIManager,
+  createUIManager,
   createNetwork,
   NETWORK_SOCKET,
   getHotUpdateService,
@@ -37,6 +38,7 @@ import {
   ccStorageModule,
   ccAudioModule,
   ccUIModule,
+  createCcUIView,
   ccNetworkModule,
   ccHotUpdateModule,
   loadLocaleTable,
@@ -216,6 +218,39 @@ export class DemoBoot extends Component {
       console.log(`${tag} UIManager open(缺prefab) = ${opened}（应 false，不崩；真渲染待 prefab 资产；UI_VIEW 已 registered）`);
     } catch (e) {
       console.warn(`${tag} UIManager 验证异常：`, (e as Error).message);
+    }
+
+    // UIManager happy path（真 prefab → 加载渲染 → 关闭回收）：core→engine 适配层端到端，真 cc 节点树断言。
+    // 直接 createCcUIView({root}) + createUIManager({view})：root 挂 this.node 子树，可控可查，忠实验证引擎半
+    // 迄今未测的真渲染路径——真 prefab load、instantiate、挂层容器、close 销毁 + asset release。
+    // （DI 注册的 getUIManager 走 Canvas 兜底根，端到端 wiring 已由上面缺-prefab smoke 覆盖；此处专攻渲染 happy path。）
+    try {
+      const uiRoot = new Node('CCK_UIRoot');
+      this.node.addChild(uiRoot);
+      const uiMgr = createUIManager({ view: createCcUIView({ root: uiRoot }) });
+      const opened = await uiMgr.open('DemoPanel'); // 默认层 'ui'：真加载 resources/DemoPanel.prefab → instantiate → 挂 UILayer_ui
+      const layer = uiRoot.getChildByName('UILayer_ui');
+      const inst = layer && layer.children.length === 1 ? layer.children[0] : null;
+      const label = inst?.getComponent(Label);
+      const rendered = !!inst && label?.string === 'CCK UI OK'; // 真 prefab 被 instantiate 并按内容还原（Label 文本）
+      const tracked =
+        uiMgr.isOpen('DemoPanel') && uiMgr.list().join(',') === 'DemoPanel' && uiMgr.layerOf('DemoPanel') === 'ui';
+      const closed = uiMgr.close('DemoPanel'); // → view.destroy(handle)：node.destroy()（延迟帧末）+ getAssetLoader().release
+      const passOpen =
+        opened === true && rendered && tracked && closed === true && uiMgr.isOpen('DemoPanel') === false;
+      console.log(
+        `${tag} 🖼️ UIManager open/render smoke: opened=${opened} 层子节点=${layer ? layer.children.length : '-'} label='${label?.string ?? '-'}' tracked=${tracked} close=${closed} isOpen后=${uiMgr.isOpen('DemoPanel')} → ${passOpen ? 'PASS' : 'FAIL'}`,
+      );
+      // cc.Node.destroy() 延迟到帧末才从 _children 摘除并置 isValid=false：下一帧断言实例真被回收（节点摘除 + 失效；release 不崩）。
+      this.scheduleOnce(() => {
+        const recycled = (!layer || layer.children.length === 0) && !!inst && inst.isValid === false;
+        console.log(
+          `${tag} 🧹 UIManager close 回收 smoke: 下一帧层子节点=${layer ? layer.children.length : 0} inst.isValid=${inst?.isValid} → ${recycled ? 'PASS' : 'FAIL'}`,
+        );
+        uiRoot.destroy();
+      }, 0);
+    } catch (e) {
+      console.warn(`${tag} UIManager happy-path smoke 异常：`, (e as Error).message);
     }
 
     // SceneFlow（loadScene：director 切场景 promisify）：真切场景待第二场景，这里验未知场景优雅 reject

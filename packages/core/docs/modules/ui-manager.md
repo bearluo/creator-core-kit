@@ -113,4 +113,9 @@ export function createUIManager(opts?: { view?: IUIView; logger?: ILogger }): UI
 - **接入**：`bootCoreKit({ modules:[…, ccUIModule()] })` 后 `getUIManager()` 自动拾取 cc `UI_VIEW`。
 - **ceiling（ponytail）**：`spec.args` 透传未接（待约定 UI 脚本基类/接口后在 create 后调 `onShow(args)`）；出/退场动画未做；兜底新建的 Canvas 无 Camera 可能不渲染（正式项目场景应自带 Canvas）。
 - **类型策略**：官方 `@cocos/creator-types@3.8.7`（ADR-0005）。
-- **验证**：四门全绿；**真机 gameView 预览已验证** DI 接入：`UI_VIEW registered = true`、`open(缺prefab)=false` 优雅失败不崩（走 core 的加载失败回滚）。真渲染（prefab 实例化上屏）属 ADR-0002 的引擎真实行为，待 apps/demo 补一份 prefab 资产做端到端渲染验证。
+- **验证**：四门全绿；**真机 gameView 预览已验证**两条路径——
+  1. **DI 接入 + 错误路径**：`UI_VIEW registered = true`、`open(缺prefab)=false` 优雅失败不崩（走 core 加载失败回滚）。
+  2. **happy path 端到端**（2026-07-29）：`resources/DemoPanel.prefab`（Node+UITransform+Label 'CCK UI OK'）经 `createUIManager({ view: createCcUIView({ root }) }).open('DemoPanel')` 真加载 → `instantiate` → 挂 `UILayer_ui` 层容器（子节点=1、Label 内容 'CCK UI OK' 还原 = 真反序列化）→ core 跟踪（tracked/isOpen）→ `close` → **下一帧**节点摘除 + `inst.isValid=false` + `asset release` 不崩。smoke 见 `apps/demo/assets/scripts/DemoBoot.ts`（🖼️ open/render + 🧹 close 回收，两条 PASS）。
+  - 坑记 1（回收断言时机）：`cc.Node.destroy()` **延迟到帧末**才置 `isValid=false` 并从 `_children` 摘除——回收断言须放下一帧（`scheduleOnce(…,0)`），首版误按同步断言 → FAIL，非 UIManager bug。
+  - 坑记 2（prefab 生成）：`DemoPanel.prefab` 首版用 `cce.Utils.serialize(new Prefab{data:裸Node})` 造，产物**缺 `cc.PrefabInfo`/`cc.CompPrefabInfo`**（根 `_prefab:null`、组件 `__prefab:null`）——运行时 `instantiate` 不需要它（smoke 照过），但**编辑器打开 prefab 崩** `TypeError: Cannot read properties of null (reading 'instance')`（读 `prefabInfo.instance`）。修法：手补根节点 `_prefab → cc.PrefabInfo{root,asset,fileId,instance:null,targetOverrides:null,nestedPrefabInstanceRoots:null}` + 每组件 `__prefab → cc.CompPrefabInfo{fileId}`，fileId 复用序列化器给的 `_id`、节点/组件 `_id` 清空。已按 uuid 加载验证 `hasPrefabInfo=true / instance=null(OK) / instantiate OK`，编辑器 open 不再崩。
+  - 未覆盖（ponytail / YAGNI）：Canvas 兜底新建分支（smoke 用显式 root）、出/退场动画、`args` 透传。
