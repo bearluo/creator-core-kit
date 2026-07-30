@@ -40,6 +40,11 @@ export interface I18n {
    * merge=true（默认）叠加到已有表（同键覆盖）；false 整表替换。
    */
   addTable(locale: string, table: LocaleTableInput, merge?: boolean): void;
+  /**
+   * 移除翻译。keys 省略 → 删除整个 locale 表；给定 → 只删这些点键（不存在的键忽略）。
+   * 删空后该 locale 表一并移除（availableLocales 不留空表）。空 locale 告警 no-op。用于卸载模块撤其翻译。
+   */
+  removeTable(locale: string, keys?: readonly string[]): void;
   /** 取译文：当前 locale → fallback → key 本身（缺翻译去重告警）。参数走 {name} 插值。 */
   t(key: string, params?: I18nParams): string;
   /** 指定（默认当前）locale 是否直接有该 key（不查 fallback）。 */
@@ -105,6 +110,21 @@ export function createI18n(opts?: I18nOptions): I18n {
     }
   };
 
+  const removeTable = (loc: string, keys?: readonly string[]): void => {
+    if (!loc) {
+      logger.warn('removeTable: 空 locale，忽略');
+      return;
+    }
+    const existing = tables.get(loc);
+    if (!existing) return;
+    if (keys === undefined) {
+      tables.delete(loc);
+      return;
+    }
+    for (const k of keys) delete existing[k];
+    if (Object.keys(existing).length === 0) tables.delete(loc);
+  };
+
   if (opts?.tables) {
     for (const [loc, table] of Object.entries(opts.tables)) addTable(loc, table);
   }
@@ -144,6 +164,7 @@ export function createI18n(opts?: I18nOptions): I18n {
     },
 
     addTable,
+    removeTable,
 
     t(key: string, params?: I18nParams): string {
       let tpl = tables.get(locale)?.[key];

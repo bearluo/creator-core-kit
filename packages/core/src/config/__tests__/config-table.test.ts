@@ -171,4 +171,15 @@ describe('ConfigTableManager', () => {
     getRootContainer().register(CONFIG_TABLES, { useValue: custom });
     expect(getConfigTables()).toBe(custom);
   });
+
+  it('7. unregister：撤单张表，返回是否存在；不影响其它表', () => {
+    const m = createConfigTableManager({ logger: fakeLogger().logger });
+    m.register('hero', HEROES);
+    m.register('item', [{ id: 10 }]);
+    expect(m.unregister('hero')).toBe(true);
+    expect(m.has('hero')).toBe(false);
+    expect(m.has('item')).toBe(true); // 其它表不受影响
+    expect(m.names()).toEqual(['item']);
+    expect(m.unregister('hero')).toBe(false); // 再撤不存在 → false
+  });
 });

@@ -196,4 +196,32 @@ describe('I18n', () => {
     const i18n = createI18n();
     expect(i18n.locale).toBe('en');
   });
+
+  it('19. removeTable：给定 keys 只删这些点键，其余保留', () => {
+    const { i18n } = make();
+    i18n.addTable('en', { 'shop.title': 'Shop', 'shop.buy': 'Buy' });
+    i18n.removeTable('en', ['shop.title', 'shop.buy']);
+    expect(i18n.has('shop.title')).toBe(false);
+    expect(i18n.has('shop.buy')).toBe(false);
+    expect(i18n.t('menu.start')).toBe('Start'); // 原有键仍在
+    expect(i18n.availableLocales().sort()).toEqual(['en', 'zh']); // en 非空，仍在
+  });
+
+  it('20. removeTable：省略 keys 删整个 locale 表', () => {
+    const { i18n } = make();
+    i18n.removeTable('zh');
+    expect(i18n.has('menu.start', 'zh')).toBe(false);
+    expect(i18n.availableLocales()).toEqual(['en']);
+  });
+
+  it('21. removeTable：删空后移除该 locale；空/未知 locale 安全', () => {
+    const { logger, warns } = fakeLogger();
+    const i18n = createI18n({ logger, tables: { en: { a: '1', b: '2' } } });
+    i18n.removeTable('en', ['a', 'b']); // 删空 → en 整表移除
+    expect(i18n.availableLocales()).toEqual([]);
+    i18n.removeTable('nope', ['x']); // 未知 locale 静默 no-op
+    expect(warns.length).toBe(0);
+    i18n.removeTable(''); // 空 locale 告警
+    expect(warns.length).toBe(1);
+  });
 });

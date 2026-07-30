@@ -1,4 +1,4 @@
-import { director } from 'cc';
+import { assetManager, director } from 'cc';
 
 /**
  * SceneFlow 的「引擎半」：把 cc.director 的场景切换 promisify，供 FlowState 在 onEnter/钩子里发起真实切场景。
@@ -6,8 +6,28 @@ import { director } from 'cc';
  * 无 DI token——切场景是 engine 直接行为，core 不持有其接缝（对齐 sceneflow.ts 设计：状态自发副作用）。
  */
 
-/** 切换到已在 build 设置里的场景。成功 resolve；场景未找到 / 加载出错 reject。 */
-export function loadScene(name: string): Promise<void> {
+/**
+ * 切换场景。成功 resolve；未找到 / 出错 reject。
+ * - 默认（无 bundle）：`director.loadScene`——切到主包/build「包含场景」列表里的场景。
+ * - `opts.bundle`：从已加载的自定义 bundle 里切它自带的场景（大厅子游戏框架 `kind:'game'` 模块场景）。
+ *   走官方两步：`bundle.loadScene`（只加载 SceneAsset、不运行）→ `director.runScene`（帧末切换）。
+ *   ponytail: bundle 分支的 loadScene→runScene 链路待 apps/demo 真机复验（ADR-0002 引擎行为不 mock）。
+ */
+export function loadScene(name: string, opts?: { bundle?: string }): Promise<void> {
+  const bundleName = opts?.bundle;
+  if (bundleName) {
+    return new Promise<void>((resolve, reject) => {
+      const bundle = assetManager.getBundle(bundleName);
+      if (!bundle) {
+        reject(new Error(`loadScene('${name}', {bundle:'${bundleName}'})：bundle 未加载（先经 BundleManager.load 加载该 bundle）`));
+        return;
+      }
+      bundle.loadScene(name, (err, sceneAsset) => {
+        if (err) reject(err);
+        else director.runScene(sceneAsset, undefined, () => resolve());
+      });
+    });
+  }
   return new Promise<void>((resolve, reject) => {
     const started = director.loadScene(name, (err) => {
       if (err) reject(err);

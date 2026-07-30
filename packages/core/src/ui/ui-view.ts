@@ -6,6 +6,8 @@ export interface UIViewSpec {
   uiId: string;
   /** prefab 资源路径（默认 = uiId）。 */
   prefab: string;
+  /** prefab 所在 Asset Bundle 名（省略 = 内置 resources/主包）。 */
+  bundle?: string;
   /** 归属层名（决定挂到哪个层容器 Node，定 z 序）。 */
   layer: string;
   /** 打开传参，透传给 UI 脚本的 onShow/init。 */

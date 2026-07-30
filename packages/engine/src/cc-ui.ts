@@ -11,6 +11,7 @@ import type { IUIView, UIViewSpec, KitModule } from '@cck/core';
 interface Rec {
   readonly node: Node;
   readonly prefab: string;
+  readonly bundle?: string;
 }
 
 export function createCcUIView(opts?: { root?: Node }): IUIView {
@@ -45,12 +46,12 @@ export function createCcUIView(opts?: { root?: Node }): IUIView {
 
   return {
     async create(spec: UIViewSpec): Promise<number> {
-      const prefab = await getAssetLoader().load<Prefab>(spec.prefab, { type: 'prefab' });
+      const prefab = await getAssetLoader().load<Prefab>(spec.prefab, { type: 'prefab', bundle: spec.bundle });
       const node = instantiate(prefab);
       layerNode(spec.layer).addChild(node);
       // ponytail: spec.args 透传未接——需先约定 UI 脚本基类/接口，再在此 node.getComponent(...)?.onShow(args)。
       const handle = next++;
-      handles.set(handle, { node, prefab: spec.prefab });
+      handles.set(handle, { node, prefab: spec.prefab, bundle: spec.bundle });
       return handle;
     },
 
@@ -59,7 +60,7 @@ export function createCcUIView(opts?: { root?: Node }): IUIView {
       if (!rec) return;
       handles.delete(handle);
       if (rec.node.isValid) rec.node.destroy();
-      getAssetLoader().release(rec.prefab, { type: 'prefab' });
+      getAssetLoader().release(rec.prefab, { type: 'prefab', bundle: rec.bundle });
     },
   };
 }

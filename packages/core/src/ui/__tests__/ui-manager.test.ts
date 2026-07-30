@@ -117,6 +117,13 @@ describe('UIManager · 打开', () => {
     expect(ui.isOpen('bad')).toBe(false);
     expect(warns).toHaveLength(1);
   });
+
+  it('16. open 透传 bundle 到 view.create（模块从自带 bundle 开面板）', async () => {
+    const v = makeView();
+    const ui = createUIManager({ view: v.view });
+    await ui.open('shop/panel', { bundle: 'shop' });
+    expect(v.creates[0]).toMatchObject({ uiId: 'shop/panel', prefab: 'shop/panel', bundle: 'shop' });
+  });
 });
 
 describe('UIManager · 关闭', () => {

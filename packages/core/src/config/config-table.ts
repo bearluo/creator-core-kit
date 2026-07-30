@@ -133,6 +133,8 @@ export interface ConfigTableManager {
   getRow<T>(name: string, id: RowKey): T | undefined;
   /** 已注册表名（按插入顺序）。 */
   names(): string[];
+  /** 反注册一张表（按名）。存在→删除返回 true；不存在→no-op 返回 false。用于卸载模块撤其配表。 */
+  unregister(name: string): boolean;
   /** 清空全部表。 */
   clear(): void;
 }
@@ -169,6 +171,9 @@ export function createConfigTableManager(opts?: { logger?: ILogger }): ConfigTab
     },
     names(): string[] {
       return [...tables.keys()];
+    },
+    unregister(name: string): boolean {
+      return tables.delete(name);
     },
     clear(): void {
       tables.clear();

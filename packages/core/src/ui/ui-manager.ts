@@ -10,6 +10,8 @@ export interface UIOpenOptions {
   layer?: string;
   /** prefab 路径，默认 = uiId。 */
   prefab?: string;
+  /** prefab 所在 Asset Bundle 名（省略 = 内置 resources/主包）。模块从自带 bundle 打开面板时传。 */
+  bundle?: string;
   /** 打开传参，透传给 engine 渲染层。 */
   args?: unknown;
 }
@@ -78,7 +80,7 @@ export function createUIManager(opts?: UIManagerOptions): UIManager {
       const entry: Entry = { layer, view: 0, closed: false };
       const p = (async (): Promise<boolean> => {
         try {
-          const handle = await view.create({ uiId, prefab, layer, args: o?.args });
+          const handle = await view.create({ uiId, prefab, layer, bundle: o?.bundle, args: o?.args });
           if (entry.closed) {
             // 加载期间被 close：销毁刚建好的节点，不回填
             view.destroy(handle);
