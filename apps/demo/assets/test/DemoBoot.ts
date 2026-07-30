@@ -132,35 +132,26 @@ export class DemoBoot extends Component {
     // —— AssetManager engine 半（IAssetSource 的 cc 实现，经 ccAssetModule 注册 ASSET_SOURCE）——
     // registered=true 即证明 DI 接入链路通：getAssetLoader 背后是 cc source 而非 memory fallback。
     console.log(`${tag} ASSET_SOURCE (cc) registered = ${this.kit.container.has(ASSET_SOURCE)}`);
-    const loader = getAssetLoader(); // 先 boot 再取，确保拾取到已注册的 cc source
-    try {
-      const cfg = await loader.load<JsonAsset>('test-config', { type: 'json' });
-      console.log(`${tag} ✅ 真加载 resources/test-config.json via cc AssetSource:`, cfg.json);
-      loader.release('test-config', { type: 'json' });
-    } catch (e) {
-      console.warn(
-        `${tag} （可选真加载）resources/test-config.json 不存在，已跳过；放个该 json 后预览即验证真加载：`,
-        (e as Error).message,
-      );
-    }
-
-    // —— BundleManager engine 半（IBundleSource 的 cc 实现，经 ccBundleModule 注册 BUNDLE_SOURCE）——
-    // 端到端：load 具名 bundle → 在其内加载资源（顺带验 AssetSource 具名 bundle 分支）→ release，全生命周期。
     console.log(`${tag} BUNDLE_SOURCE (cc) registered = ${this.kit.container.has(BUNDLE_SOURCE)}`);
+    const loader = getAssetLoader(); // 先 boot 再取，确保拾取到已注册的 cc source
+
+    // —— 测试 fixtures 全在自定义 bundle 'fixtures-bundle'（reorg 后 resources/ 已删）——
+    // 全程只 load 一次（顺带验 BundleManager load 生命周期）→ 所有 fixture 经 {bundle} 加载 → start 末尾 release。
     const bundleMgr = getBundleManager();
+    const FB = 'fixtures-bundle';
+    await bundleMgr.load(FB);
+    console.log(`${tag} ✅ 真加载 bundle '${FB}' via cc BundleSource: isLoaded = ${bundleMgr.isLoaded(FB)}`);
+
+    // AssetManager 具名 bundle 内加载资源（验 AssetSource 具名 bundle 分支）
     try {
-      await bundleMgr.load('probe-bundle');
-      console.log(`${tag} ✅ 真加载 bundle 'probe-bundle' via cc BundleSource: isLoaded = ${bundleMgr.isLoaded('probe-bundle')}`);
-      const probe = await loader.load<JsonAsset>('probe', { bundle: 'probe-bundle', type: 'json' });
+      const cfg = await loader.load<JsonAsset>('test-config', { bundle: FB, type: 'json' });
+      console.log(`${tag} ✅ 真加载 ${FB}/test-config.json via cc AssetSource:`, cfg.json);
+      loader.release('test-config', { bundle: FB, type: 'json' });
+      const probe = await loader.load<JsonAsset>('probe', { bundle: FB, type: 'json' });
       console.log(`${tag} ✅ 具名 bundle 内真加载资源（验 AssetSource 具名分支）:`, probe.json);
-      loader.release('probe', { bundle: 'probe-bundle', type: 'json' });
-      bundleMgr.release('probe-bundle');
-      console.log(`${tag} bundle release 后 isLoaded = ${bundleMgr.isLoaded('probe-bundle')}（应为 false）`);
+      loader.release('probe', { bundle: FB, type: 'json' });
     } catch (e) {
-      console.warn(
-        `${tag} （可选）bundle 'probe-bundle' 验证跳过（未配置该 bundle）：`,
-        (e as Error).message,
-      );
+      console.warn(`${tag} 具名 bundle 内资源加载异常：`, (e as Error).message);
     }
 
     // —— 第 2 批设施 · engine 半批量验证（Save / Audio / UI / i18n / Config / SceneFlow）——
@@ -186,22 +177,22 @@ export class DemoBoot extends Component {
 
     // i18n（loadLocaleTable：翻译表 JSON 经 cc AssetLoader 真加载 → addTable）
     try {
-      await loadLocaleTable('en', 'i18n-en');
+      await loadLocaleTable('en', 'i18n-en', { bundle: FB });
       console.log(
         `${tag} ✅ i18n loadLocaleTable via cc AssetLoader: t('greet.hello') = ${getI18n().t('greet.hello', { name: 'Cocos' })}`,
       );
     } catch (e) {
-      console.warn(`${tag} i18n loadLocaleTable 跳过（缺 resources/i18n-en.json）：`, (e as Error).message);
+      console.warn(`${tag} i18n loadLocaleTable 跳过（缺 ${FB}/i18n-en.json）：`, (e as Error).message);
     }
 
     // ConfigTable（loadTable：配表 JSON 数组经 cc AssetLoader 真加载 → register）
     try {
-      const heroes = await loadTable<{ id: number; name: string; hp: number }>('hero', 'heroes');
+      const heroes = await loadTable<{ id: number; name: string; hp: number }>('hero', 'heroes', { bundle: FB });
       console.log(
         `${tag} ✅ ConfigTable loadTable via cc AssetLoader: size = ${heroes.size}, get(2).name = ${heroes.get(2)?.name}`,
       );
     } catch (e) {
-      console.warn(`${tag} ConfigTable loadTable 跳过（缺 resources/heroes.json）：`, (e as Error).message);
+      console.warn(`${tag} ConfigTable loadTable 跳过（缺 ${FB}/heroes.json）：`, (e as Error).message);
     }
 
     // AudioService（ccAudioModule 注册 cc.AudioSource 播放器）：真出声待 audioClip 资产，这里验 no-throw
@@ -228,7 +219,7 @@ export class DemoBoot extends Component {
       const uiRoot = new Node('CCK_UIRoot');
       this.node.addChild(uiRoot);
       const uiMgr = createUIManager({ view: createCcUIView({ root: uiRoot }) });
-      const opened = await uiMgr.open('DemoPanel'); // 默认层 'ui'：真加载 resources/DemoPanel.prefab → instantiate → 挂 UILayer_ui
+      const opened = await uiMgr.open('DemoPanel', { bundle: FB }); // 默认层 'ui'：真加载 fixtures-bundle/DemoPanel.prefab（走 gap#1 open({bundle}））→ instantiate → 挂 UILayer_ui
       const layer = uiRoot.getChildByName('UILayer_ui');
       const inst = layer && layer.children.length === 1 ? layer.children[0] : null;
       const label = inst?.getComponent(Label);
@@ -390,7 +381,7 @@ export class DemoBoot extends Component {
     // app 戳 resources/cck-app-compat.json 由 tools 的 `cck-manifest stamp --core <core-dist> --version <appVer>` 出包期生成。
     // 缺戳 → 用默认 AppInfo{appVersion:'0.0.0'}，闸对 coreApiHash 休眠（单边缺失恒放行，不阻断）。
     try {
-      const stamp = await loader.load<JsonAsset>('cck-app-compat', { type: 'json' });
+      const stamp = await loader.load<JsonAsset>('cck-app-compat', { bundle: FB, type: 'json' });
       const j = stamp.json as { version: string; coreApiHash: string };
       const app: AppInfo = { appVersion: j.version, coreApiHash: j.coreApiHash };
       this.kit.container.register(
@@ -399,9 +390,9 @@ export class DemoBoot extends Component {
         { allowOverride: true },
       );
       console.log(`${tag} 🏷️ app 戳读入 → AppInfo: appVersion=${app.appVersion} coreApiHash=${app.coreApiHash}（coreApiHash 闸已激活）`);
-      loader.release('cck-app-compat', { type: 'json' });
+      loader.release('cck-app-compat', { bundle: FB, type: 'json' });
     } catch (e) {
-      console.warn(`${tag} app 戳未读到（缺 resources/cck-app-compat.json），coreApiHash 闸休眠：`, (e as Error).message);
+      console.warn(`${tag} app 戳未读到（缺 ${FB}/cck-app-compat.json），coreApiHash 闸休眠：`, (e as Error).message);
     }
 
     // HotUpdate：ccHotUpdateModule 用 sys.isNative 守门——web 预览下 no-op（HOTUPDATE_BACKEND 不注册），
@@ -433,6 +424,11 @@ export class DemoBoot extends Component {
     } catch (e) {
       console.warn(`${tag} HotUpdate 驱动异常：`, (e as Error).message);
     }
+
+    // fixtures 用毕 → 释放 bundle（验 BundleManager release 生命周期收尾）。
+    // native 热更 ready 分支会提前 return（走 restart），不影响；web 预览走到这。
+    bundleMgr.release(FB);
+    console.log(`${tag} bundle '${FB}' release 后 isLoaded = ${bundleMgr.isLoaded(FB)}（应 false）`);
   }
 
   update(): void {
