@@ -5,7 +5,8 @@
 摘要: UI 管理 createUIManager——open/close/closeLayer/closeAll 以 uiId 为粒度，层内单实例 + 并发 open 去重 + 加载中 close 防泄漏，实际 prefab 实例化/销毁经 IUIView 接缝落到引擎。core 定义 UIManager（消费接口）+ IUIView（原子渲染接缝）+ 空渲染层 fake；cc.Node 不进 core。每层独立、无全局返回栈。
 何时读: 需要打开/关闭界面、按层批量关、或为某工程接 UI 渲染后端时。
 日期: 2026-07-27
-依赖: di（UI_VIEW/UI_MANAGER token + tryResolve）、logger（告警）。IUIView 的 cc 适配走 engine（ADR-0002，后续；内部用 [[asset-manager]] 加载 prefab）。横评见 docs/research/2026-07-27-ui-and-audio-survey.md。对标 oops-framework LayerManager（LayerType + UIMap）。
+依赖: di（UI_VIEW/UI_MANAGER token + tryResolve）、logger（告警）。IUIView 的 cc 适配走 engine（ADR-0002；内部用 [[asset-manager]] 加载 prefab）。横评见 docs/research/2026-07-27-ui-and-audio-survey.md。对标 oops-framework LayerManager（LayerType + UIMap）。
+改造中: **v2 提案已定稿待实现** — `docs/design/2026-07-31-ui-manager-v2-proposal.md`（10 档固定层枚举 / UI 注册表 + 变体解析 / CCKUIView 契约 / 按需重建）。本文描述**当前代码**，v2 实施后整体重写为新现状。
 ---
 
 # UIManager（层级/窗口/生命周期）设计文档
@@ -95,27 +96,25 @@ export function createUIManager(opts?: { view?: IUIView; logger?: ILogger }): UI
 
 ---
 
-## 实现记录
+## 已知行为与坑
 
-- **落地文件**：`packages/core/src/ui/ui-view.ts`（`UIViewSpec` + `IUIView` + `UI_VIEW` + `createMemoryUIView`）、`ui-manager.ts`（`createUIManager` + `UIManager`/`UIOpenOptions` + `DEFAULT_UI_LAYER` + `UI_MANAGER` + `getUIManager`）、`index.ts`；core `index.ts` re-export（`export * from './ui'`）。
-- **最终 API 与设计偏差**：
-  1. 无偏差；API 与定稿一致。
-  2. `closeLayer` 用 `for (const [id, e] of [...open])` 遍历 entries 快照（而非 `open.keys()` 再 `open.get(id)?.layer`）——避免 `?.` 的 undefined 分支恒不可达（id 来自快照、同 id 才被 close 删），换来 100% 分支覆盖。
-  3. 加载中 close 的取消经 `Entry.closed` 标记：`close` 先删表 + 置 closed；create 落地在 open 成功分支检查 `entry.closed`（闭包持 entry 引用），为真则 `destroy` 刚建好的 handle、返 false，不回填账本。
-- **测试结果 / 覆盖率**：`ui-manager.test.ts` **15 用例全绿**；`ui-manager.ts`、`ui-view.ts`、`index.ts` 均 **100% Stmts/Branch/Funcs/Lines**（全量 271 passed，含 [[audio-service]]）。
-- **commit / PR**：待提交（与 [[audio-service]] 同批）。
-- **遗留 Minors**：隐藏缓存、模态遮罩、返回栈、多实例留后续（YAGNI）。engine 侧 `IUIView` 的 cc 适配已实现（见下）。
+### 落地文件
 
-### engine 半适配（IUIView 的 cc 渲染实现，2026-07-28）
+- **core**：`packages/core/src/ui/ui-view.ts`（`UIViewSpec` + `IUIView` + `UI_VIEW` + `createMemoryUIView`）、`ui-manager.ts`（`createUIManager` + `UIManager`/`UIOpenOptions` + `DEFAULT_UI_LAYER` + `UI_MANAGER` + `getUIManager`）、`index.ts`；core `index.ts` re-export（`export * from './ui'`）。
+- **engine**：`packages/engine/src/cc-ui.ts` —— `createCcUIView(opts?)`（`IUIView` 的 cc 实现）+ `ccUIModule()`（注册 `UI_VIEW → cc 实现`），engine `index.ts` 导出。接入方式：`bootCoreKit({ modules:[…, ccUIModule()] })` 后 `getUIManager()` 自动拾取。类型走官方 `@cocos/creator-types@3.8.7`（[[adr-0005]]）。
 
-- **落地文件**：`packages/engine/src/cc-ui.ts`——`createCcUIView(opts?)`（`IUIView` 的 cc 实现）+ `ccUIModule()`（注册 `UI_VIEW → cc 实现`）；engine `index.ts` 导出。
-- **实现**：`create(spec)` 经 `IAssetLoader` 加载 `Prefab` → `instantiate` → 挂到层容器 Node → 返 handle；`destroy` 销毁节点并 `release` prefab。层容器：每个 layer 懒建一个子 Node 挂在 UI 根 Canvas 下（子节点挂载顺序即 z 序）；UI 根懒查场景内首个 `Canvas`，缺则兜底新建。窗口栈/去重/生命周期全在 core。
-- **接入**：`bootCoreKit({ modules:[…, ccUIModule()] })` 后 `getUIManager()` 自动拾取 cc `UI_VIEW`。
-- **ceiling（ponytail）**：`spec.args` 透传未接（待约定 UI 脚本基类/接口后在 create 后调 `onShow(args)`）；出/退场动画未做；兜底新建的 Canvas 无 Camera 可能不渲染（正式项目场景应自带 Canvas）。
-- **类型策略**：官方 `@cocos/creator-types@3.8.7`（ADR-0005）。
-- **验证**：四门全绿；**真机 gameView 预览已验证**两条路径——
-  1. **DI 接入 + 错误路径**：`UI_VIEW registered = true`、`open(缺prefab)=false` 优雅失败不崩（走 core 加载失败回滚）。
-  2. **happy path 端到端**（2026-07-29）：`resources/DemoPanel.prefab`（Node+UITransform+Label 'CCK UI OK'）经 `createUIManager({ view: createCcUIView({ root }) }).open('DemoPanel')` 真加载 → `instantiate` → 挂 `UILayer_ui` 层容器（子节点=1、Label 内容 'CCK UI OK' 还原 = 真反序列化）→ core 跟踪（tracked/isOpen）→ `close` → **下一帧**节点摘除 + `inst.isValid=false` + `asset release` 不崩。smoke 见 `apps/demo/assets/scripts/DemoBoot.ts`（🖼️ open/render + 🧹 close 回收，两条 PASS）。
-  - 坑记 1（回收断言时机）：`cc.Node.destroy()` **延迟到帧末**才置 `isValid=false` 并从 `_children` 摘除——回收断言须放下一帧（`scheduleOnce(…,0)`），首版误按同步断言 → FAIL，非 UIManager bug。
-  - 坑记 2（prefab 生成）：`DemoPanel.prefab` 首版用 `cce.Utils.serialize(new Prefab{data:裸Node})` 造，产物**缺 `cc.PrefabInfo`/`cc.CompPrefabInfo`**（根 `_prefab:null`、组件 `__prefab:null`）——运行时 `instantiate` 不需要它（smoke 照过），但**编辑器打开 prefab 崩** `TypeError: Cannot read properties of null (reading 'instance')`（读 `prefabInfo.instance`）。修法：手补根节点 `_prefab → cc.PrefabInfo{root,asset,fileId,instance:null,targetOverrides:null,nestedPrefabInstanceRoots:null}` + 每组件 `__prefab → cc.CompPrefabInfo{fileId}`，fileId 复用序列化器给的 `_id`、节点/组件 `_id` 清空。已按 uuid 加载验证 `hasPrefabInfo=true / instance=null(OK) / instantiate OK`，编辑器 open 不再崩。
-  - 未覆盖（ponytail / YAGNI）：Canvas 兜底新建分支（smoke 用显式 root）、出/退场动画、`args` 透传。
+### 反直觉行为 / 坑
+
+- **`cc.Node.destroy()` 延迟到帧末**才置 `isValid=false` 并从 `_children` 摘除 —— 断言回收必须放到下一帧（`scheduleOnce(…, 0)`），同步断言会假失败。
+- **手工造的 prefab 缺 `cc.PrefabInfo`/`cc.CompPrefabInfo` 会让编辑器崩**：`cce.Utils.serialize(new Prefab{ data: 裸Node })` 的产物根 `_prefab:null`、组件 `__prefab:null`，运行时 `instantiate` 照常工作，但**编辑器打开该 prefab** 抛 `TypeError: Cannot read properties of null (reading 'instance')`。修法：根节点补 `_prefab → cc.PrefabInfo{root, asset, fileId, instance:null, targetOverrides:null, nestedPrefabInstanceRoots:null}`、每个组件补 `__prefab → cc.CompPrefabInfo{fileId}`；fileId 复用序列化器给的 `_id`，节点/组件自身 `_id` 清空。
+- **加载中 close 靠 `Entry.closed` 标记**：`close` 先删表 + 置 `closed`；`create` 落地时在 `open` 的成功分支检查该标记（闭包持 entry 引用），为真则销毁刚建好的 handle、返 false 且不回填账本。这是防「prefab 加载完成后节点泄漏」的唯一机制，改动此处需同步看两侧。
+- **`closeLayer` 遍历 entries 快照**（`for (const [id, e] of [...open])`）而非 `open.keys()` 再 `get(id)?.layer` —— 后者的 `?.` undefined 分支恒不可达，会挡住分支覆盖。
+- **层容器懒建 → 层序 = 首次 open 顺序**：`cc-ui.ts` 按需建 `UILayer_<name>` 并 addChild，所以先开 `toast` 再开 `popup` 会让 popup 盖住 toast。**这是当前的已知缺陷**，v2 提案（见头部 `改造中:` 指针）改为启动时按固定层枚举顺序建全。
+
+### 当前限制（ponytail / YAGNI）
+
+- `spec.args` 透传**未接**：界面收不到打开参数，也没有 `onShow`/`onHide` 生命周期（缺界面契约）。
+- 出 / 退场动画未做；`close()` 是同步的。
+- 关闭 = 销毁，无隐藏缓存 —— 高频开关的界面每次都重新加载 prefab。
+- 无模态遮罩 / 点击拦截（由 prefab 自理）、无 UI 级返回栈、同 uiId 不支持多实例。
+- `uiRoot()` 兜底新建的 `Canvas` 无 Camera，可能不渲染 —— 正式项目应让场景自带 Canvas 或装 [[camera-rig]]；该兜底分支无测试覆盖。

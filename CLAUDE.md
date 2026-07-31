@@ -62,23 +62,31 @@ docs/                                        顶层 = 跨包 / 跨项目
 ├─ research/YYYY-MM-DD-<topic>.md            调研横评（带日期，快照性质）
 ├─ design/
 │  ├─ <topic>-overview.md                    跨模块 / 总纲设计
+│  ├─ YYYY-MM-DD-<模块>-v2-proposal.md       改造提案（过程文档，一次性；实施后并入模块文档、标「已实施」封存）
 │  └─ modules/{_TEMPLATE,monorepo-scaffold}.md  共享模板 + 跨包骨架（仅跨包留此）
 ├─ progress.md                               全仓模块状态看板（每次开工/完工更新）
 └─ adr/NNNN-<slug>.md                        重大 / 不可逆决策，一条一记、追加不改
 
-packages/<pkg>/docs/modules/<module>.md      单模块设计文档（随包，设计→实现记录一份到底）
+packages/<pkg>/docs/modules/<module>.md      单模块**当前功能文档**（随包，单一时态）
                                              core 模块归 core、engine 专属归 engine；
                                              跨 core+engine 的按「逻辑主场」归属（多在 core），适配层作文档内小节
 ```
 
+> **模块文档 = 现状，不是编年史。** 打开它读到的就是**代码此刻的样子**，不得出现 v1/v2 并列、「推翻了旧决策」这类演进叙事——读者不该在脑子里做版本减法。过程（改造动机、变更清单、迁移步骤、决策沿革）放 `docs/design/…-proposal.md` 与 `docs/adr/`，沿革本身另有 git 历史。踩坑与已知行为**留在模块文档**——它们描述的是当前系统的真实行为，属现状而非过程。
+
 - **渐进式披露 + AI 友好**：入口是 `docs/README.md`（地图）→ 主题文档 → 细节，逐层深入。每个文档顶部用统一头部 `状态 / 摘要 / 何时读 / 依赖`，让人和 AI 扫头部即可判断相关性、按需深入，不必一次性加载全部；`CLAUDE.md` 作为 L0 常驻保持精炼，细节推到 `docs/`。
-- **模块文档骨架**见 `docs/design/modules/_TEMPLATE.md`：Purpose / Public API（TS 精确签名）/ Behavior & data flow / Key decisions（决策表）/ Platform / Testable seams + 测试计划 / Open Questions / 实现记录。
+- **模块文档骨架**见 `docs/design/modules/_TEMPLATE.md`：Purpose / Public API（TS 精确签名）/ Behavior & data flow / Key decisions（决策表）/ Platform / Testable seams + 测试计划 / Open Questions / 已知行为与坑。
 - **状态标记**（文档顶部）：`草案 → 评审中 → 已定稿 → 已实现`。
-- **每个模块的流程**：
+- **新模块流程**：
   1. 动工前先出 `packages/<pkg>/docs/modules/<module>.md` 并评审**定稿**；
   2. 定稿后才 TDD 实现；
-  3. 实现完成 → 更新 `docs/progress.md` 状态 + 在模块文档补「实现记录」（最终 API、与设计偏差、测试结果、commit）；
+  3. 实现完成 → 把模块文档**改写为现状**（最终 API、已知行为与坑）+ 更新 `docs/progress.md`；
   4. 重大 / 不可逆技术决策 → 追加一条 `docs/adr/`。
+- **改造已有模块流程**（别往模块文档里追加 v2 节）：
+  1. 出 `docs/design/YYYY-MM-DD-<模块>-v2-proposal.md`（动机 / 变更总览 / 目标 API / 决策 / 测试计划 / 实施步骤）并评审**定稿**；模块文档头部加一行 `改造中:` 指针，正文仍描述现状；
+  2. 定稿后才 TDD 实施；
+  3. 实施完成 → 模块文档**整体重写为新现状**（不留 v1 痕迹）+ 提案标「已实施」封存 + 更新 `docs/progress.md`；
+  4. 破坏性 / 不可逆决策 → 追加一条 `docs/adr/`。
 
 ---
 
