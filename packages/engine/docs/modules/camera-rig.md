@@ -110,6 +110,8 @@ export interface CameraRig {
   readonly root: Node;                              // 常驻根（已 addPersistRootNode）
   /** ⚠️ 挂上去的节点跨场景存活——只放全局 loading/toast/断线提示；场景 UI 留在场景里。 */
   layerRoot(layer: CameraRigLayer): Node;           // @throws 该层未启用
+  hasLayer(layer: CameraRigLayer): boolean;         // UI 挂载点据此决定是否回退到 'ui'
+  layerMask(layer: CameraRigLayer): number;         // 挂上去的子树须归一到它，否则相机 visibility 不含 → 不可见
   camera(layer: CameraRigLayer): Camera;            // @throws 该层未启用
   claimClear(cam: Camera): void;                    // 「故意不要背景」时用
   releaseClear(): void;
@@ -202,7 +204,9 @@ await bootCoreKit({
 
 ### core / engine 分工
 
-本模块整体属 engine。core 侧不感知相机；`UIManager`（core）经 `IUIView`（engine `cc-ui.ts`）拿挂载 root —— 落地时把 `cc-ui.ts` 的 root 解析改为优先取 `getCameraRig().layerRoot('ui')`，保留现有兜底。
+本模块整体属 engine。core 侧不感知相机；`UIManager`（core）经 `IUIView`（engine `cc-ui.ts`）拿挂载 root。
+
+`cc-ui.ts` 把 core 的 10 档 UI 层映射到本模块的相机层（`back→uiBack`、`hud/ui/popup/dialog→ui`、`guide/loading/system/notify/top→uiFront`），**带回退**：`hasLayer(want)` 为 false 就落回 `ui` root（默认 rig 只建 `['bg','ui']`，所以默认全落 `ui`），层内 z 序仍由「启动时按 `UI_LAYERS` 顺序一次建全层容器」保证。项目要真拆相机只需 `cameraRigModule({ layers: ['bg','uiBack','ui','uiFront'] })`，业务与层枚举都不用改。挂上去的子树 layer 由 `cc-ui.ts` 按 `layerMask(层)` 递归归一——prefab 存的多是 `UI_2D`，不归一挂到 `uiBack/uiFront` 会因相机 `visibility` 不含该层而整屏不可见。详见 [[ui-manager]]。
 
 ## Key design decisions（决策表）
 
@@ -251,31 +255,28 @@ await bootCoreKit({
 | 1 | 相机 + `RenderRoot2D` 在 persist 节点上跨 `loadScene` 持续渲染 | ✅ Lobby → Dodge → Lobby 全程 `CCKRig` 存活并正常出图 |
 | 2 | **场景内** `RenderRoot2D` 子树被**常驻**相机按 layer 渲染 | ✅ Lobby / Dodge 两场景均无自带相机，内容由常驻 `uiCamera` 渲出 |
 | 3 | 层级 root 的 `Widget` 在裸 `Node` 父级下拉满 `visibleRect` | ✅ 大厅内容水平居中、随窗口重排 |
-| 4 | 旋转时 `resolutionModule` 换分辨率 → 相机跟上 | ⚠️ **未实测**（见下） |
+| 4 | 旋转时 `resolutionModule` 换分辨率 → 相机跟上 | ✅ **浏览器预览实测**（2026-07-31）：横→竖设计分辨率 `1920×1080 → 1080×1920`，UI 跟着换布局 |
 | 5 | `claimClear` 后背景消失且无花屏 | ⚠️ **未实测**（demo 无「故意不要背景」的场景可借用） |
 
-第 4 项为何未实测：Game View 的「设计分辨率」模式把画布**钉在项目设计分辨率**上，改编辑器窗口尺寸不会让 `screen.windowSize` 变横向；面板的旋转开关是 panel 局部 UI，`Editor.Profile` 里改 `preview.preview.rotate` 不触发它，也没有对应的 `Editor.Message`。要实测须**真机转屏**或浏览器预览手动改窗口比例。纯逻辑侧（`pickDesignResolution` × 7、`computeCameraCenter` 横屏用例）已单测覆盖，未覆盖的只剩 6 行事件订阅接线。
-
-## Open Questions（待用户拍板）
-
-1. 是否给 `cc-ui.ts`（`IUIView`）加「按层挂载」参数，让 `UIManager.open` 能指定挂 `uiFront`（弹窗）而非 `ui`？首版可不做。
+第 4 项怎么测的：**Game View 测不了**——它的「设计分辨率」模式把画布钉在项目设计分辨率上，改编辑器窗口不会让 `screen.windowSize` 变横向；面板的旋转开关是 panel 局部 UI，`Editor.Profile` 改 `preview.preview.rotate` 不触发它，也没有对应的 `Editor.Message`。改走**浏览器预览**（`Editor.Message.request('preview','query-preview-url')` 拿 URL）+ Playwright 改视口。注意预览页自己管画布尺寸、**不转发 window resize 给引擎**，所以引擎不会发 `canvas-resize`；实测时在页面里 `cc.view.emit('canvas-resize')` 手动触发那一下——被验的是 kit 的反应链（`pickDesignResolution` → `setDesignResolutionSize` → 相机 `syncCameras` → `setUIVariant` 按需重建），事件本身是引擎职责。
 
 ---
 
-## 实现记录
+## 已知行为与坑
 
-- **最终 API 与设计偏差**：
-  - `CAMERA_PRIORITY.background` → **`.bg`**，与 `CameraRigLayer` / `CCK_LAYERS` 键名统一。
-  - 新增 `createCameraRig()`（不经 KitModule 直建，便于特殊编排）。
-  - 新增独立的 **`resolutionModule`**（`src/resolution.ts`）——本轮新增需求「竖屏大厅旋转成横屏游戏」的落地，决策 #11~13。
-  - `visibleRect` **不在公开 cc 声明里**，改用等价的 `view.getVisibleSize().height`。
-  - 决策 #6 从「幂等复用同名根」改为「**销毁旧根重建**」——复用旧代码建的节点树更危险。
-  - `computeOrthoHeight` 比 Canvas 源码多一个 `scaleY <= 0/NaN` 的 guard（`ponytail:` 注明），挡住 Infinity/NaN 进渲染管线。
-  - 层校验错误信息带上「去 Project Settings → Layers 把 bit N 命名为 X」的可操作指引。
-  - **新增 `computeCameraCenter`（决策 #14）**：首版把相机放在世界 `(0,0)`，预览实测发现界面整体偏到右上角、大半不可见。查源码坐实 UI 坐标系原点在可视区左下（`view.ts` 硬置 `vb.x=0; vb.y=0`），Widget 的 isRoot 分支把层级 root 拉到 `[0,w]×[0,h]`。改为把相机摆到可视矩形中心，并补 3 条回归单测。
-- **测试结果**：`render-policy.test.ts` **20 条全绿**；全仓 `vitest run` **410 tests / 27 files 全绿**；`tsc -b --force` 对官方真 cc 类型 exit 0；`eslint .` 0 warning；`pnpm build` 成功。
-- **预览实测（apps/demo）**：Boot → kit(含 `resolution` + `camera-rig`) → `loadScene('Lobby')` → panel 模块 shop mount/unmount/release → game 模块 mini-dodge 切 `Dodge.scene` → `lobby:back` 切回 `Lobby.scene` + release，**全程 0 error / 0 warning**。逐项结果见上方测试计划表。
-- **commit / PR**：待提交。
-- **遗留 Minors**：
-  - 测试计划表第 4 / 5 项未实测（转屏须真机；`claimClear` demo 里无场景可借用）。
-  - Open Question 1（`IUIView` 按层挂载参数）仍未做。
+> ⚠️ 本节写**当前系统的真实行为**——踩过的坑、反直觉的时序、未覆盖的分支。
+
+### 反直觉行为 / 坑
+
+- **相机 XY 必须落可视矩形中心，不是世界原点**：UI 坐标系原点在可视区左下（`view.ts::_updateAdaptResult` 硬置 `vb.x=0; vb.y=0`），Widget 的 isRoot 分支把层级 root 拉到 `[0,w]×[0,h]`。相机留在 `(0,0)` 时视野是 `[-w/2,w/2]×[-h/2,h/2]`，与内容整整错开半屏——表现为「界面挤到右上角、大半不可见」。`computeCameraCenter` + 3 条回归单测守这一条。
+- **常驻根与层级 root 绝不能加 `UITransform`**：`widget-manager.ts` 的 `useGlobal = target instanceof Scene || !target.getComponent(UITransform)` 靠「父节点没有 UITransform」走 isRoot 分支对齐 `visibleRect`（全屏）。一旦有了，Widget 改为对齐本节点默认的 100×100 contentSize → 全部 UI 缩成一团。
+- **自定义层未在 Project Settings 注册 / bit 对不上 → 启动即抛**，且**故意不做 `Layers.addLayer` 运行时兜底**：运行时注册与项目设置不一致会让场景资源里存的 layer 值错位，变成静默的诡异 bug。宁可炸一个带「去 Project Settings → Layers 把 bit N 命名为 X」的可操作错误。
+- **`computeOrthoHeight` 比 Canvas 源码多一个 guard**：`scaleY <= 0 / NaN`（headless、窗口最小化）时回退到设计单位口径，挡住 Infinity/NaN 灌进渲染管线（`ponytail:` 注明）。
+- **热重载幂等靠销毁重建而非复用**：开发期热重载会重跑模块顶层，`buildRoot` 发现同名旧根就 `removePersistRootNode` + `destroy` 再建新的——复用旧代码建的节点树更危险。
+- **Creator packer 不监视 `node_modules/`**：改完 engine `dist` 后 Game View 可能还跑旧代码，需切一次 browser 预览强制重打包。
+- **`claimClear` 必须两处同改**：只改 `clearFlags` 留着背景开着 → 背景整屏白画一遍再被覆盖（多一次全屏 clear + 整批 overdraw）；只关背景而借用方仍 `DEPTH_ONLY` → 无人清色，颜色缓冲未定义 → **真机花屏**，预览查不出。这就是它被封成原子方法的原因。
+
+### 未覆盖（ponytail / YAGNI）
+
+- 测试计划第 5 项 `claimClear` 未实测——demo 里没有「故意不要背景」的场景可借用。
+- `uiBack` / `uiFront` 默认不建（决策 #8 只占号）。UI 层映射带回退，所以不建也不影响业务；真要拆相机加一行 `layers` 即可。

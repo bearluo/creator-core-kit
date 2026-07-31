@@ -6,6 +6,8 @@
  * 「为什么不用 Canvas」的源码依据见 docs/research/2026-07-30-cc-canvas-vs-renderroot2d.md。
  */
 
+import type { Orientation } from '@cck/core';
+
 /**
  * 相机 priority 阶梯：**值越小越先渲染 → 越大越叠在上层**（cc `Camera.priority` 语义，
  * 见 3.8.7 声明「值越小越优先渲染」）。
@@ -35,7 +37,8 @@ export const CCK_LAYERS = {
   uiFront: { name: 'UI_FRONT', bit: 2 },
 } as const;
 
-export type Orientation = 'portrait' | 'landscape';
+/** 屏幕方向。定义在 core（它同时是 UI 变体的一个维度，见 `UIVariant`），此处转出供本包内使用。 */
+export type { Orientation };
 
 export interface DesignResolution {
   readonly orientation: Orientation;

@@ -11,3 +11,7 @@ export type {
 } from './bundle-manager';
 export { createMemoryBundleSource, BUNDLE_SOURCE } from './bundle-source';
 export type { IBundleSource, BundleLoadOptions } from './bundle-source';
+export { createBundleScope } from './bundle-scope';
+export type { BundleScope, BundleScopeDeps } from './bundle-scope';
+export { BUNDLE_RELOADER } from './bundle-reloader';
+export type { IBundleReloader } from './bundle-reloader';

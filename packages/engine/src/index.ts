@@ -19,8 +19,9 @@ export { createCcStorage, ccStorageModule } from './cc-storage';
 // —— 第 2 批 · 设施（AudioService engine 半：IAudioPlayer 的 cc.AudioSource 实现）——
 export { createCcAudioPlayer, ccAudioModule } from './cc-audio';
 
-// —— 第 2 批 · 设施（UIManager engine 半：IUIView 的 cc 渲染实现）——
+// —— 第 2 批 · 设施（UIManager engine 半：IUIView 的 cc 渲染实现 + 界面契约）——
 export { createCcUIView, ccUIModule } from './cc-ui';
+export { CCKUIView } from './cck-ui-view';
 
 // —— 第 2 批 · 设施（SceneFlow engine 半：director 切场景 promisify）——
 export { loadScene, preloadScene } from './scene-loader';
@@ -66,3 +67,6 @@ export { CAMERA_RIG, cameraRigModule, createCameraRig, getCameraRig } from './ca
 export type { CameraRig, CameraRigOptions } from './camera-rig';
 export { resolutionModule } from './resolution';
 export type { ResolutionOptions } from './resolution';
+
+// —— App 层 · 启动编排的引擎半（平台重启 + bundle 脚本失效接缝）——
+export { appModule, createCcBundleReloader } from './app-module';

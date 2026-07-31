@@ -24,6 +24,9 @@ export * from './asset';
 export * from './audio';
 export * from './ui';
 
+// —— App 层 · 启动编排（把热更/分包/compat 闸串成一条可插拔序列）——
+export * from './app';
+
 // —— 第 3 批 · 进阶 ——
 export * from './hotupdate';
 export * from './network';

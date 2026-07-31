@@ -1,4 +1,5 @@
 import { ResolutionPolicy, screen, view } from 'cc';
+import { getLogger, setUIVariant } from '@cck/core';
 import type { KitModule } from '@cck/core';
 import { pickDesignResolution, type DesignResolution, type Orientation } from './render-policy';
 
@@ -55,6 +56,11 @@ export function resolutionModule(opts?: ResolutionOptions): KitModule {
       applying = false;
     }
     applied = r.orientation;
+    // 灌进 UI 变体：登记了 orientation resolver 的界面会按需重建换 view，其余零成本（解析结果没变）。
+    // 不 await——apply 由 resize/orientation 事件同步调用，重建是异步的，让它自己跑完。
+    void setUIVariant({ orientation: r.orientation }).catch((e: unknown) =>
+      getLogger('resolution').warn('按方向重建界面失败', e),
+    );
     opts?.onOrientationChange?.(r.orientation);
   };
 

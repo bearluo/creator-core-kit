@@ -43,6 +43,14 @@ export interface BundleManager {
   get(name: string): BundleHandle | undefined;
   /** 已跟踪 bundle 快照（name 升序）。 */
   list(): BundleInfo[];
+  /**
+   * 设置 bundle → 版本映射（web 出包的 md5）。**整体替换**，不是合并。
+   * load 时 `opts.version` 优先，否则查此表。
+   *
+   * 放这里而不是上层 App：UIManager 打开界面时也会 load 它所属的 bundle，
+   * 版本表放上层就会漏掉那条路径。放这里则所有调用点零改自动带上版本。
+   */
+  setVersions(map: Readonly<Record<string, string>>): void;
 }
 
 interface Entry {
@@ -56,6 +64,7 @@ export function createBundleManager(opts?: BundleManagerOptions): BundleManager 
   const source = opts?.source ?? getRootContainer().tryResolve(BUNDLE_SOURCE) ?? createMemoryBundleSource();
   const logger = opts?.logger ?? getLogger('BundleManager');
   const table = new Map<string, Entry>();
+  let versions: Readonly<Record<string, string>> = {};
 
   const handleOf = (name: string, e: Entry): BundleHandle => ({ name, version: e.version });
 
@@ -72,9 +81,10 @@ export function createBundleManager(opts?: BundleManagerOptions): BundleManager 
         return handleOf(name, existing);
       }
 
-      const entry: Entry = { version: loadOpts?.version, refCount: 1 };
+      const version = loadOpts?.version ?? versions[name];
+      const entry: Entry = { version, refCount: 1 };
       const p = source.loadBundle(name, {
-        version: loadOpts?.version,
+        version,
         onProgress: loadOpts?.onProgress,
         url,
       });
@@ -114,9 +124,13 @@ export function createBundleManager(opts?: BundleManagerOptions): BundleManager 
     },
 
     list(): BundleInfo[] {
-      return [...table.entries()]
+      return Array.from(table.entries())
         .map(([name, e]) => ({ name, version: e.version, refCount: e.refCount }))
         .sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    setVersions(map): void {
+      versions = { ...map };
     },
   };
 }

@@ -1,0 +1,331 @@
+import { getAssetLoader, type IAssetLoader } from '../asset';
+import { getBundleManager, type BundleManager } from '../bundle';
+import { createToken, getRootContainer, type Token } from '../di';
+import type { Disposer } from '../eventbus';
+import {
+  createSemverVersionGate,
+  getHotUpdateService,
+  type AppInfo,
+  type HotUpdateService,
+  type VersionGate,
+} from '../hotupdate';
+import { getLogger, type ILogger } from '../logging';
+
+/**
+ * App —— 启动编排层：把「读戳 → 热更 → 装共享包 → 进大厅」串成一条可插拔、可上报、可重试的序列。
+ *
+ * 零件（HotUpdateService / BundleManager / compat 闸 / UIManager）本就齐备，缺的是把它们按序装起来
+ * 并对失败分类的这一层。纯逻辑、零 cc：切场景这类副作用由 {@link AppConfig.lobby}`.enter` 回调交还
+ * 给 engine 侧（对齐 engine/scene-loader「切场景是 engine 直接行为，core 不持其接缝」的既有决策）。
+ */
+
+/** 启动阶段，也是进度上报的粒度。 */
+export type LaunchPhase =
+  | 'idle'
+  | 'platform'
+  | 'hotupdate'
+  | 'shared'
+  | 'lobby'
+  | 'running'
+  | 'failed';
+
+export interface AppConfig {
+  readonly appId: string;
+  /** 客户端版本；app 戳缺失时作 compat 闸的 appVersion 兜底。 */
+  readonly version: string;
+  /** 渠道 / 分发标识。 */
+  readonly channel: string;
+  /** 环境：决定版本表 / manifest 地址由项目怎么拼。 */
+  readonly env: 'dev' | 'staging' | 'prod';
+  /** 启动期必须加载的共享 bundle（按序），默认 `['shared']`。 */
+  readonly shared?: readonly string[];
+  readonly lobby: {
+    readonly bundle: string;
+    /** 进入大厅。engine 侧通常就是一行 `loadScene(scene, { bundle })`。 */
+    readonly enter: () => Promise<void>;
+  };
+  /**
+   * web：bundle 版本表 JSON 地址（形状见 {@link RemoteVersions}）。
+   * 不配则跳过该步——native 靠 searchPaths 读新文件，不需要版本表。
+   */
+  readonly versionUrl?: string;
+  /** app 戳所在 bundle，默认 `'main'`（Cocos 主包）。 */
+  readonly stampBundle?: string;
+  /** app 戳资源路径，默认 `'cck-app-compat'`（tools 的 `cck-manifest stamp` 出包期生成）。 */
+  readonly stampPath?: string;
+}
+
+/** 远程版本表：web 热更的全部输入。 */
+export interface RemoteVersions {
+  /** bundle 名 → 版本（出包 md5）。 */
+  readonly bundles?: Readonly<Record<string, string>>;
+  /** 本次内容版本号，喂 compat 闸。 */
+  readonly version?: string;
+  readonly minAppVersion?: string;
+  readonly coreApiHash?: string;
+}
+
+export interface LaunchProgress {
+  readonly phase: LaunchPhase;
+  /** 0..1，仅下载阶段有。 */
+  readonly ratio?: number;
+  /** i18n key —— kit 不出面向用户的文案，UI 自己译。 */
+  readonly messageKey?: string;
+}
+
+/** 失败分类：三种给用户看的东西完全不同（重试 / 去商店 / 兜底），不能糊成一个 Error。 */
+export type LaunchFailure =
+  | { kind: 'network'; retryable: true; error: unknown }
+  | { kind: 'needFullUpdate'; reason: string }
+  | { kind: 'fatal'; error: unknown };
+
+export interface LaunchContext {
+  readonly config: AppConfig;
+  /** 步骤间传值（{@link APP_INFO}、登录态、服务器下发的配置…）。 */
+  readonly bag: Map<string, unknown>;
+  report(p: LaunchProgress): void;
+}
+
+export interface LaunchStep {
+  readonly name: string;
+  readonly phase: LaunchPhase;
+  /** 返回 `'halt'` = 到此为止（如 native 热更已 restart，等进程重来）。 */
+  run(ctx: LaunchContext): Promise<void | 'halt'>;
+}
+
+export interface App {
+  readonly config: AppConfig;
+  readonly phase: LaunchPhase;
+  /** 从当前游标跑到底。重复调用不会重跑已完成的步骤。 */
+  launch(): Promise<void>;
+  /** 从**失败那一步**继续，前面的不重跑。 */
+  retry(): Promise<void>;
+  restart(): void;
+  onProgress(cb: (p: LaunchProgress) => void): Disposer;
+  onFailure(cb: (f: LaunchFailure) => void): Disposer;
+}
+
+/** 依赖注入口（仅为可测；生产不传，各服务从全局取）。 */
+export interface AppDeps {
+  bundles?: Pick<BundleManager, 'load' | 'setVersions'>;
+  assets?: Pick<IAssetLoader, 'load' | 'loadRemote' | 'release'>;
+  hotUpdate?: Pick<HotUpdateService, 'check' | 'update' | 'restart'>;
+  gate?: VersionGate;
+  logger?: ILogger;
+  /**
+   * 重启应用。默认走 `HotUpdateService.restart()`（native 的 `game.restart`）。
+   * engine 侧按平台注入——**web 必须 `location.reload()`**：只有整页重来才会重新拉 `index.<md5>.js`。
+   */
+  restart?: () => void;
+}
+
+/** `ctx.bag` 里 AppInfo 的键——platform 步写入，compat 闸与项目自定义步骤读取。 */
+export const APP_INFO = 'cck.app.info';
+
+const DEFAULT_SHARED = ['shared'] as const;
+const DEFAULT_STAMP_BUNDLE = 'main';
+const DEFAULT_STAMP_PATH = 'cck-app-compat';
+
+/** JSON 资源的最小形状（`cc.JsonAsset` 的 `.json`）——core 不 import cc，只认这个结构。 */
+interface JsonLike {
+  readonly json?: unknown;
+}
+
+/**
+ * 步骤主动中止启动并指定失败分类。
+ * 用**结构标记**而非自定义 Error 子类——跨 bundle `instanceof` 不可靠（ADR-0001）。
+ */
+export function abortLaunch(failure: LaunchFailure): never {
+  throw Object.assign(new Error(`启动中止：${failure.kind}`), { __cckLaunchFailure: failure });
+}
+
+function classify(e: unknown): LaunchFailure {
+  const marked = (e as { __cckLaunchFailure?: LaunchFailure } | null)?.__cckLaunchFailure;
+  if (marked) return marked;
+  // ponytail: 启动期偶发失败绝大多数是网络/IO（下载、加载资源、切场景）→ 默认判可重试。
+  // 真是代码 bug 时重试也只是再失败一次，代价小于把可恢复的失败判成 fatal 让用户无路可走。
+  return { kind: 'network', retryable: true, error: e };
+}
+
+/** kit 的默认启动序列。项目可整体替换，或取本函数结果再插队自己的步骤（登录 / SDK / 公告）。 */
+export function defaultLaunchSteps(deps?: AppDeps): readonly LaunchStep[] {
+  const logger = deps?.logger ?? getLogger('App');
+  const assets = (): Pick<IAssetLoader, 'load' | 'loadRemote' | 'release'> =>
+    deps?.assets ?? getAssetLoader();
+  const bundles = (): Pick<BundleManager, 'load' | 'setVersions'> =>
+    deps?.bundles ?? getBundleManager();
+  const hot = (): Pick<HotUpdateService, 'check' | 'update' | 'restart'> =>
+    deps?.hotUpdate ?? getHotUpdateService();
+  const gate = (): VersionGate => deps?.gate ?? createSemverVersionGate();
+
+  return [
+    {
+      name: 'platform',
+      phase: 'platform',
+      async run(ctx: LaunchContext): Promise<void> {
+        const bundle = ctx.config.stampBundle ?? DEFAULT_STAMP_BUNDLE;
+        const path = ctx.config.stampPath ?? DEFAULT_STAMP_PATH;
+        let info: AppInfo = { appVersion: ctx.config.version };
+        try {
+          const stamp = await assets().load<JsonLike>(path, { bundle, type: 'json' });
+          const j = (stamp?.json ?? {}) as { version?: string; coreApiHash?: string };
+          info = { appVersion: j.version ?? ctx.config.version, coreApiHash: j.coreApiHash };
+          assets().release(path, { bundle, type: 'json' }); // 值已取出，资源可放
+        } catch (e) {
+          // 缺戳**不阻断启动**：闸对 coreApiHash 单边缺失恒放行（休眠），只是失去 AOT 缺代码的保护。
+          // 只取 message 不带堆栈——没打戳的项目每次启动都会走到这，堆栈纯噪音。
+          logger.warn(
+            `app 戳未读到（${bundle}/${path}）→ coreApiHash 闸休眠：${(e as Error)?.message ?? String(e)}`,
+          );
+        }
+        ctx.bag.set(APP_INFO, info);
+      },
+    },
+
+    {
+      name: 'hotupdate',
+      phase: 'hotupdate',
+      async run(ctx: LaunchContext): Promise<void | 'halt'> {
+        // native：backend 注册了才真检查。web 上是空后端 → 恒 up-to-date，本段自然 no-op。
+        const r = await hot().check();
+        if (r.kind === 'rejected') abortLaunch({ kind: 'needFullUpdate', reason: r.reason });
+        if (r.kind === 'error') throw r.error;
+        if (r.kind === 'update-available') {
+          const u = await hot().update((p) =>
+            ctx.report({
+              phase: 'hotupdate',
+              ratio: p.bytesTotal > 0 ? p.bytesDone / p.bytesTotal : undefined,
+              messageKey: 'cck.launch.downloading',
+            }),
+          );
+          if (u.kind === 'failed') throw u.error;
+          if (u.kind === 'ready') {
+            hot().restart();
+            return 'halt'; // 进程即将重来，别再往下走
+          }
+          // 'skipped'：当前状态不允许 update，按无更新继续
+        }
+
+        // web：拉 bundle 版本表（native 靠 searchPaths 读新文件，通常不配 versionUrl → 跳过）
+        const url = ctx.config.versionUrl;
+        if (!url) return;
+        const remote = await assets().loadRemote<JsonLike>(url, { type: 'json' });
+        const j = (remote?.json ?? {}) as RemoteVersions;
+        // ⚠️ web 路径没有 AssetsManager 的 apply，compat 闸只能摆在这里 —— 少了它，热更下来的新
+        // bundle 引用主包 AOT 里已被裁掉的符号时，会跑到那一行才崩（ADR-0001，隐蔽）。
+        const local = (ctx.bag.get(APP_INFO) as AppInfo | undefined) ?? {
+          appVersion: ctx.config.version,
+        };
+        const g = gate().canApply(
+          {
+            version: j.version ?? ctx.config.version,
+            minAppVersion: j.minAppVersion,
+            coreApiHash: j.coreApiHash,
+          },
+          local,
+        );
+        if (!g.ok) {
+          abortLaunch({ kind: 'needFullUpdate', reason: g.reason ?? '版本表与当前客户端不兼容' });
+        }
+        bundles().setVersions(j.bundles ?? {});
+      },
+    },
+
+    {
+      name: 'shared',
+      phase: 'shared',
+      async run(ctx: LaunchContext): Promise<void> {
+        for (const b of ctx.config.shared ?? DEFAULT_SHARED) {
+          await bundles().load(b);
+        }
+      },
+    },
+
+    {
+      name: 'lobby',
+      phase: 'lobby',
+      async run(ctx: LaunchContext): Promise<void> {
+        await bundles().load(ctx.config.lobby.bundle);
+        await ctx.config.lobby.enter();
+      },
+    },
+  ];
+}
+
+export function createApp(
+  config: AppConfig,
+  opts?: { steps?: readonly LaunchStep[]; deps?: AppDeps },
+): App {
+  const logger = opts?.deps?.logger ?? getLogger('App');
+  const steps = opts?.steps ?? defaultLaunchSteps(opts?.deps);
+  const progressCbs = new Set<(p: LaunchProgress) => void>();
+  const failureCbs = new Set<(f: LaunchFailure) => void>();
+  const bag = new Map<string, unknown>();
+  let phase: LaunchPhase = 'idle';
+  let cursor = 0;
+
+  const report = (p: LaunchProgress): void => {
+    for (const cb of Array.from(progressCbs)) cb(p);
+  };
+
+  const ctx: LaunchContext = { config, bag, report };
+
+  const run = async (): Promise<void> => {
+    while (cursor < steps.length) {
+      const step = steps[cursor];
+      if (!step) break;
+      phase = step.phase;
+      report({ phase: step.phase });
+      let r: void | 'halt';
+      try {
+        r = await step.run(ctx);
+      } catch (e) {
+        phase = 'failed';
+        const f = classify(e);
+        logger.warn(`启动步骤 '${step.name}' 失败（${f.kind}）`, e);
+        for (const cb of Array.from(failureCbs)) cb(f);
+        return;
+      }
+      // 'halt'：本步已把控制权交出去（如已 restart）。cursor 不推进 —— 万一没真重启，retry 重跑这步。
+      if (r === 'halt') return;
+      cursor++;
+    }
+    phase = 'running';
+    report({ phase: 'running' });
+  };
+
+  return {
+    config,
+    get phase(): LaunchPhase {
+      return phase;
+    },
+    launch: run,
+    retry: run,
+    restart(): void {
+      const r = opts?.deps?.restart;
+      if (r) r();
+      else (opts?.deps?.hotUpdate ?? getHotUpdateService()).restart();
+    },
+    onProgress(cb: (p: LaunchProgress) => void): Disposer {
+      progressCbs.add(cb);
+      return () => void progressCbs.delete(cb);
+    },
+    onFailure(cb: (f: LaunchFailure) => void): Disposer {
+      failureCbs.add(cb);
+      return () => void failureCbs.delete(cb);
+    },
+  };
+}
+
+/** DI token：App 有必需配置、造不出无参默认，所以只有注册后才能 {@link getApp}。 */
+export const APP: Token<App> = createToken<App>('cck.app');
+
+export function getApp(): App {
+  const app = getRootContainer().tryResolve(APP);
+  if (!app) {
+    throw new Error(
+      'getApp: App 未注册 —— 先在启动处 createApp(config) 并 getRootContainer().register(APP, { useValue: app })',
+    );
+  }
+  return app;
+}

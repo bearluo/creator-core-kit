@@ -46,6 +46,10 @@ export interface CameraRig {
    * 场景自己的 UI 请留在场景里（自带 `RenderRoot2D` + 设对应层）。
    */
   layerRoot(layer: CameraRigLayer): Node;
+  /** 该层是否已启用（UI 挂载点用它决定是否回退到 `ui` 层）。 */
+  hasLayer(layer: CameraRigLayer): boolean;
+  /** 该层的 cc layer 掩码。挂上去的节点子树须归一到它，否则相机 visibility 不含该层 → 不可见。 */
+  layerMask(layer: CameraRigLayer): number;
   /** 取某层的相机。 */
   camera(layer: CameraRigLayer): Camera;
   /** 清色职责移交：`cam` 转 `SOLID_COLOR` + 关背景相机。用于「故意不要背景」的全屏场景。 */
@@ -219,6 +223,8 @@ export function createCameraRig(opts?: CameraRigOptions): CameraRig {
   return {
     root,
     layerRoot: (layer) => need(layerRoots, layer, '挂载 root'),
+    hasLayer: (layer) => layerRoots.has(layer),
+    layerMask: (layer) => need(masks, layer, 'layer 掩码'),
     camera: (layer) => need(cameras, layer, '相机'),
     claimClear: (cam) => clear.claim(cam),
     releaseClear: () => clear.release(),

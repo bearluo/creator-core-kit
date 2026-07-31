@@ -1,6 +1,85 @@
-import { assetManager } from 'cc';
+import { assetManager, js } from 'cc';
 import { BUNDLE_SOURCE } from '@cck/core';
 import type { IBundleSource, BundleLoadOptions, KitModule } from '@cck/core';
+
+/**
+ * SystemJS 的 load 记录，只用到三个字段：`id` = 模块 id，`d` = 依赖的 load 记录，
+ * namespace = 模块导出对象。
+ *
+ * ⚠️ namespace 挂哪个字段**跨版本会变**：Cocos 3.8.7 web 产物里的 SystemJS 是 `n`，`C` 是
+ * 「top-level completion promise」；另一些版本 namespace 在 `C` 上。写死一个就会在另一边静默拿到空
+ * 导出、一个类都注销不掉（表现为「类换了、界面没换」）→ 下面按形状挑，不按字段名赌。
+ */
+interface SysLoad {
+  id: string;
+  n?: unknown;
+  C?: unknown;
+  d?: SysLoad[] | null;
+}
+
+/** 取 load 记录的 namespace：普通对象才算（`C` 在某些版本是 Promise，要排除掉）。 */
+function namespaceOf(load: SysLoad): Record<string, unknown> | undefined {
+  for (const v of [load.n, load.C]) {
+    if (v && typeof v === 'object' && typeof (v as { then?: unknown }).then !== 'function') {
+      return v as Record<string, unknown>;
+    }
+  }
+  return undefined;
+}
+/** SystemJS 实例：模块表挂在唯一的 symbol 键上，declare 表是普通实例属性 `registerRegistry`。 */
+type SystemLike = Record<string | symbol, unknown> & {
+  registerRegistry?: Record<string, unknown>;
+};
+
+/** 每个 bundle 上次加载用的版本；用来判断「这次 load 是不是换了 md5」。 */
+const loadedVersions = new Map<string, string | undefined>();
+
+/**
+ * 让下一次 loadBundle **真正重新求值**该 bundle 的脚本：把它在 SystemJS 里的模块记录
+ * （连同 declare 缓存）删掉，并把它注册进 cc 的类注销掉。返回是否真的清了。
+ *
+ * 为什么两样都要清（2026-07-31 web-mobile 真构建实测）：
+ * - 只删模块不注销类 → 新模块虽然重新求值，但 `js.setClassName` 撞名不覆盖 `_registeredClassIds`，
+ *   prefab 是按 **classId** 反序列化的 → 拿到的还是旧类，表现为「类换了、界面没换」。
+ * - 只注销类不删模块 → `System.import` 命中缓存的 load 记录，declare 根本不再执行，类永远回不来
+ *   （反而比不清更糟：prefab 反序列化报 `Can not find class`，组件被静默丢弃）。
+ *
+ * ⚠️ **只在 md5（version）真的变了时调**。cc 的 `downloadScript` 按 **URL** 缓存已下载的脚本
+ * （引擎内模块私有的 `downloaded[url]`，外部够不到）：同 URL 再加载不会重新插 `<script>`，
+ * 清了缓存就再也执行不到那段代码，`System.import` 两张表都落空 → 加载直接失败。
+ * native 没有这层 DOM 脚本缓存，热更覆盖同名文件后可以无条件清。
+ */
+export function invalidateBundleScripts(name: string): boolean {
+  const sys = (globalThis as { System?: SystemLike }).System;
+  if (!sys) return false;
+  const symbol = Reflect.ownKeys(sys).find((k) => typeof k === 'symbol');
+  const loads = symbol ? (sys[symbol] as Record<string, SysLoad> | undefined) : undefined;
+  const declares = sys.registerRegistry;
+  if (!loads || !declares) return false;
+
+  // 出包时该 bundle 的入口 chunk，它的依赖就是这个 bundle 自己的全部脚本模块
+  const entryId = `chunks:///_virtual/${name}`;
+  const entry = loads[entryId];
+  if (!entry) return false;
+
+  const classes: unknown[] = [];
+  const drop = (id: string): void => {
+    delete loads[id];
+    delete declares[id];
+  };
+  for (const dep of entry.d ?? []) {
+    const ns = namespaceOf(dep);
+    for (const key of Object.keys(ns ?? {})) {
+      const exported = ns?.[key];
+      if (typeof exported === 'function') classes.push(exported); // 导出的函数 = 该模块注册的类
+    }
+    drop(dep.id);
+  }
+  drop(entryId);
+  drop(`virtual:///prerequisite-imports/${name}`);
+  if (classes.length) (js.unregisterClass as (...c: unknown[]) => void)(...classes);
+  return true;
+}
 
 /**
  * IBundleSource 的 cc 实现 —— BundleManager 的「引擎半」薄壳：只做「真加载 / 真释放 / 是否就绪」
@@ -11,13 +90,21 @@ export function createCcBundleSource(): IBundleSource {
   return {
     loadBundle(name: string, opts?: BundleLoadOptions & { url?: string }): Promise<void> {
       const target = opts?.url ?? name; // 远程有 url 从 url 取，本地按 name
+      // 换了 md5 = 换了脚本 URL = 有新代码可求值 → 先清掉上一版的模块与类，免重启换代码。
+      // 版本没变时**绝不能清**（见 invalidateBundleScripts 的 downloadScript URL 缓存说明）。
+      if (loadedVersions.has(name) && loadedVersions.get(name) !== opts?.version) {
+        invalidateBundleScripts(name);
+      }
       // ponytail: onProgress 忽略——cc.assetManager.loadBundle 不暴露 bundle 级进度回调（只 options.version）。
       //           需要进度时改走第 3 批 HotUpdateService 的 AssetsManager backend。
       const options = opts?.version ? { version: opts.version } : null;
       return new Promise<void>((resolve, reject) => {
         assetManager.loadBundle(target, options, (err) => {
           if (err) reject(err);
-          else resolve();
+          else {
+            loadedVersions.set(name, opts?.version);
+            resolve();
+          }
         });
       });
     },

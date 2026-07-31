@@ -7,6 +7,7 @@ import {
 import {
   createMemoryBundleSource,
   BUNDLE_SOURCE,
+  type BundleLoadOptions,
   type IBundleSource,
 } from '../bundle-source';
 import { getRootContainer } from '../../di';
@@ -30,12 +31,14 @@ function fakeLogger(): { logger: ILogger; warns: unknown[][] } {
 function makeSource() {
   const ready = new Set<string>();
   const loadCalls: string[] = [];
+  const loadOptions: Array<(BundleLoadOptions & { url?: string }) | undefined> = [];
   const releaseCalls: string[] = [];
   const pending: Array<{ resolve: () => void; reject: (e: unknown) => void }> = [];
   let auto = true;
   const source: IBundleSource = {
-    loadBundle(name: string): Promise<void> {
+    loadBundle(name: string, opts?: BundleLoadOptions & { url?: string }): Promise<void> {
       loadCalls.push(name);
+      loadOptions.push(opts);
       if (auto) {
         ready.add(name);
         return Promise.resolve();
@@ -61,6 +64,7 @@ function makeSource() {
   return {
     source,
     loadCalls,
+    loadOptions,
     releaseCalls,
     setAuto: (v: boolean) => {
       auto = v;
@@ -240,6 +244,34 @@ describe('BundleManager', () => {
     expect(getBundleManager()).toBe(custom);
     getRootContainer().unregister(BUNDLE_MANAGER);
     expect(getBundleManager()).toBeTruthy(); // 回退进程默认
+  });
+
+  it('14. setVersions 后 load 自动带上表里的 version', async () => {
+    const s = makeSource();
+    const bm = createBundleManager({ source: s.source });
+    bm.setVersions({ shop: 'abc123', lobby: 'def456' });
+    const h = await bm.load('shop');
+    expect(h.version).toBe('abc123');
+    expect(s.loadOptions[0]?.version).toBe('abc123');
+  });
+
+  it('15. opts.version 显式传入时优先于版本表', async () => {
+    const s = makeSource();
+    const bm = createBundleManager({ source: s.source });
+    bm.setVersions({ shop: 'abc123' });
+    const h = await bm.load('shop', { version: 'override' });
+    expect(h.version).toBe('override');
+    expect(s.loadOptions[0]?.version).toBe('override');
+  });
+
+  it('16. setVersions 覆盖式替换：不在新表里的名字无版本', async () => {
+    const s = makeSource();
+    const bm = createBundleManager({ source: s.source });
+    bm.setVersions({ shop: 'v1' });
+    bm.setVersions({ lobby: 'v2' }); // 整体替换，shop 的条目没了
+    const h = await bm.load('shop');
+    expect(h.version).toBeUndefined();
+    expect(s.loadOptions[0]?.version).toBeUndefined();
   });
 });
 
