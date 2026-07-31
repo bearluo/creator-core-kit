@@ -125,7 +125,7 @@ class ContainerImpl implements Container {
     if (this._isRoot) throw new Error('DI: root container cannot be disposed');
     if (this._disposed) return;
     this._disposed = true;
-    for (const child of [...this._children]) child.dispose();
+    for (const child of Array.from(this._children)) child.dispose();
     this._children.clear();
     for (const entry of this._local.values()) {
       const p = entry.provider;

@@ -70,7 +70,7 @@ function topoSort(modules: readonly KitModule[]): KitModule[] {
     const s = state.get(m.name);
     if (s === 'done') return;
     if (s === 'visiting') {
-      throw new Error(`Bootstrap: dependency cycle detected: ${[...path, m.name].join(' -> ')}`);
+      throw new Error(`Bootstrap: dependency cycle detected: ${path.concat(m.name).join(' -> ')}`);
     }
     state.set(m.name, 'visiting');
     for (const dep of m.deps ?? []) {
@@ -78,7 +78,7 @@ function topoSort(modules: readonly KitModule[]): KitModule[] {
       if (!dm) {
         throw new Error(`Bootstrap: module "${m.name}" depends on missing module "${dep}"`);
       }
-      visit(dm, [...path, m.name]);
+      visit(dm, path.concat(m.name));
     }
     state.set(m.name, 'done');
     sorted.push(m);

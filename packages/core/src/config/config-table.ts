@@ -101,10 +101,10 @@ export function createTable<T>(
       return index.has(id);
     },
     all(): readonly T[] {
-      return [...index.values()];
+      return Array.from(index.values());
     },
     keys(): RowKey[] {
-      return [...index.keys()];
+      return Array.from(index.keys());
     },
     find(pred: (row: T) => boolean): T | undefined {
       for (const row of index.values()) if (pred(row)) return row;
@@ -170,7 +170,7 @@ export function createConfigTableManager(opts?: { logger?: ILogger }): ConfigTab
       return tables.get(name)?.get(id) as T | undefined;
     },
     names(): string[] {
-      return [...tables.keys()];
+      return Array.from(tables.keys());
     },
     unregister(name: string): boolean {
       return tables.delete(name);

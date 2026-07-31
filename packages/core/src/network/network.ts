@@ -98,7 +98,7 @@ export function createNetwork(opts?: NetworkOptions): INetwork {
   const setState = (s: NetState): void => {
     if (s === state) return;
     state = s;
-    for (const cb of [...stateListeners]) cb(s);
+    for (const cb of Array.from(stateListeners)) cb(s);
   };
 
   const rawSend = (msg: NetMessage): void => socket.send(codec.encode(msg));
@@ -106,7 +106,7 @@ export function createNetwork(opts?: NetworkOptions): INetwork {
   const dispatch = (msg: NetMessage): void => {
     const set = handlers.get(msg.type);
     if (!set) return;
-    for (const h of [...set]) {
+    for (const h of Array.from(set)) {
       try {
         h(msg.body, msg);
       } catch (e) {

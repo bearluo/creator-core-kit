@@ -35,7 +35,7 @@ export function createMemoryStorage(initial?: Record<string, string>): IStorage 
       return Promise.resolve();
     },
     keys(): Promise<string[]> {
-      return Promise.resolve([...map.keys()]);
+      return Promise.resolve(Array.from(map.keys()));
     },
   };
 }

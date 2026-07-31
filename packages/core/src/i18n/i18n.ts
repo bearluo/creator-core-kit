@@ -154,7 +154,7 @@ export function createI18n(opts?: I18nOptions): I18n {
         logger.warn(`setLocale: locale '${next}' 无翻译表（拼写错误或表尚未加载），仍切换`);
       }
       locale = next;
-      for (const cb of [...listeners]) {
+      for (const cb of Array.from(listeners)) {
         try {
           cb(locale);
         } catch (e) {
@@ -184,7 +184,7 @@ export function createI18n(opts?: I18nOptions): I18n {
     },
 
     availableLocales(): string[] {
-      return [...tables.keys()];
+      return Array.from(tables.keys());
     },
 
     onChange(cb: (locale: string) => void): Disposer {

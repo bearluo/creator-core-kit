@@ -132,7 +132,7 @@ export function createAudioService(opts?: AudioServiceOptions): IAudioService {
       active.delete(handle);
     },
     stopAllEffects(): void {
-      for (const [h, a] of [...active]) {
+      for (const [h, a] of Array.from(active)) {
         if (a.channel === 'sfx') {
           player.stop(a.player);
           active.delete(h);

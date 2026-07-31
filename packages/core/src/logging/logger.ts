@@ -80,7 +80,7 @@ class ConsoleLogger implements ILogger {
 
   private _emit(level: LogLevel, args: unknown[]): void {
     if (level < this._state.level) return;
-    const out = this._prefix ? [this._prefix, ...args] : args;
+    const out = this._prefix ? ([this._prefix] as unknown[]).concat(args) : args;
     switch (level) {
       case LogLevel.Debug:
         this._sink.debug(...out);

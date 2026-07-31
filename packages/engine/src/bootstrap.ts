@@ -71,11 +71,8 @@ export async function bootCoreKit(opts?: {
   const logger = opts?.logger ?? createCcLogger();
   return boot({
     logger,
-    modules: [
-      loggerModule(logger),
-      coreModule({ timer }),
-      directorDriveModule(timer),
-      ...(opts?.modules ?? []),
-    ],
+    modules: [loggerModule(logger), coreModule({ timer }), directorDriveModule(timer)].concat(
+      opts?.modules ?? [],
+    ),
   });
 }

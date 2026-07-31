@@ -46,4 +46,21 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // 会被打进 Cocos 构建的运行时代码（测试只在 node 跑，不受此限）。
+    files: ['packages/*/src/**/*.ts'],
+    ignores: ['packages/*/src/**/__tests__/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ArrayExpression > SpreadElement',
+          message:
+            '禁止数组字面量展开：Cocos 构建（babel loose spread）把 `[...x]` 降级成 `[].concat(x)`，' +
+            '对 Set/Map/Iterator 会把整个集合塞成单个元素，且预览不降级、只在构建产物里炸。' +
+            '用 Array.from(x) 取快照，用 a.concat(b) 拼接。',
+        },
+      ],
+    },
+  },
 );

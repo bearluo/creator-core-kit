@@ -185,7 +185,7 @@ export function createAssetLoader(opts?: { source?: IAssetSource; logger?: ILogg
         logger.warn(`releaseGroup: 组 '${group}' 不存在，忽略`);
         return;
       }
-      for (const key of [...s]) {
+      for (const key of Array.from(s)) {
         const e = table.get(key);
         if (e) finalize(e); // scope 强制拆除，忽略 refCount
       }

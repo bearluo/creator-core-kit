@@ -44,7 +44,7 @@ function track(p: Producer): void {
 
 /** 写后通知：遍历订阅者快照逐个重跑（快照防重入期间 _subs 变动）。 */
 function trigger(p: Producer): void {
-  for (const s of [...p._subs]) {
+  for (const s of Array.from(p._subs)) {
     if (s._alive) s._notify();
   }
 }
