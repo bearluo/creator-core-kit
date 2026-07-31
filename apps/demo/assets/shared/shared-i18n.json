@@ -1,0 +1,9 @@
+{
+  "app.name": "CCK Demo",
+  "launch.checking": "检查更新…",
+  "launch.downloading": "下载中…",
+  "launch.loading": "加载中…",
+  "common.close": "关闭",
+  "common.back": "返回",
+  "common.retry": "重试"
+}

@@ -1,6 +1,6 @@
 import { _decorator, Component, Node, Label, UITransform, Layers, Color } from 'cc';
 import { getEventBus } from '@cck/core';
-import { LOBBY_EVENTS, type LobbyEventMap } from '../../lobby/lobby-events';
+import { LOBBY_EVENTS, type LobbyEventMap } from '../lobby/lobby-events';
 
 const { ccclass } = _decorator;
 const TAG = '[CCK-DODGE]';

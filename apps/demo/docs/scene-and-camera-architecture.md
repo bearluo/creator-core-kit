@@ -12,8 +12,8 @@
 
 | 场景 | 职责 | 生命周期 | 内含 |
 |---|---|---|---|
-| **`Boot.scene`** | **一次性启动场**：Bootstrap 脚本 `bootCoreKit()` 装配 kit → 建 **kit 常驻相机组** → `loadScene(配置的第一个场景)` | **除 app 重启外不二次进入** | 一个挂 Bootstrap 脚本的空节点 |
-| **`Lobby.scene`** | **主场 / 大厅**，也是子游戏的**返回目标** | 每次返回大厅都**重新加载** | **只有大厅自己的内容**（无相机——相机常驻） |
+| **`Boot.scene`**（main 包） | **一次性启动场**：Bootstrap 脚本 `bootCoreKit()` 装配 kit（含 **kit 常驻相机组**）→ `app.launch()` 跑启动序列（读戳 → 热更 → `shared` → `lobby`），进大厅由序列末尾的 `lobby.enter` 回调发起 | **除 app 重启外不二次进入** | 一个挂 Bootstrap 脚本的空节点 |
+| **`Lobby.scene`**（`lobby` bundle） | **主场 / 大厅**，也是子游戏的**返回目标**。大厅自己是一个 bundle（可热更），场景也在包内，切回来要带 `{bundle:'lobby'}` | 每次返回大厅都**重新加载** | **只有大厅自己的内容**（无相机——相机常驻） |
 | 子游戏 `<module>/<Game>.scene` | 全屏子游戏，在自己 bundle 内 | 进入时加载、返回时卸载 | 自己的内容；**3D 子游戏额外加一台 world 相机** |
 
 **为什么 Boot 不兼任返回目标**：常驻相机组用 `addPersistRootNode` 注册，而它在 Boot 里建。若 Boot 同时是返回目标，每次返回重载 Boot 就会**再建一份常驻组叠在已存活的那份上** → 双份相机。「一次性启动场」与「可反复重载的主场」拆开，这个冲突从结构上消失。
@@ -304,9 +304,7 @@ view.on('design-resolution-changed', this._syncCameras, this);
 | 5 | 编辑期可见性 | **接受代价**（用户拍板）：编辑器里打开 `Lobby.scene` 看不到常驻相机，靠预览验证 |
 | 6 | 设计分辨率取值与策略 | **`1080 × 1920` + `FIXED_WIDTH` 作竖屏基准**（用户拍板），运行时由 `resolutionModule` 按锁短边随方向覆盖（§3.3 ③） |
 
-**仍待拍板**：
-
-1. 是否给 `cc-ui.ts`（`IUIView`）加「按层挂载」参数，让 `UIManager.open` 能指定挂 `uiFront`（弹窗）而非 `ui`？首版未做。
+| 7 | UI 怎么选层挂载 | **已决（2026-07-31，UIManager v2）**：core 定 10 档固定 UI 层枚举，engine `cc-ui.ts` 把它映射到相机层（`back→uiBack`、`hud/ui/popup/dialog→ui`、其余 `→uiFront`），**相机层没启用就回退到 `ui` root**。故本工程保持默认 `['bg','ui']` 不变、业务照样能写 `layer:'notify'`；哪天真要拆相机，`cameraRigModule({layers:[...]})` 加一行即可。见 [[ui-manager]] 与 [[adr-0008]] |
 
 ---
 
@@ -337,10 +335,10 @@ view.on('design-resolution-changed', this._syncCameras, this);
 
 7. Project Settings → Layers 加 `BG`(bit 0)。`UI_BACK`/`UI_FRONT` 按 YAGNI **未占位**（priority 与 bit 已在 kit 里留号，要用时再注册）。落 `settings/v2/packages/project.json` 的 `layer` 字段，随仓库提交。
 8. 设计分辨率 `1080 × 1920` + `fitWidth`（= `FIXED_WIDTH`），落同一个 `project.json` 的 `general.designResolution`；运行时由 `resolutionModule` 按方向覆盖。
-9. `Boot.scene` 收缩为纯引导：新增 `assets/scenes/Bootstrap.ts`（`@property firstScene = 'Lobby'`），`bootCoreKit({ modules: [resolutionModule(), cameraRigModule(), ...] })` → `loadScene(firstScene)`。Boot 场景只剩一个挂它的空节点。
-10. 新建 `scenes/Lobby.scene`：单节点 `LobbyRoot`（层 `UI_2D` + `UITransform` + `RenderRoot2D` + 四边 0 的 `Widget` + `LobbyHost`），无相机。
+9. `Boot.scene` 收缩为纯引导：新增 `assets/scenes/Bootstrap.ts`，`bootCoreKit({ modules: [resolutionModule(), cameraRigModule(), …, appModule(APP_CONFIG, {steps})] })` → `app.launch()`。Boot 场景只剩一个挂它的空节点。（进大厅这一下后来收进了 App 启动序列的 `lobby` 步，由 `APP_CONFIG.lobby.enter` 给出，不再是 Bootstrap 里的一行 `loadScene`。）
+10. 新建 `Lobby.scene`：单节点 `LobbyRoot`（层 `UI_2D` + `UITransform` + `RenderRoot2D` + 四边 0 的 `Widget` + `LobbyHost`），无相机。（后随大厅整体降为 `lobby` bundle，现落在 `assets/modules/lobby/Lobby.scene`，见 [[adr-0009]]。）
 11. `LobbyHost` 重写：删掉 `buildPersistRoot()`（相机 / Canvas / persist 根全部消失），大厅 UI 改建在**场景**的 `LobbyRoot` 下；跨场景只保留 `SceneFlow` / `backSub` / `pendingGame` 三样状态。
-12. 返回路径 `returnedFromGame()`：`loadScene('Boot')` → **`loadScene('Lobby')`**；`uiCamera.active` 开关与 `showLobby()` 一并删除。
+12. 返回路径 `returnedFromGame()`：`loadScene('Boot')` → **`loadScene('Lobby', { bundle: 'lobby' })`**；`uiCamera.active` 开关与 `showLobby()` 一并删除。
 13. `modules/mini-dodge/Dodge.scene`：删掉自带 `Camera` 与 `Canvas`，改为单节点 `DodgeRoot`（`UI_2D` + `RenderRoot2D` + `Widget` + `DodgeGame`）。
 14. `cc-ui.ts`（`IUIView`）root 解析优先 `getRootContainer().tryResolve(CAMERA_RIG)?.layerRoot('ui')`，保留场景 Canvas 兜底。
 15. 构建场景列表：`builder.json` 为空 = **默认收录 `assets/` 下全部场景**，无需登记。⚠️ 预览起始场景实测取**当前在编辑器里打开的场景**：开着 `Lobby.scene` 点播放会**跳过 Boot**（kit 未初始化 → 无相机、画面全黑），验证启动流程前先打开 `Boot.scene`。`LobbyHost` 已对这种情况打一条 `console.error` 指路。

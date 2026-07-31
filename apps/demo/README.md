@@ -6,8 +6,8 @@
 
 | 场景 | 用途 | 入口脚本 |
 |---|---|---|
-| **`assets/scenes/Boot.scene`** | 🌱 **一次性启动场**：装配 kit → 进第一个场景。除 app 重启外不二次进入 | `scenes/Bootstrap.ts` |
-| **`assets/scenes/Lobby.scene`** | 🏠 **大厅主场**，也是子游戏的返回目标（每次返回都重新加载） | `lobby/LobbyHost.ts` |
+| **`assets/scenes/Boot.scene`**（main 包） | 🌱 **一次性启动场**：装配 kit → 跑启动序列（读戳 → 热更 → `shared` → `lobby`）。除 app 重启外不二次进入 | `scenes/Bootstrap.ts` |
+| **`assets/modules/lobby/Lobby.scene`**（`lobby` bundle） | 🏠 **大厅主场**，也是子游戏的返回目标（每次返回都重新加载）。大厅自己就是一个可热更的 bundle | `modules/lobby/LobbyHost.ts` |
 | `assets/modules/mini-dodge/Dodge.scene` | 🎮 子游戏自带场景，在自己的 Asset Bundle 里 | `modules/mini-dodge/DodgeGame.ts` |
 | `assets/test/Demo.scene` | 🔬 逐模块验证探针（狂打 `[CCK-DEMO]` 日志，无可见 UI） | `test/DemoBoot.ts` |
 
@@ -15,7 +15,7 @@
 
 ## 接入样例怎么读
 
-**① `Bootstrap.ts`（怎么起）** —— 一句 `bootCoreKit({ modules })` 装配项目要用的 cc 适配模块，然后 `loadScene(firstScene)`。要加/减能力就动这个数组：
+**① `Bootstrap.ts`（怎么起）** —— 一句 `bootCoreKit({ modules })` 装配项目要用的 cc 适配模块，再 `app.launch()` 跑启动序列。要加/减能力就动这个数组；要往启动里插登录 / SDK / 公告，就往 `launchSteps()` 里插一步：
 
 ```ts
 await bootCoreKit({
@@ -23,13 +23,16 @@ await bootCoreKit({
     resolutionModule({ shortSide: 1080, longSide: 1920 }), // 横竖屏锁短边适配
     cameraRigModule(),                                     // 常驻背景 + UI 相机
     ccAssetModule(), ccBundleModule(), ccStorageModule(), ccAudioModule(), ccUIModule(),
+    appModule(APP_CONFIG, { steps: launchSteps() }),       // 启动序列（只造不跑）
   ],
 });
+getApp().onProgress(...); getApp().onFailure(...);         // 订阅必须在 launch 之前挂
+await getApp().launch();                                   // platform → hotupdate → shared → lobby → running
 ```
 
 **② `LobbyHost.ts` + `module-catalog.ts`（怎么加功能）** —— 大厅是**数据驱动**的：加一个功能 = 新建 `assets/modules/<id>/` 一个 bundle + 在 `MODULE_CATALOG` 加一行，**大厅代码零改**。两种承载：
 
-- `kind: 'panel'` —— UI 面板，挂进大厅场景，`load bundle → mount → unmount → release` 对称回收（样例：`shop`、`mini-clicker`）；
+- `kind: 'panel'` —— UI 面板，由 UIManager 按注册表加载并挂进常驻层容器；关闭时一行 `await scope.dispose()` 对称回收（关界面 → 撤 i18n / 配表 / 资源 / DI 子作用域 → `release(bundle)`）。样例：`shop`、`mini-clicker`；
 - `kind: 'game'` —— 全屏子游戏，走 `SceneFlow` 切到 bundle 自带的场景；返回不 import 主包，靠 core `EventBus` emit `lobby:back` 解耦（样例：`mini-dodge`）。
 
 **③ 纯逻辑 ViewModel（零 `cc`）** —— 如 `modules/mini-clicker/CounterVM.ts`：状态与行为写在这，可直接 node/vitest 单测、不用开 Creator，再用 `bindText` 单向映射到 cc `Label`。这是铁律「逻辑可脱离引擎」+「数据驱动 UI」的落地。
@@ -39,7 +42,10 @@ await bootCoreKit({
 ## 设计文档
 
 - [`docs/scene-and-camera-architecture.md`](docs/scene-and-camera-architecture.md) —— **场景三分职责**（Boot 一次性引导 / Lobby 主场 / 子游戏自带场景）、**相机组规格**（背景 + UI 两台，priority 与 layer 双阶梯）、**多分辨率与转屏适配**，以及开发期踩坑清单。
-- kit 侧实现见 [`packages/engine/docs/modules/camera-rig.md`](../../packages/engine/docs/modules/camera-rig.md)。
+- [`docs/design/lobby-modular-framework-overview.md`](../../docs/design/lobby-modular-framework-overview.md) —— 大厅框架范式：承载矩阵（panel / game）、模块契约、模块作用域资源、catalog。
+- kit 侧实现见 [`camera-rig.md`](../../packages/engine/docs/modules/camera-rig.md)、[`app.md`](../../packages/core/docs/modules/app.md)（启动序列）、[`bundle-manager.md`](../../packages/core/docs/modules/bundle-manager.md)（`BundleScope` + 免重启换代码）。
+
+> **包分层**：main 包（Boot + Bootstrap + AppConfig）必须重启才更新；`shared` / `lobby` 在启动序列里 load，更新下次启动天然生效；`modules/*` 可运行期换。判据见 [`ADR-0009`](../../docs/adr/0009-bundle-layering-criterion.md)。
 
 ## 跑起来
 

@@ -1,7 +1,16 @@
 import { _decorator, Component } from 'cc';
 import { EDITOR } from 'cc/env';
-import { getI18n, getRootContainer, KIT } from '@cck/core';
 import {
+  defaultLaunchSteps,
+  getApp,
+  getI18n,
+  getRootContainer,
+  KIT,
+  type AppConfig,
+  type LaunchStep,
+} from '@cck/core';
+import {
+  appModule,
   bootCoreKit,
   cameraRigModule,
   ccAssetModule,
@@ -9,26 +18,74 @@ import {
   ccBundleModule,
   ccStorageModule,
   ccUIModule,
+  loadLocaleTable,
   loadScene,
   resolutionModule,
 } from '@cck/engine';
 
-const { ccclass, property } = _decorator;
+const { ccclass } = _decorator;
 const TAG = '[CCK-BOOT]';
 
 /**
- * Boot.scene 唯一的脚本 —— **只做启动**：初始化 kit（含常驻相机组 + 横竖屏适配）后切到配置的第一个场景。
+ * 应用配置 —— 版本 / 渠道 / 环境 / 包分层集中在这一处。
  *
- * Boot 除应用重启外**不二次进入**：返回大厅走 `loadScene('Lobby')`，不回 Boot。
+ * 包分层（判据是「启动期加载且被跨模块持有引用」，不是「哪个包」）：
+ * - **重启层**：引擎 + AOT chunks（@cck/core、@cck/engine 全部框架代码）、main 包（本文件 + Boot.scene）
+ * - **启动期换**：`shared`、`lobby` —— 启动序列 load 时用的就是新版本，更新天然生效
+ * - **运行期换**：按需业务 bundle（shop / mini-clicker / mini-dodge）
+ */
+const APP_CONFIG: AppConfig = {
+  appId: 'cck-demo',
+  version: '1.0.0',
+  channel: 'dev',
+  env: 'dev',
+  shared: ['shared'],
+  lobby: {
+    bundle: 'lobby',
+    // core 不持场景接缝（切场景是 engine 直接行为）→ 进大厅这一下由这里给。
+    enter: () => loadScene('Lobby', { bundle: 'lobby' }),
+  },
+  // versionUrl 不配：demo 的热更走 native AssetsManager 那条已 e2e 验证的路径（ADR-0006）。
+  // web 版本表要真 CDN 才有意义，接入方按 env 拼自己的地址。
+};
+
+/**
+ * 启动序列 = kit 默认四步 + 项目自己的一步。
+ * 这正是 `LaunchStep` 可插拔的用途：登录、SDK 初始化、公告、隐私协议都插在这里，kit 不预设。
+ */
+function launchSteps(): readonly LaunchStep[] {
+  const steps = [...defaultLaunchSteps()];
+  const globalI18n: LaunchStep = {
+    name: 'demo-i18n',
+    phase: 'shared',
+    async run() {
+      // 先预埋空表再 setLocale，避免「设 locale 时该表尚未加载」的启动告警
+      getI18n().addTable('zh', {});
+      getI18n().setLocale('zh');
+      await loadLocaleTable('zh', 'shared-i18n', { bundle: 'shared' });
+      console.log(`${TAG} 全局 i18n 就绪（来自 shared bundle）`);
+    },
+  };
+  // 按名字定位而不是写死下标——kit 以后往默认序列里加步骤时这里不会错位
+  steps.splice(
+    steps.findIndex((s) => s.name === 'lobby'),
+    0,
+    globalI18n,
+  );
+  return steps;
+}
+
+/**
+ * Boot.scene 唯一的脚本 —— **只做启动**：装配 kit（含常驻相机组 + 横竖屏适配）→ 交给 App 跑启动序列。
+ *
+ * Boot 除应用重启外**不二次进入**：返回大厅走 `loadScene('Lobby', {bundle:'lobby'})`，不回 Boot。
  * 也不该往 Boot.scene 里加任何内容——它加载完就被换掉。
  *
- * 设计见 apps/demo/docs/scene-and-camera-architecture.md §1。
+ * 设计见 apps/demo/docs/scene-and-camera-architecture.md §1 与
+ * docs/design/2026-07-31-app-layer-and-bundle-lifecycle-proposal.md。
  */
 @ccclass('Bootstrap')
 export class Bootstrap extends Component {
-  @property({ tooltip: 'kit 初始化完成后进入的第一个场景（主场景 / 返回目标）' })
-  firstScene = 'Lobby';
-
   async start(): Promise<void> {
     // 开发期守卫：Creator 的 Game View 停止再播放**不重载 JS 上下文**，模块级状态（含挂在
     // globalThis 上的 DI 根容器）会活着 → 二次 bootCoreKit 抛 'already booted'。
@@ -63,12 +120,24 @@ export class Bootstrap extends Component {
         ccStorageModule(),
         ccAudioModule(),
         ccUIModule(),
+        appModule(APP_CONFIG, { steps: launchSteps() }), // 只造不跑，launch 在下面显式发起
       ],
     });
-    // 'zh' 作基准 locale；先预埋空表再 setLocale，避免「设 locale 时该表尚未加载」的启动告警。
-    getI18n().addTable('zh', {});
-    getI18n().setLocale('zh');
-    console.log(`${TAG} kit 就绪[${kit.modules.join(', ')}] → loadScene('${this.firstScene}')`);
-    await loadScene(this.firstScene);
+    console.log(`${TAG} kit 就绪[${kit.modules.join(', ')}] → app.launch()`);
+
+    // 进度 / 失败订阅必须在 launch 之前挂上。真实项目在这里驱动启动 loading UI：
+    // 这阶段 lobby 还没加载、用不了任何 prefab，所以只能是代码化 UI（挂 UIManager 的 'loading' 层）。
+    const app = getApp();
+    app.onProgress((p) =>
+      console.log(
+        `${TAG} 启动阶段 → ${p.phase}${p.ratio === undefined ? '' : ` ${Math.round(p.ratio * 100)}%`}`,
+      ),
+    );
+    app.onFailure((f) => {
+      console.error(`${TAG} 启动失败：${f.kind}`, f);
+      // 三种失败给用户看的东西完全不同：network 给「重试」按钮（app.retry()）、
+      // needFullUpdate 引导去商店 / 整包更新、fatal 兜底提示。demo 只打日志。
+    });
+    await app.launch();
   }
 }

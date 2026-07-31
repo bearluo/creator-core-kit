@@ -1,7 +1,7 @@
 [
   {
     "__type__": "cc.Prefab",
-    "_name": "Shop",
+    "_name": "Shop_land",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_native": "",
@@ -13,7 +13,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "Shop",
+    "_name": "Shop_land",
     "_objFlags": 0,
     "__editorExtras__": {},
     "_parent": null,
@@ -89,8 +89,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 170,
+      "x": -420,
+      "y": 60,
       "z": 0
     },
     "_lrot": {
@@ -161,9 +161,9 @@
     "_dstBlendFactor": 4,
     "_color": {
       "__type__": "cc.Color",
-      "r": 120,
-      "g": 200,
-      "b": 255,
+      "r": 255,
+      "g": 190,
+      "b": 90,
       "a": 255
     },
     "_string": "（i18n: shop.title）",
@@ -248,8 +248,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": 40,
+      "x": -420,
+      "y": -20,
       "z": 0
     },
     "_lrot": {
@@ -407,8 +407,8 @@
     },
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": 0,
-      "y": -180,
+      "x": 420,
+      "y": -60,
       "z": 0
     },
     "_lrot": {

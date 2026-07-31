@@ -1,196 +1,155 @@
 ---
 主题: lobby-modular-framework（大厅 + 可分包功能模块框架）
-范围: 跨包（apps/demo 样例 + core: ui-manager/i18n/config-table 补缺 + engine 适配）
-状态: 评审中（§9 四个 Open Question 已决议 2026-07-30；补缺+样例落地后转已实现）          # 草案 → 评审中 → 已定稿 → 已实现
-摘要: 一个「常驻框架根 + 一切功能皆可分包」的大厅框架样例。大厅/子游戏/商城等功能各是一个 Asset Bundle，
-      按需 load/release；框架根节点常驻（addPersistRootNode）跨场景存活，模块按 kind 承载（面板挂常驻根、
-      全屏世界用自带场景）；模块自带的 i18n/配表/音频/prefab 随 bundle 一起加载、一起释放（模块作用域资源）。
-何时读: 设计/实现 apps/demo 大厅框架样例前；或需要「分包功能模块 + 模块作用域资源生命周期」范式时。
-日期: 2026-07-30
-依赖: [[bundle-manager]]（按需 load/release bundle）、[[ui-manager]]（open 面板，需补 bundle?）、
-      [[asset-manager]]（bundle 内加载资源）、i18n（需补 removeTable）、config-table（需补 unregister）、
-      DI（模块子作用域）、[[sceneflow]]（全屏世界切场景，可选）。场景能力一手调研见
-      docs/research/2026-07-30-cocos-scene-capabilities.md。
+范围: 跨包（apps/demo 样例 + core 的 ui-manager / bundle-scope / i18n / config-table + engine 适配）
+状态: 已实现          # 草案 → 评审中 → 已定稿 → 已实现
+摘要: 一个「一切功能皆可分包」的大厅框架样例。大厅自己是一个 bundle，商城 / 子游戏等功能各是一个 bundle，
+      按需 load / open / release；panel 类模块 = 注册进 UIManager 的界面（挂 kit 常驻相机组的层容器，跨场景存活），
+      game 类 = 自带 `.scene`（经 SceneFlow 栈切过去）；模块自带的 i18n / 配表 / 资源随 bundle 一起来、
+      经 `BundleScope` 一行回收。
+何时读: 想照着搭「大厅 + 分包功能模块」时；或想知道 apps/demo 的大厅样例各部分职责怎么分时。
+日期: 2026-07-31
+依赖: [[bundle-manager]]（按需 load/release + `BundleScope` 回收契约）、[[ui-manager]]（注册表 / 变体 / `closeByBundle`）、
+      [[app]]（启动序列把 lobby bundle 装起来）、[[asset-manager]]、[[i18n]]、[[config-table]]、[[di-container]]、
+      [[sceneflow]]（game 类切场景）、[[camera-rig]] 与 `apps/demo/docs/scene-and-camera-architecture.md`（场景 / 相机职责）、
+      [[adr-0009]]（包分层判据）。场景能力一手调研见 `docs/research/2026-07-30-cocos-scene-capabilities.md`。
 ---
 
 # 大厅 + 可分包功能模块框架（overview）
 
 ## TL;DR
 
-给 `apps/demo` 做一个**大厅框架样例**：一个常驻大厅，子游戏、商城、背包、排行榜等功能**各自是一个 Asset Bundle**，
-按需 `BundleManager.load` 加载、退出 `release`。**框架根节点常驻**（`director.addPersistRootNode`），承载
-kit（DI/音频/…）+ 大厅导航 UI + 模块挂载层，**跨场景存活**。模块按 `kind` 承载：
-**面板类（商城）= 从模块 bundle 加载 prefab 挂到常驻根的 UI 层**（单活动场景约束下面板不能是独立场景）；
-**全屏世界类（重子游戏/3D）= 用它 bundle 里自带的 `.scene`**（携带编辑器配置的 SceneGlobals/相机/环境），
-`bundle.loadScene` 切过去、常驻框架在其上存活。**模块自带的 i18n/配表/音频/prefab 随 bundle 一起加载、
-一起释放**（模块作用域资源）——bundle 没加载就不该有它的配置，卸载 bundle 就连配置一起下掉。为此需补三处 kit 小缺口：
-`UIManager.open({bundle})`、`i18n.removeTable`、`ConfigTableManager.unregister`。
+`apps/demo` 的大厅样例：**大厅自己是 `lobby` bundle**（[[adr-0009]] 的「启动期换」层），商城 / 点击计数器 / 躲避小游戏各是 `modules/<id>` 一个 bundle，按需加载。
+
+- **panel 类**（商城、点击计数器）= 一个**注册进 UIManager 的界面**：清单 → `registerUI(id, {layer, bundle, prefab})`，host 只写 `open(id, ctx)`；界面脚本继承 `CCKUIView` 挂在自己 bundle 的 prefab 根上。界面被挂进 **kit 常驻相机组的层容器**（跨场景存活），大厅不自建挂载层。
+- **game 类**（躲避小游戏）= 用它 bundle 里**自带的 `.scene`**，经 `SceneFlow` pushdown 栈切过去；返回目标是 **`Lobby.scene`**（重新加载），不是 Boot。
+- **模块作用域资源**：模块自带的 i18n / 配表 / 资源全部经 `{bundle}` 从自己 bundle 加载，登记进 kit 的 **`BundleScope`**；关闭时 host 一行 `await scope.dispose()` 全撤（`closeByBundle` → 逆序 teardown → `release(bundle)`）。
+- **数据驱动**：大厅只吃 `module-catalog.ts` 一张清单。**加任何功能 = 新建一个 bundle + 清单加一行，大厅代码零改。**
 
 ## 1. 目标与定位
 
-- **做什么**：教一个新项目「大厅 + 一切功能皆可分包」怎么在 kit 上搭。既是 apps/demo 的接入样例，也顺带补齐
-  kit 里「模块作用域资源」需要的小原语。
-- **和验证探针的关系**：旧的逐模块验证探针（`DemoBoot` / `Demo.scene` / `probe-bundle`）迁进 `assets/test/`，
-  与本框架样例物理隔离，互不干扰（探针继续作回归用）。
-- **YAGNI（首版砍）**：模块间路由历史/返回栈（大厅→模块→模块的深层导航）；模块热更（归 HotUpdateService）；
-  模块预下载优先级；模块 A 直接依赖模块 B（模块只经 catalog + 事件解耦，不互相 import）。
+- **做什么**：教一个新项目「大厅 + 一切功能皆可分包」怎么在 kit 上搭。既是 `apps/demo` 的接入样例，也是 kit 里「模块作用域资源」这套原语的使用现场。
+- **和验证探针的关系**：旧的逐模块验证探针（`DemoBoot` / `Demo.scene` / `fixtures-bundle`）在 `assets/test/`，与本样例物理隔离，继续作回归用。
+- **YAGNI（本版不做）**：模块间深层导航历史；模块 A 直接依赖模块 B（模块只经 catalog + 事件解耦，不互相 import）；模块预下载优先级。
 
-## 2. 架构：常驻框架根 + 模块按 kind 承载
+## 2. 架构：三类场景 + 常驻相机组
 
-### 2.1 常驻框架根节点（persist root）
+场景职责三分（详见 `apps/demo/docs/scene-and-camera-architecture.md`）：
 
-- Boot.scene 里建一个框架根节点 `CCKApp`，`director.addPersistRootNode(CCKApp)` 提为常驻（**要求：常驻节点必须是
-  场景根的直接子节点**，见调研第 4 条）。其下挂：
-  - kit 组合根（`bootCoreKit` 的产物：DI 容器 / 音频 / timer / …）；
-  - 大厅导航 UI（代码化 UI，列 catalog）；
-  - **模块挂载层**（一个 UI 容器节点，`kind:'panel'` 模块挂这）。
-- 常驻 = 跨 `loadScene` 存活。这样即便切到某个全屏世界模块的场景，大厅框架（含"返回大厅"入口）依然在其上渲染。
-- **纯 A（单场景）场景下常驻并非必需**（Boot 永不卸载），但把框架根设为常驻是**统一前提**：让"全屏世界=自带场景"
-  这条路（2.2）无需丢失框架，二者共用一套骨架。
-- **Boot 空引导 + CCKApp 承载全部 + 幂等 bootstrap（关键）**：Boot.scene 做成**空引导场景**（无相机/无 UI，只一个 bootstrap 节点）；
-  相机 / Canvas / kit / 大厅 UI / 模块挂载层**全部建在常驻 `CCKApp` 上，只在首次启动 boot 一次**。从 game 场景返回时
-  `loadScene(Boot)` → Boot 仍是空的、`CCKApp` 常驻还在 → bootstrap **幂等**（检测到 `CCKApp` 已存在就跳过 `bootCoreKit`/建 UI，
-  只重新显示大厅）→ **杜绝二次启动 kit**。这把「一个空引导场景，其余全部 prefab+代码加载」铁律落到字面。
-- **多相机共存**：进 game 场景时其自带相机渲染世界，`CCKApp` 的 UI 相机在其上渲染大厅覆盖层（返回入口等）；返回空 Boot 时仅 UI 相机活动。属常规 3D+UI 相机分层。
+| 场景 | 职责 | 何时进入 | 内容 |
+|---|---|---|---|
+| `Boot.scene`（main 包） | 一次性启动：`bootCoreKit` 装配 kit → `app.launch()` 跑启动序列 | 除应用重启外不二次进入 | 一个挂 `Bootstrap` 的空节点 |
+| `Lobby.scene`（`lobby` bundle） | 主场 / 大厅，也是子游戏的**返回目标** | 每次返回都**重新加载** | 一个渲染根 + `LobbyHost` |
+| 模块自带 `.scene`（各自 bundle） | 全屏子游戏的世界 | `bundle.loadScene` 切过去 | 该子游戏的内容 |
 
-### 2.2 承载矩阵（按 kind）
+**三个场景一律不含相机、不含 Canvas。** 相机与屏幕适配由 kit 的 `cameraRigModule` 建成常驻 `CCKRig` 跨场景存活；UIManager 的 10 档层容器就挂在它下面——所以 **panel 类模块的界面天然跨场景存活**，大厅不需要自己的「常驻框架根」。
+
+> 早期设计里的常驻框架根 `CCKApp`（承载 kit + 大厅 UI + 模块挂载层）**已被这套取代**：常驻的是相机组与层容器，大厅内容随 `Lobby.scene` 生灭。
+
+### 承载矩阵（按 kind）
 
 | kind | 典型 | 承载方式 | 加载 | 卸载 |
 |---|---|---|---|---|
-| `panel` | 商城 / 背包 / 排行榜 | 从模块 bundle 加载 **prefab**（或代码化 UI），**挂到常驻根的模块挂载层**（叠加在大厅上） | `load(bundle)` → `uiMgr.open(id, {bundle})` / 代码建 UI | close → 销毁挂载子树 + `release(bundle)` |
-| `game` | 全屏子游戏（3D/重场景） | 用模块 bundle 里**自带的 `.scene`**（携带编辑器 SceneGlobals/相机/环境），常驻框架在其上存活 | `load(bundle)` → `bundle.loadScene(sceneName)` | 返回 → `loadScene(base)` + `release(bundle)` |
+| `panel` | 商城 / 点击计数器 | 从模块 bundle 加载 **prefab**，由 UIManager 挂进常驻层容器（叠在大厅上） | `load(bundle)` → `uiMgr.open(id, ctx)` | `scope.dispose()`（关界面 → 逆序回收 → `release(bundle)`） |
+| `game` | 躲避小游戏 | 模块 bundle 里**自带的 `.scene`**（携带编辑期 SceneGlobals） | `load(bundle)` → `flow.push('game')` → `loadScene(scene, {bundle})` | `flow.pop()` → 回 `Lobby.scene` → `release(bundle)` |
 
-- **为何面板必须是 A（挂常驻根）不是独立场景**：Cocos 运行时**同一时刻只有一个活动场景**（调研第 2 条，官方明文），
-  切场景旧场景整树销毁——叠加面板（商城浮在大厅上）根本没有"两个场景同时在场"可言，**只能是当前（常驻）层的 node 子树/prefab**。
-- **为何全屏世界可以是 C（自带场景）**：靠常驻框架根，`loadScene` 到世界场景时框架不丢；世界场景带上自己在编辑器里配好的
-  环境（见 2.3）。轻量子游戏（2D、无特殊环境）也可直接走 `panel` 式挂常驻根，不必非得开场景。
-- **不违反「一个空引导场景」铁律**：铁律本意是杜绝**共享**场景的合并冲突；每个世界模块自带的 `.scene` 在它自己 bundle、
-  单人 own，零共享冲突——恰是"feature-based，一模块一 bundle 一目录"的落地。
+- **为何面板必须挂常驻层而不是独立场景**：Cocos 运行时**同一时刻只有一个活动场景**，切场景旧场景整树销毁——「商城浮在大厅上」没有「两个场景同时在场」可言。
+- **为何全屏世界可以是自带场景**：`.scene` 是**编辑期配置单元**——SceneGlobals（环境光 / 天空盒 / 雾 / 阴影 / 后处理 / 烘焙）只能在场景级配，prefab 与代码化 UI 拿不到。需要独立环境的子游戏必须走这条路。
+- **不违反「一个空引导场景」铁律**：铁律本意是杜绝**共享**场景的合并冲突；每个模块自带的 `.scene` 在它自己 bundle、单人 own，零共享冲突。
 
-### 2.3 场景 = 编辑期配置单元（不是可有可无的节点树）
+### 场景导航栈
 
-cc 的 `.scene` 不只是运行时一棵根节点树，它在**编辑器里承载可配置属性**并序列化进文件：
+`game` 类切场景走 core `SceneFlow` 的 pushdown 栈：大厅 = 一个 state；进 game → `push('game')`（`onEnter` 里 `loadScene(scene, {bundle})`）；返回 → `pop()` → `'lobby'.onResume` → `loadScene('Lobby', {bundle:'lobby'})` 再 `release` 该 game bundle。
 
-- **SceneGlobals**（选中场景根在 Inspector 配）：环境光 ambient、天空盒/IBL skybox、雾 fog、阴影 shadows、
-  后处理 post-process、光照探针 / 烘焙 bake、octree 剔除等——**这些只能在场景级配置，prefab 与纯代码 UI 拿不到**。
-- 编辑器可视化编排的**节点层级 + 组件属性值**（拖拽搭场景 / 连引用）。
-- **含义**：需要独立环境/相机/光照的**全屏世界模块**，做成自带 `.scene` 才能吃到这套编辑期配置（故 2.2 的 `game` 走 C）；
-  而叠加面板（商城）在共享常驻层上，用 prefab 承载其编辑期编排即可（prefab 也有编辑期属性，但没有场景级 SceneGlobals）。
-- 待补：调研文档 `2026-07-30-cocos-scene-capabilities.md` 的「场景是什么」目前偏运行时定义，后续补一节 SceneGlobals/编辑期属性。
+- **诚实语义**：单活动场景 ⇒ 栈存的是**返回目标**，`pop` 是重新加载它，不是恢复活着的旧场景。大厅状态不丢靠的是 `LobbyNav` 这个 module-level 单例（JS 模块不随 `loadScene` 重载）。
+- **释放顺序有讲究**：先切完场景再 `release(bundle)`——它自带的场景还在跑时不能卸。
 
-### 2.4 场景导航栈（用 core SceneFlow，Q4 决议）
+## 3. 模块契约 + 生命周期
 
-`game` 类模块切场景走 **core `SceneFlow` 的 pushdown 栈**（`push`/`pop`/`onPause`/`onResume`，已实现、MAX_STACK=32，demo 迄今未用）：
-大厅 = 一个 state；进 game → `push(gameState)`（`onEnter` 里 `bundle.loadScene`）；返回 → `pop`（切回 Boot）。
-
-- **诚实语义**：Cocos 单活动场景 → 栈存的是**返回目标场景名**，`pop` = 重新 `loadScene` 该目标，**不是恢复活着的旧场景**；
-  live 状态保持靠常驻 `CCKApp`（大厅状态天然不丢）。样例 mini-dodge 深度=1，栈到位但只演示一层；`game→game` 多级不堵路。
-- **为何不裸切**：栈机制零新写（复用 sceneflow）、满足返回栈诉求、顺带展示 sceneflow 模块。
-
-## 3. FeatureModule 契约 + 生命周期
+panel 类模块**就是一个注册进 UIManager 的界面**。框架不定义 mount/unmount 契约，也不自建工厂注册表——prefab 里存的就是组件类，bundle 加载执行脚本时 `@ccclass` 已把它注册进 cc 类表（**引擎原生的跨 bundle 桥接**，无反射、AOT 友好）。
 
 ```ts
-/** 框架注入给模块的运行上下文。 */
+/** 框架注入给模块的运行上下文 —— 它就是 open(uiId, args) 的 args。 */
 export interface ModuleContext {
-  readonly root: Node;            // 模块挂载根（常驻框架下的一个容器节点；panel 用；game 走场景时可空）
-  readonly container: Container;  // 模块专属 DI 子作用域（卸载即 dispose，隔离模块单例）
-  readonly bundle: string;        // 本模块 bundle 名，模块用它加载自带资源（i18n/config/audio/prefab）
-  readonly args?: unknown;        // 打开传参
-  close(): void;                  // 模块请求关闭自己 → 框架走 unmount + 释放
-}
-
-/** 一切可分包功能模块的统一契约（type-only，编译期擦除，模块 bundle 不产生对主包的运行时依赖）。 */
-export interface FeatureModule {
-  /** 挂载：加载自带资源（{bundle} 作用域）、建 UI/进场景、挂到 ctx.root。可 async。 */
-  mount(ctx: ModuleContext): void | Promise<void>;
-  /** 卸载：与 mount 对称回收——撤自带 i18n 表、反注册配表、销毁 UI、释放 asset。可 async。 */
-  unmount(): void | Promise<void>;
+  readonly container: Container;  // 模块专属 DI 子作用域（关闭即 dispose）
+  readonly bundle: string;        // 本模块 bundle 名
+  readonly scope: BundleScope;    // kit 的 bundle 作用域（已绑定本 bundle）
+  readonly args?: unknown;
+  close(): void;                  // 模块请求关闭自己
 }
 ```
 
-**大厅 host 对一个 `panel` 模块的生命周期**（`game` 类同，mount/unmount 换成 `bundle.loadScene` / 切回 base）：
+界面侧只实现 `CCKUIView` 的钩子：`onShow(args, state)`（可 async——商城要先 `await scope.i18n(...)`）、`onHide()`、可选 `saveState()`（转屏 / 换皮重建时保状态）。
 
-1. `await bundleMgr.load(bundle)`（引用计数 + 并发去重，已实现）；
-2. 从已加载 bundle 取模块入口（见 Open Q1：注册表自登记 vs `js.getClassByName`）；
-3. 造 `ModuleContext`：DI 子作用域 + 常驻根下新建挂载容器 + bundle 名；
-4. `await module.mount(ctx)`；
-5. close 时：`await module.unmount()` → dispose 模块 DI 子作用域 → 销毁挂载容器 → `bundleMgr.release(bundle)`。
+**host 对一个 panel 模块的生命周期**：
 
-## 4. 模块作用域资源（核心约束）
+1. `await bundleMgr.load(bundle)`；
+2. 造 `ModuleContext`：DI 子作用域 + `createBundleScope(bundle)` + close 回调，并把 `container.dispose()` 也 `scope.add` 进同一条回收链（调用点只记一笔账）；
+3. `await getUIManager().open(id, ctx)`——prefab 与层来自注册表，UIManager 负责加载 / 挂层 / 调 `onShow`；打开失败则回滚（同样一行 `scope.dispose()`）；
+4. 关闭：`await ctx.scope.dispose()` 一行全撤。
 
-> **bundle 没加载，就不该有它的 i18n / 配表 / 音频 / prefab；卸载 bundle，就连它们一起下掉。**（用户 2026-07-30 定）
+> ⚠️ **界面自己不要 `dispose`**：`dispose` 的第一步就是 `closeByBundle` 关掉本 bundle 的界面——也就是调起 `onHide` 的那一步，界面在 `onHide` 里反手 dispose 会自递归。所有权在 host 手里。
 
-- 模块的自带资源**全部经 `{bundle: ctx.bundle}` 从模块自己的 bundle 加载**，在 `mount` 里发起：
-  - i18n：`loadLocaleTable(locale, path, { bundle })`（已支持 bundle）；
-  - 配表：`loadTable(name, path, { bundle })`（已支持 bundle）；
-  - 面板 prefab：`uiMgr.open(id, { bundle })`（**待补 bundle?**，见 §5）；
-  - 音频 clip / 其它资源：`getAssetLoader().load(path, { bundle })`（已支持 bundle）。
-- `unmount` 里**对称回收**。难点：i18n/config 是把数据**拷进 core 全局注册表**的，仅 `bundleMgr.release` 释放 bundle 的
-  JSON 资源**撤不掉已注册的表**——必须显式反注册（**待补 i18n.removeTable / config.unregister**，见 §5）。
-- **推荐实现**：给模块一个 `ModuleResourceScope`（仿 `BindingScope`）——mount 里所有 `load*` 经它登记，`unmount` 一行
-  `scope.dispose()` 反做全部（removeTable / unregister / release / unbind）。模块作者不用手写逐条回收。
-- **命名空间约定**：模块 i18n 键、配表名建议带模块 id 前缀（如 `shop.title` / 表名 `shop.goods`），避免跨模块撞名，也让
-  removeTable/unregister 能按前缀精确撤。
+## 4. 模块作用域资源
 
-## 5. 需要补的 kit 缺口（小、TDD、随文档）
+> **bundle 没加载，就不该有它的 i18n / 配表 / 资源；卸载 bundle，就连它们一起下掉。**
 
-| # | 模块 | 现状 | 补什么 | 影响文件 |
-|---|---|---|---|---|
-| 1 | ui-manager | `open` / `IUIView`/`UIViewSpec` 无 bundle | `UIOpenOptions.bundle?` → `UIViewSpec.bundle?` → engine `cc-ui.ts create` 透传给 `load(prefab,{bundle})` | core `ui-manager.ts`/`ui-view.ts`、engine `cc-ui.ts`、`ui-manager.md`、+1 core 单测 |
-| 2 | i18n | 只有 `addTable`，无移除 | `removeTable(locale, table?)`（或按键前缀移除）——卸载模块撤其翻译 | core `i18n.ts`、i18n 模块文档、+单测 |
-| 3 | config-table | 只有 `register`/`clear`（清全部） | `ConfigTableManager.unregister(name)`——卸载模块撤其配表 | core `config-table.ts`、config 模块文档、+单测 |
-| 4 | engine scene-loader | `loadScene(name)` 只走 `director.loadScene`（主包/build 列表） | `loadScene(name, { bundle? })`——bundle 内场景走 `assetManager.getBundle(bundle).loadScene`（`game` 类模块场景在自带 bundle） | engine `scene-loader.ts`、sceneflow/loader 文档、apps/demo 真机验证 |
+难点在于 i18n 表与配表是把数据**拷进 core 全局注册表**的——只 release bundle 的 JSON 资源撤不掉已注册的表。这套对称回收已沉淀成 kit 的 **`BundleScope`**（[[bundle-manager]] §BundleScope），大厅样例直接用：`scope.i18n(locale, path)` / `scope.table(name, path)` / `scope.load(path, type)` / `scope.add(teardown)` 登记，`scope.dispose()` 反做全部。
 
-- 四处均**加法、向后兼容**（可选字段 / 新方法），不动既有签名。
-- 均守铁律：core 侧改（#1~#3）零 cc、TDD 补测；engine 改（#1 cc-ui 透传、#4 scene-loader）走 apps/demo 真机验证。
+**命名空间约定**：模块 i18n 键与配表名带模块 id 前缀（`shop.title` / 表名 `shop.goods`）——既避免跨模块撞名，也让按精确键回收成立（`BundleScope` 只按顶层键 `removeTable`，**表必须扁平**）。
+
+## 5. 本样例用到的 kit 能力（均已落地）
+
+| 能力 | 落点 |
+|---|---|
+| `UIManager` 注册表 + `{bundle}` 加载 + 变体换 view | [[ui-manager]]（v2） |
+| `i18n.removeTable(locale, keys)` / `ConfigTableManager.unregister(name)` | [[i18n]] / [[config-table]] |
+| `loadScene(name, { bundle })`（bundle 内场景走 `bundle.loadScene`） | engine `scene-loader.ts` |
+| `BundleScope` 对称回收 + `UIManager.closeByBundle` | [[bundle-manager]] / [[ui-manager]] |
+| 启动序列把 `shared` + `lobby` 装起来 | [[app]] |
 
 ## 6. 目录结构（apps/demo/assets）
 
 ```
 apps/demo/assets/
-├─ scenes/Boot.scene         大厅引导场景：建常驻框架根 CCKApp + 挂 LobbyHost
-├─ lobby/                    常驻框架 + 契约（主包/首包）
-│  ├─ LobbyHost.ts           bootCoreKit → 提常驻根 → 读 catalog → 导航 UI → 按需 load/mount/release
-│  ├─ FeatureModule.ts       FeatureModule + ModuleContext 契约（type-only）
-│  ├─ ModuleResourceScope.ts 模块作用域资源登记/一键回收（§4）
-│  └─ module-catalog.ts      { id, title, bundle, kind:'panel'|'game', entry }[]
-├─ modules/                  一切可分包功能（一模块一 bundle 一目录）
-│  ├─ shop/        ShopModule.ts (+ 可选 Shop.prefab / shop-i18n.json)   kind:panel
-│  ├─ mini-clicker/ ClickerGame.ts + CounterVM.ts                        kind:panel（轻量，挂常驻根）
-│  └─ mini-dodge/  DodgeGame.ts (+ 可选 Dodge.scene)                     kind:game（演示自带场景/C）
-├─ resources/                【彻底删除】fixtures 迁入 test/（§附）
-└─ test/                     旧验证探针集中
-   ├─ Demo.scene · DemoBoot.ts
-   └─ fixtures-bundle/       test-config/i18n-en/heroes/cck-app-compat/DemoPanel + probe.json（自定义 bundle）
+├─ scenes/                     main 包（重启层）：只剩启动
+│  ├─ Boot.scene               空引导场景，一个挂 Bootstrap 的节点
+│  └─ Bootstrap.ts             AppConfig + 装配 kit + 插自定义启动步 + app.launch()
+├─ shared/                     shared bundle：跨模块公共资源（全局 i18n 基表…）
+├─ modules/                    一切可分包的东西，一个一 bundle 一目录（本身不是 bundle）
+│  ├─ lobby/                   lobby bundle：大厅本体（可热更、可替换）
+│  │  ├─ Lobby.scene           主场景（一个渲染根 + LobbyHost，无相机）
+│  │  ├─ LobbyHost.ts          场景宿主组件 + LobbyNav 导航单例（catalog → load/open/release）
+│  │  ├─ ModuleContext.ts      模块运行上下文契约（type-only；= open 的 args 形状）
+│  │  ├─ module-catalog.ts     清单 + registerCatalogUIs()（清单 → UIManager 注册表）
+│  │  └─ lobby-events.ts       大厅事件（如子游戏请求返回）
+│  ├─ shop/         ShopView.ts + Shop.prefab / Shop_land.prefab / shop-i18n.json   kind:panel
+│  ├─ mini-clicker/ ClickerView.ts + CounterVM.ts + Clicker.prefab                  kind:panel
+│  └─ mini-dodge/   DodgeGame.ts + Dodge.scene                                      kind:game
+└─ test/                       旧验证探针（Demo.scene · DemoBoot.ts · fixtures-bundle）
 ```
+
+> `lobby` 和功能模块**同住 `modules/` 但不同层**：`lobby` 是「启动期换」（启动序列里 load，更新下次启动天然生效），`shop` 等是「运行期换」。目录只表达「是不是一个可独立加载的包」，分层判据在 [[adr-0009]]——**别用目录反推层**。
+> `modules/` 自己**不能标 bundle**（Cocos 不允许 bundle 嵌套）；它只是个普通目录。
 
 ## 7. 数据驱动 catalog
 
-大厅只吃 `module-catalog.ts` 一张清单：`{ id, title, bundle, kind, entry }[]`。**加任何功能 = 新建一个
-`modules/xxx` bundle + catalog 加一行，大厅代码零改** → 多人协作零冲突（一模块一 bundle 一目录，专人 own）。
+大厅只吃 `module-catalog.ts` 一张清单：`{ id, title, bundle, kind, prefab?, prefabLand?, layer?, scene? }[]`。
 
-## 8. 验证计划（真 cc，funplay MCP）
+- `registerCatalogUIs()` 把 panel 项登记进 UIManager；填了 `prefabLand` 的登记成 **resolver**（转屏时 UIManager 只重建这一类界面，其余零成本）。
+- **加任何功能 = 新建一个 `modules/xxx` bundle + 清单加一行，大厅代码零改** → 多人协作零冲突（一模块一 bundle 一目录，专人 own）。
 
-- 门禁：core 三处补缺 `pnpm test`/`-r typecheck`/`lint`/相关包 `build` 全绿。
-- 真机（Creator 3.8.7 gameView 预览 + `[CCK-LOBBY]` 日志 + 截图）：
-  1. 大厅渲染、列出 catalog；
-  2. 点商城 → `load('shop')` 真加载 → 面板挂常驻根上屏 → 其 i18n/配表已就绪（且**加载前查不到**，证模块作用域）；
-  3. 关商城 → unmount → i18n 表/配表**已撤**、`release('shop')` → `isLoaded=false`；
-  4. 点子游戏（game/C）→ `bundle.loadScene` 切世界场景、常驻框架存活、返回回大厅；
-  5. 【待实测】自定义 bundle 里的 `.scene` 不进 build「包含场景」列表即可 `bundle.loadScene`（调研标注项，此处坐实）。
+## 8. 验证记录
 
-## 9. Open Questions（已决议 · 2026-07-30 用户定）
+- **Game View 预览全流程 0 error**：Boot → kit → Lobby → panel 模块 mount / unmount / release → game 模块切场景 → `lobby:back` 回 Lobby + release。
+- **模块作用域成立**：打开商城前 `getI18n().t('shop.title')` 查不到 `shop.*`；关闭后翻译已撤、`isLoaded=false`。
+- **转屏真换 view**：`Shop → Shop_land`；未登记横屏变体的界面 `sameInstance=true` 零重建。
+- **web-mobile 真构建 + 浏览器 e2e**：完整启动序列 0 error；`scope.dispose` 卸载链在构建产物里成立；换 `shop` 版本后**免重启换代码**生效（见 [[adr-0010]]）。
+- **自定义 bundle 里的 `.scene` 不进 build「包含场景」列表也能 `bundle.loadScene`**（调研标注项，已坐实）。
 
-1. **模块入口获取方式**：✅ **(a) 模块自登记**——模块脚本顶层 `registerModule(id, factory)` 写进框架注册表，host 加载 bundle 后按 id 取。
-   无 cc 类名反射依赖、AOT 友好。
-2. **框架 host 归属**：✅ **全作 apps/demo 样例**（host/契约/ResourceScope 都在 apps/demo）；kit 只补 §5 的 4 处通用小原语。沉淀进 kit 留后续独立决策。
-3. **mini-dodge 的 kind**：✅ **做成 `game`（自带 `.scene`/C）**，完整演示「bundle 内自带场景 + 切场景 + 常驻框架存活」路。mini-clicker 仍 `panel`（轻量挂常驻根）。
-4. **场景导航 + base 场景**：✅ **走 core `SceneFlow` pushdown 栈**（见 §2.4），返回目标 = **Boot（空引导场景）**；Boot 幂等 bootstrap（见 §2.1），常驻 `CCKApp` 承载全部、只 boot 一次。不裸切、不另建 base 场景。
+## 9. 已知行为与坑
 
-## 附：旧测试探针迁 test/ 的处置
-
-- `Demo.scene` / `DemoBoot.ts` / `probe-bundle` → `assets/test/`（asset-db `move-asset` 保 uuid/引用）。
-- `resources/` 5 个 fixture（test-config/i18n-en/heroes/cck-app-compat/DemoPanel.prefab）→ 并入 `test/fixtures-bundle/`
-  自定义 bundle；改 `DemoBoot` 加载调用加 `{bundle:'fixtures-bundle'}`（DemoPanel 依赖 §5#1 的 `uiMgr.open({bundle})`）。
-  → `resources/` 彻底删除，无尾巴。
-- 旧 `GameBoot.ts` 计数器退役（逻辑并入 `modules/mini-clicker`）。
+- **直接播放 `Lobby.scene` 会全黑**：预览起始场景取「当前在编辑器里打开的场景」，跳过 Boot 就没有 kit、没有相机组。`LobbyHost` 已对这种情况打一条指路的 `console.error`——验证启动流程前先打开 `Boot.scene`。
+- **导航状态跨场景常驻靠 module-level 单例**：`Lobby.scene` 会被 game 场景顶掉再重新加载，但 JS 模块不随 `loadScene` 重载，所以 `LobbyNav` 单例活着；场景内节点（大厅 UI）则随场景销毁重建。
+- **kit 换了要整套重建导航状态**：编辑器 Game View 重播走 `shutdown → reboot`，上一轮的 EventBus / SceneFlow 已作废，旧订阅永远收不到事件 → `LobbyNav` 记住自己是绑在哪个 `Kit` 上建的，kit 变了就重建订阅。
+- **代码化 UI 节点必须置 `Layers.Enum.UI_2D`**，否则 UI 相机 `visibility` 不含它 → 不可见且无日志。
+- **面板打开失败要走同一条回滚链**（`scope.dispose()`），否则 bundle 计数与 DI 子作用域会泄漏。

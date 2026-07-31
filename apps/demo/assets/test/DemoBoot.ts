@@ -19,6 +19,7 @@ import {
   getAudioService,
   getUIManager,
   createUIManager,
+  registerUI,
   createNetwork,
   NETWORK_SOCKET,
   getHotUpdateService,
@@ -205,8 +206,12 @@ export class DemoBoot extends Component {
 
     // UIManager（ccUIModule 注册 cc 渲染层）：真渲染待 prefab 资产，这里验缺 prefab 优雅失败（open→false，不崩）
     try {
-      const opened = await getUIManager().open('__no_such_ui__');
-      console.log(`${tag} UIManager open(缺prefab) = ${opened}（应 false，不崩；真渲染待 prefab 资产；UI_VIEW 已 registered）`);
+      registerUI('__no_such_ui__', { prefab: '__no_such_ui__' });
+      const opened = await getUIManager().open('__no_such_ui__'); // 已注册但 prefab 不存在 → 加载失败
+      const unreg = await getUIManager().open('__never_registered__'); // 未注册 → warn + false，不碰渲染层
+      console.log(
+        `${tag} UIManager open(缺prefab)=${opened} open(未注册)=${unreg}（均应 false，不崩；UI_VIEW 已 registered）`,
+      );
     } catch (e) {
       console.warn(`${tag} UIManager 验证异常：`, (e as Error).message);
     }
@@ -219,7 +224,8 @@ export class DemoBoot extends Component {
       const uiRoot = new Node('CCK_UIRoot');
       this.node.addChild(uiRoot);
       const uiMgr = createUIManager({ view: createCcUIView({ root: uiRoot }) });
-      const opened = await uiMgr.open('DemoPanel', { bundle: FB }); // 默认层 'ui'：真加载 fixtures-bundle/DemoPanel.prefab（走 gap#1 open({bundle}））→ instantiate → 挂 UILayer_ui
+      registerUI('DemoPanel', { prefab: 'DemoPanel', bundle: FB }); // 「怎么开」进注册表，open 只给 uiId
+      const opened = await uiMgr.open('DemoPanel'); // 默认层 'ui'：真加载 fixtures-bundle/DemoPanel.prefab → instantiate → 挂 UILayer_ui
       const layer = uiRoot.getChildByName('UILayer_ui');
       const inst = layer && layer.children.length === 1 ? layer.children[0] : null;
       const label = inst?.getComponent(Label);

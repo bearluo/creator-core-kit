@@ -1,18 +1,19 @@
 import { _decorator, Color, Component, Label, Layers, Node, UITransform } from 'cc';
 import {
+  createBundleScope,
   createSceneFlow,
   getBundleManager,
   getEventBus,
   getRootContainer,
+  getUIManager,
   KIT,
   type Disposer,
   type Kit,
   type SceneFlow,
 } from '@cck/core';
 import { loadScene } from '@cck/engine';
-import { MODULE_CATALOG, type CatalogEntry } from './module-catalog';
-import { getModuleFactory, type FeatureModule, type ModuleContext } from './FeatureModule';
-import { ModuleResourceScope } from './ModuleResourceScope';
+import { MODULE_CATALOG, registerCatalogUIs, type CatalogEntry } from './module-catalog';
+import type { ModuleContext } from './ModuleContext';
 import { LOBBY_EVENTS, type LobbyEventMap } from './lobby-events';
 
 export { LOBBY_EVENTS } from './lobby-events';
@@ -21,6 +22,8 @@ const { ccclass } = _decorator;
 const TAG = '[CCK-LOBBY]';
 /** 主场景 / 返回目标。返回大厅是重进本场景，不回 Boot。 */
 const LOBBY_SCENE = 'Lobby';
+/** 大厅自己就是一个 bundle（可热更、可替换）——场景也在包内，切回来要带 bundle 名。 */
+const LOBBY_BUNDLE = 'lobby';
 
 /**
  * 大厅导航大脑（module-level 单例）——按 catalog 导航、按需 load→mount→release 模块。
@@ -28,15 +31,16 @@ const LOBBY_SCENE = 'Lobby';
  * 状态分两类：
  * - **跨场景常驻**（`flow` / `backSub` / `pendingGame`）：只初始化一次。Lobby.scene 会被 game 场景
  *   顶掉再重新加载，但 JS 模块不随 loadScene 重载，所以单例活着。
- * - **场景内节点**（`lobbyPanel` / `moduleLayer` / `openPanel`）：随 Lobby.scene 销毁重建，不做常驻。
+ * - **场景内节点**（`lobbyPanel`）：随 Lobby.scene 销毁重建，不做常驻。模块面板不在此列——
+ *   它们由 UIManager 挂进 kit 常驻相机组的层容器（跨场景存活），host 只持 `openPanel` 这份账。
  *
  * 相机 / 屏幕适配**不在这里** —— kit 的常驻相机组（`cameraRigModule`）在 Boot 阶段建好并跨场景存活。
  * 设计见 apps/demo/docs/scene-and-camera-architecture.md。
  */
-class LobbyApp {
-  private static _inst?: LobbyApp;
-  static instance(): LobbyApp {
-    return (LobbyApp._inst ??= new LobbyApp());
+class LobbyNav {
+  private static _inst?: LobbyNav;
+  static instance(): LobbyNav {
+    return (LobbyNav._inst ??= new LobbyNav());
   }
 
   private flow?: SceneFlow;
@@ -46,11 +50,11 @@ class LobbyApp {
   private navKit?: Kit;
 
   private lobbyPanel?: Node;
-  private moduleLayer?: Node;
-  private openPanel?: { entry: CatalogEntry; module: FeatureModule; ctx: ModuleContext; host: Node };
+  private openPanel?: { entry: CatalogEntry; ctx: ModuleContext };
 
   /** Lobby.scene 每次加载都调用：在场景里重建大厅 UI；导航常驻状态只初始化一次。 */
   enterLobby(root: Node): void {
+    registerCatalogUIs(); // 清单 → UIManager 注册表（幂等，重复登记覆盖）
     this.buildLobbyUI(root);
     const kit = getRootContainer().tryResolve(KIT);
     if (!kit) {
@@ -76,13 +80,11 @@ class LobbyApp {
 
   // —— 大厅导航 UI（数据驱动：只吃 MODULE_CATALOG）——
   private buildLobbyUI(root: Node): void {
-    // 大厅内容全挂在场景自己的渲染根下（随场景回收），不碰 kit 常驻相机组的挂载点。
+    // 大厅内容全挂在场景自己的渲染根下（随场景回收）。模块面板不再自建挂载层——
+    // 交给 UIManager 挂进 kit 常驻相机组的对应层容器（z 序由层枚举顺序定，不由打开顺序定）。
     this.lobbyPanel = new Node('LobbyPanel');
     this.lobbyPanel.layer = Layers.Enum.UI_2D;
     root.addChild(this.lobbyPanel);
-    this.moduleLayer = new Node('ModuleLayer');
-    this.moduleLayer.layer = Layers.Enum.UI_2D;
-    root.addChild(this.moduleLayer);
 
     const panel = this.lobbyPanel;
     makeLabel(panel, '大厅 · Lobby', 200, 40, new Color(120, 200, 255));
@@ -111,44 +113,42 @@ class LobbyApp {
     }
   }
 
-  // —— panel：从模块 bundle 取自登记工厂 → 建子作用域 + 挂载容器 → mount ——
+  // —— panel：建 bundle 作用域 → UIManager.open（prefab/层来自注册表，界面脚本随 prefab 一起被 instantiate）——
   private async mountPanel(entry: CatalogEntry): Promise<void> {
-    const factory = getModuleFactory(entry.id);
-    if (!factory) {
-      console.error(`${TAG} 模块 '${entry.id}' 未自登记（bundle 加载未执行 registerModule？）`);
-      getBundleManager().release(entry.bundle);
-      return;
-    }
-    const module = factory();
     const container = getRootContainer().createScope(`module:${entry.id}`);
-    const host = new Node(`module:${entry.id}`);
-    host.layer = Layers.Enum.UI_2D;
-    this.moduleLayer!.addChild(host);
+    const scope = createBundleScope(entry.bundle);
+    scope.add(() => container.dispose()); // DI 子作用域也挂进同一条回收链，别让调用点记两笔账
     const ctx: ModuleContext = {
-      root: host,
       container,
       bundle: entry.bundle,
-      scope: new ModuleResourceScope(entry.bundle),
+      scope,
       args: undefined,
       close: () => void this.closePanel(),
     };
-    this.openPanel = { entry, module, ctx, host };
+    this.openPanel = { entry, ctx };
     if (this.lobbyPanel?.isValid) this.lobbyPanel.active = false; // 面板占屏时收起大厅
-    await module.mount(ctx);
-    console.log(`${TAG} 模块 '${entry.id}' mount 完成（i18n/prefab 已随 bundle 就绪）`);
+    // ctx 就是 args：UIManager 透传给界面的 onShow(args, state)
+    const ok = await getUIManager().open(entry.id, ctx);
+    if (!ok) {
+      console.error(`${TAG} 模块 '${entry.id}' 打开失败（prefab 缺失或未注册）→ 回滚`);
+      this.openPanel = undefined;
+      await scope.dispose(); // 回滚也走同一条链：子作用域 + release(bundle) 一并撤
+      if (this.lobbyPanel?.isValid) this.lobbyPanel.active = true;
+      return;
+    }
+    console.log(`${TAG} 模块 '${entry.id}' 打开完成（i18n/prefab 已随 bundle 就绪）`);
   }
 
   private async closePanel(): Promise<void> {
     const o = this.openPanel;
     if (!o) return;
     this.openPanel = undefined;
-    await o.module.unmount(); // 对称回收：scope.dispose（removeTable/unregister/release）
-    o.ctx.container.dispose(); // 释放模块 DI 子作用域
-    if (o.host.isValid) o.host.destroy();
-    getBundleManager().release(o.entry.bundle); // 卸 bundle
+    // 一行全撤：closeByBundle（先销毁界面实例——换版本后旧类实例即成孤儿）→ 逆序回收登记项
+    //（i18n / 配表 / 资源 / DI 子作用域）→ 最后 release(bundle)。顺序由 kit 的 BundleScope 保证。
+    await o.ctx.scope.dispose();
     if (this.lobbyPanel?.isValid) this.lobbyPanel.active = true;
     console.log(
-      `${TAG} 模块 '${o.entry.id}' 关闭：unmount + 子作用域 dispose + release('${o.entry.bundle}') → isLoaded=${getBundleManager().isLoaded(o.entry.bundle)}`,
+      `${TAG} 模块 '${o.entry.id}' 关闭：scope.dispose 一行全撤 → isLoaded=${getBundleManager().isLoaded(o.entry.bundle)}`,
     );
   }
 
@@ -167,7 +167,7 @@ class LobbyApp {
   private async returnedFromGame(): Promise<void> {
     const e = this.pendingGame;
     this.pendingGame = undefined;
-    await loadScene(LOBBY_SCENE); // 重进主场景（LobbyHost.start → enterLobby 重建大厅 UI）
+    await loadScene(LOBBY_SCENE, { bundle: LOBBY_BUNDLE }); // 重进主场景（LobbyHost.start → enterLobby 重建大厅 UI）
     if (e) getBundleManager().release(e.bundle); // 场景换完才卸 bundle（它自带的场景还在跑时不能卸）
     console.log(`${TAG} 返回大厅：loadScene('${LOBBY_SCENE}') + release('${e?.bundle}')`);
   }
@@ -175,12 +175,12 @@ class LobbyApp {
 
 /**
  * Lobby.scene 的宿主组件 —— 挂在场景渲染根（`UITransform` + `RenderRoot2D` + 满屏 `Widget`）上。
- * 每次加载 Lobby.scene 都会新建本组件实例；导航状态在 module-level 的 `LobbyApp` 单例里跨场景常驻。
+ * 每次加载 Lobby.scene 都会新建本组件实例；导航状态在 module-level 的 `LobbyNav` 单例里跨场景常驻。
  */
 @ccclass('LobbyHost')
 export class LobbyHost extends Component {
   start(): void {
-    LobbyApp.instance().enterLobby(this.node);
+    LobbyNav.instance().enterLobby(this.node);
   }
 }
 
