@@ -43,3 +43,26 @@ export { bindText, bindProp, bindEditBox, bindToggle, BindingScope } from './rea
 
 // —— DI engine 半（KitContext：core 层级容器绑定到 cc.Node 场景树，of/resolve/provide）——
 export { KitContext } from './kit-context';
+
+// —— 渲染骨架（常驻相机组 + 横竖屏适配；纯决策逻辑在 render-policy，零 cc 可单测）——
+export {
+  CAMERA_PRIORITY,
+  CCK_LAYERS,
+  computeCameraCenter,
+  computeOrthoHeight,
+  createClearOwnership,
+  pickDesignResolution,
+} from './render-policy';
+export type {
+  CameraRigLayer,
+  ClearFlagsHolder,
+  ClearOwnership,
+  ClearOwnershipDeps,
+  DesignResolution,
+  Orientation,
+  OrthoHeightInput,
+} from './render-policy';
+export { CAMERA_RIG, cameraRigModule, createCameraRig, getCameraRig } from './camera-rig';
+export type { CameraRig, CameraRigOptions } from './camera-rig';
+export { resolutionModule } from './resolution';
+export type { ResolutionOptions } from './resolution';

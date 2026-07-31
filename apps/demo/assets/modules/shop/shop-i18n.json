@@ -1,0 +1,4 @@
+{
+  "shop.title": "🛒 商城 Shop",
+  "shop.desc": "这是商城模块的面板。它的 i18n 与 prefab 都在 shop bundle 里——随 bundle 加载而来、关闭时随之卸载（模块作用域资源）。"
+}

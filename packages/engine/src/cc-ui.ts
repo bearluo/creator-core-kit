@@ -1,7 +1,8 @@
 import { Canvas, Node, director, instantiate } from 'cc';
 import type { Prefab } from 'cc';
-import { UI_VIEW, getAssetLoader } from '@cck/core';
+import { UI_VIEW, getAssetLoader, getRootContainer } from '@cck/core';
 import type { IUIView, UIViewSpec, KitModule } from '@cck/core';
+import { CAMERA_RIG } from './camera-rig';
 
 /**
  * IUIView 的 cc 实现 —— UIManager 的「引擎半」：经 IAssetLoader 加载 prefab、instantiate、挂到层容器 Node，
@@ -21,6 +22,10 @@ export function createCcUIView(opts?: { root?: Node }): IUIView {
 
   const uiRoot = (): Node => {
     if (opts?.root && opts.root.isValid) return opts.root;
+    // 装了常驻相机组就用它的 'ui' 层挂载点：已配好 RenderRoot2D + 满屏 Widget，且**跨场景常驻**
+    // ——正合 UIManager 的全局窗口语义（loading / toast / 断线提示 不该随场景消失）。
+    const rig = getRootContainer().tryResolve(CAMERA_RIG);
+    if (rig) return rig.layerRoot('ui');
     const scene = director.getScene();
     const canvas = scene?.getComponentInChildren(Canvas);
     if (canvas) return canvas.node;

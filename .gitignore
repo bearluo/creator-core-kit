@@ -24,6 +24,10 @@ coverage/
 # funplay MCP 扩展运行时生成的本地配置（含端口/工具开关，因人而异，不入库）
 /apps/demo/funplay-cocos-mcp.config.json
 
+# Creator 自动生成的脚本模板帮助链接（.url，随编辑器版本再生，不入库；
+# 同目录的 default-meta.json 是项目配置，照常提交）
+/apps/demo/.creator/asset-template/
+
 # 系统 / 编辑器
 .DS_Store
 Thumbs.db
