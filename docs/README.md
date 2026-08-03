@@ -13,6 +13,7 @@
 | 设计 / 使用某个模块 | `packages/<pkg>/docs/modules/<module>.md`（随包，如 `packages/core/docs/modules/`） |
 | 看整体进度、谁在做什么 | `docs/progress.md` |
 | 了解选型依据（MCP / 框架 / 热更调研） | `docs/research/2026-07-24-cocos-ecosystem-survey.md` |
+| **接服务端 / 定协议 / 定更新策略** | **`docs/adr/0011-server-framework-split-and-protocol-contract.md`**（决策）→ `docs/research/2026-08-03-game-server-survey.md`（依据） |
 | 追溯某个重大技术决策 | `docs/adr/`（按需建立） |
 | 新建模块文档 | 复制 `docs/design/modules/_TEMPLATE.md` |
 
