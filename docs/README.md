@@ -8,6 +8,7 @@
 | 你的任务 | 打开 |
 |---|---|
 | 上手项目 / 遵守开发约定 | `CLAUDE.md`（L0 常驻铁律） |
+| **做新业务功能 / 写测试** | **`docs/design/testing-strategy-overview.md`（分层测试边界 + 单例禁令 + 动作清单）** |
 | 了解架构全貌与关键决策 | `docs/design/2026-07-24-architecture-overview.md` |
 | 设计 / 使用某个模块 | `packages/<pkg>/docs/modules/<module>.md`（随包，如 `packages/core/docs/modules/`） |
 | 看整体进度、谁在做什么 | `docs/progress.md` |

@@ -11,7 +11,9 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['packages/*/src/**/*.{test,spec}.ts'],
+    // 业务侧测试在 assets 之外（Creator 会编译 assets 下所有 .ts 并打进包）——
+    // 目录镜像 assets，见 docs/design/testing-strategy-overview.md §5。
+    include: ['packages/*/src/**/*.{test,spec}.ts', 'apps/*/test/**/*.{test,spec}.ts'],
     environment: 'node',
     coverage: {
       provider: 'v8',

@@ -21,4 +21,12 @@ export class CounterVM {
   reset(): void {
     this.count.value = 0;
   }
+
+  /**
+   * 从 `saveState()` 吐出的值恢复（转屏 / 换皮重建走这里）。
+   * 判类型、给默认值都在 VM——View 不做业务判断，这样这条分支才测得到。
+   */
+  restore(state: unknown): void {
+    this.count.value = typeof state === 'number' && Number.isFinite(state) ? state : 0;
+  }
 }

@@ -23,7 +23,7 @@ export class ClickerView extends CCKUIView {
   onShow(args?: unknown, state?: unknown): void {
     const ctx = args as ModuleContext;
     this.ctx = ctx;
-    if (typeof state === 'number') this.vm.count.value = state; // 转屏/换皮重建 → 计数接着走
+    this.vm.restore(state); // 转屏/换皮重建 → 计数接着走。判类型归 VM，View 不做业务判断
 
     const count = this.node.getChildByName('Count')?.getComponent(Label);
     // 绑定的生命周期是**界面实例**，不是 bundle：转屏/换皮重建会销毁重建本组件，

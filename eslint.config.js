@@ -47,6 +47,11 @@ export default tseslint.config(
     },
   },
   {
+    // 仓库维护脚本（node ESM，不进游戏包，也不进 Cocos 构建）。
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { console: 'readonly', process: 'readonly' } },
+  },
+  {
     // 会被打进 Cocos 构建的运行时代码（测试只在 node 跑，不受此限）。
     files: ['packages/*/src/**/*.ts'],
     ignores: ['packages/*/src/**/__tests__/**'],

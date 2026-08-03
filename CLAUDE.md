@@ -39,13 +39,23 @@ docs/design       设计文档
 - **测试**：**vitest**，TDD（先写测试）。`core` 覆盖率是 CI 硬门槛；**`core` 的测试不允许 import `cc`**。`engine` 用 `cc` mock 测薄壳。
 - **模块通信**：走类型安全 EventBus / 接口，不做跨模块直接引用。
 
+### 业务开发三条硬规则（做新功能前必读全文：[`docs/design/testing-strategy-overview.md`](docs/design/testing-strategy-overview.md)）
+
+1. **逻辑一律进 VM**（零 `cc`，可 node 直跑）；**View 只许做四件事**——取组件 / 建绑定 / 转发事件 / 转发生命周期钩子。写到第五件就下沉到 VM。单测覆盖到 VM 为止，View + prefab + 装配由启动 smoke 兜底。
+2. **禁模块级单例**——`export const x = new Foo()` / `static instance` / `getInstance()` 全禁。bundle 卸载不卸脚本、编辑器 stop→play 保留 JS 上下文、单 bundle 出包依赖内联，三条都让它拿到脏的旧实例。要共享就注册进模块 DI scope（`containerScoped`）。唯一豁免是 `getRootContainer()`（ADR-0001 指定机制）。
+3. **测试不进 `assets/`**——Creator 会把 `.test.ts` 当游戏脚本打包并炸构建。放 `apps/<project>/test/`，路径**镜像** `assets/`（`assets/a/B.ts` → `test/a/B.test.ts`）。运行时验证探针另有去处（`assets/probes/`），别和单测混。
+
+> 业务侧 lint 规则要写进 `apps/<project>/eslint.config.mjs`（`pnpm lint:demo`）——根 `eslint.config.js` 把 `apps/**` 整个 ignore 了，加在那里**静默失效**。
+> 四道门：`pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm check:vm-tests`（每个 `*VM.ts` 必须有镜像路径的测试）。
+
 ---
 
 ## 多人协作（硬约定）
 
 - **一个空引导场景**，其余全部 prefab + 代码加载 → 从源头消灭 scene 合并冲突。
 - **feature-based 目录，一个模块一个 Asset Bundle**，交叉最小化。
-- prefab 拆细、专人管理；**代码化 UI 优先**（减少 prefab 冲突）。
+- prefab 拆细、专人管理；**UI 一律走 prefab**——工作分配本就保证不会两个人改同一个 prefab，「prefab 冲突」这个前提不成立；代码拼节点是把字号 / 颜色 / 布局锁死在 TS 里，美术策划碰不了，得不偿失。
+- **prefab 首次创建用脚本生成**（描述数据 → 编辑器 `create-prefab` 消息从临时节点树产出；**别裸序列化 `Node`**——缺 `PrefabInfo`，运行时能 instantiate 但编辑器一打开就崩）；**改已有 prefab 走 MCP**，不要用脚本重新生成覆盖别人的编辑。
 - **线性历史**：rebase-before-merge，fast-forward 合并，禁 merge commit。
 - **分支开发一律用 git worktree，一分支一目录**（勿在同一目录反复 checkout 切分支）。
 - `.gitignore` 覆盖 `library/ temp/ build/ profiles/ native/` 等生成物；`.meta` 需提交。
@@ -101,7 +111,7 @@ packages/<pkg>/docs/modules/<module>.md      单模块**当前功能文档**（�
 ## MCP 辅助界面开发
 
 - 主力 **FunplayAI/funplay-cocos-mcp**（MIT、可裁剪、`execute_javascript` + 截图闭环），装在 `apps/demo`。
-- MCP 操作产物是 scene/prefab（协作冲突源），必须配合上面「少场景 / 代码化 UI」约定使用。
+- MCP 是**改已有** scene/prefab 的手段；**首次创建走脚本生成**（见上「多人协作」）。
 
 ---
 
