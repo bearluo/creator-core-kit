@@ -165,14 +165,37 @@ export function coreModule(opts?: {
   eventBus?: IEventBus;
   timer?: ITimer & ITimerDriver;
 }): KitModule {
+  let ownsBus = false;
+  let ownsTimer = false;
   return {
     name: 'core',
     install(ctx: BootContext): void {
-      if (!ctx.container.hasLocal(EVENT_BUS)) {
+      ownsBus = !ctx.container.hasLocal(EVENT_BUS);
+      if (ownsBus) {
         ctx.container.register(EVENT_BUS, { useValue: opts?.eventBus ?? createEventBus() });
       }
-      if (!ctx.container.hasLocal(TIMER)) {
+      ownsTimer = !ctx.container.hasLocal(TIMER);
+      if (ownsTimer) {
         ctx.container.register(TIMER, { useValue: opts?.timer ?? createTimer() });
+      }
+    },
+    /**
+     * 注销自己注册的 token，让下一轮 boot 拿到**全新**的总线与定时器。
+     *
+     * 少了这步，EVENT_BUS 会活过 `shutdown()`（install 的 `hasLocal` 守卫使重新 boot 复用旧实例），
+     * 于是上一轮挂的订阅还在总线上 → 新一轮 emit **双份触发**。开发期 Game View 重播
+     * （JS 上下文不重载 → shutdown → reboot）每次都踩，真机进程全新反而看不出来。
+     *
+     * 只注销自己注册的那份：项目可能在 boot 前预注册了自己的总线 / 定时器实现，那份归它管，别顺手拆了。
+     */
+    stop(ctx: BootContext): void {
+      if (ownsBus) {
+        ctx.container.unregister(EVENT_BUS);
+        ownsBus = false;
+      }
+      if (ownsTimer) {
+        ctx.container.unregister(TIMER);
+        ownsTimer = false;
       }
     },
   };

@@ -10,14 +10,28 @@ import { invalidateBundleScripts } from './bundle-source';
  * 本模块只造不跑：进度/失败订阅要在启动前挂上，所以 `launch()` 由调用方在 `bootCoreKit` 之后显式发起。
  */
 export function appModule(config: AppConfig, opts?: { steps?: readonly LaunchStep[] }): KitModule {
+  let ownsReloader = false;
   return {
     name: 'app',
     install(ctx) {
-      if (!ctx.container.hasLocal(BUNDLE_RELOADER)) {
+      ownsReloader = !ctx.container.hasLocal(BUNDLE_RELOADER);
+      if (ownsReloader) {
         ctx.container.register(BUNDLE_RELOADER, { useValue: createCcBundleReloader() });
       }
       const app = createApp(config, { steps: opts?.steps, deps: { restart: platformRestart } });
       ctx.container.register(APP, { useValue: app });
+    },
+    /**
+     * 注销自己注册的 token。少了这步，`shutdown()` 后再 `bootCoreKit` 会撞
+     * 「token "cck.app" already registered in scope "root"」——开发期 Game View 重播
+     * （JS 上下文不重载 → 走 shutdown → reboot）每次都踩，真机进程全新反而看不出来。
+     *
+     * 不能改用 `hasLocal` 守卫复用旧 App 了事：它的游标已停在 `running`，复用等于启动序列不再跑。
+     * `BUNDLE_RELOADER` 只注销自己注册的那份，别把项目预先注册的实现顺手拆了。
+     */
+    stop(ctx) {
+      ctx.container.unregister(APP);
+      if (ownsReloader) ctx.container.unregister(BUNDLE_RELOADER);
     },
   };
 }

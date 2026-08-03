@@ -2,15 +2,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { director, game, Director, ccCalls, resetCcMock } from 'cc';
 import { bootCoreKit, driveWithDirector, loggerModule } from '../bootstrap';
 import { createCcLogger } from '../cc-logger';
+import { appModule } from '../app-module';
 import {
   boot,
   getLogger,
   getRootContainer,
   getTimer,
+  APP,
+  BUNDLE_RELOADER,
   EVENT_BUS,
   KIT,
   LOGGER,
   TIMER,
+  type AppConfig,
   type ITimerDriver,
   type ILogger,
 } from '@cck/core';
@@ -90,5 +94,23 @@ describe('engine Bootstrap', () => {
     const custom = createCcLogger() as ILogger;
     await bootCoreKit({ logger: custom });
     expect(getRootContainer().resolve(LOGGER)).toBe(custom);
+  });
+
+  it('8. appModule：shutdown 注销 APP/BUNDLE_RELOADER，可重新 boot（开发期重播路径）', async () => {
+    const config: AppConfig = {
+      appId: 't',
+      version: '1.0.0',
+      channel: 'dev',
+      env: 'dev',
+      lobby: { bundle: 'lobby', enter: async () => {} },
+    };
+    const root = getRootContainer();
+    const kit1 = await bootCoreKit({ modules: [appModule(config)] });
+    expect(root.hasLocal(APP)).toBe(true);
+    await kit1.shutdown();
+    expect(root.hasLocal(APP)).toBe(false);
+    expect(root.hasLocal(BUNDLE_RELOADER)).toBe(false);
+    // 残留 token 会让二次 boot 抛 'already registered'
+    await expect(bootCoreKit({ modules: [appModule(config)] })).resolves.toBeDefined();
   });
 });

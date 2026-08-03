@@ -220,6 +220,47 @@ describe('Bootstrap', () => {
     );
   });
 
+  it('21. coreModule.stop 注销自己注册的 EVENT_BUS/TIMER → 重新 boot 拿到新实例', async () => {
+    const root = getRootContainer();
+    const kit1 = await boot({ modules: [coreModule()] });
+    const bus1 = root.resolve(EVENT_BUS);
+    const timer1 = root.resolve(TIMER);
+    await kit1.shutdown();
+    expect(root.hasLocal(EVENT_BUS)).toBe(false);
+    expect(root.hasLocal(TIMER)).toBe(false);
+    await boot({ modules: [coreModule()] });
+    expect(root.resolve(EVENT_BUS)).not.toBe(bus1);
+    expect(root.resolve(TIMER)).not.toBe(timer1);
+  });
+
+  // 少了这步，总线活过 shutdown → 上一轮的订阅还挂在上面，新一轮 emit 会双份触发。
+  // 开发期 Game View 重播（JS 上下文不重载 → shutdown → reboot）每次都踩。
+  it('22. 上一轮 kit 的订阅不会在重新 boot 后被触发', async () => {
+    type E = { ping: number };
+    const kit1 = await boot({ modules: [coreModule()] });
+    const stale = vi.fn();
+    getEventBus<E>().on('ping', stale);
+    await kit1.shutdown();
+    await boot({ modules: [coreModule()] });
+    const fresh = vi.fn();
+    getEventBus<E>().on('ping', fresh);
+    getEventBus<E>().emit('ping', 1);
+    expect(fresh).toHaveBeenCalledOnce();
+    expect(stale).not.toHaveBeenCalled();
+  });
+
+  it('23. 只注销自己注册的：预注册的 EVENT_BUS/TIMER 在 shutdown 后保留', async () => {
+    const root = getRootContainer();
+    const bus = createEventBus();
+    const timer = createTimer();
+    root.register(EVENT_BUS, { useValue: bus });
+    root.register(TIMER, { useValue: timer });
+    const kit = await boot({ modules: [coreModule()] });
+    await kit.shutdown();
+    expect(root.resolve(EVENT_BUS)).toBe(bus);
+    expect(root.resolve(TIMER)).toBe(timer);
+  });
+
   it('20. 拓扑序：菱形依赖 deps 全在依赖者前', async () => {
     const { calls, mod } = recorder();
     await boot({
