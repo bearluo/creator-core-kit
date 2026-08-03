@@ -34,6 +34,10 @@ export function createWebSocketSocket(): ISocket {
         return;
       }
       const sock = new WebSocket(url);
+      // 二进制帧必须收成 ArrayBuffer。默认是 'blob'，而 ICodec.decode(data) 是**同步**签名，
+      // Blob 只能异步读——不是「解不出来」，是接口形状根本对不上。JSON codec 走 string，
+      // 所以这行缺了也一直没暴露，直到接 protobuf。见 ADR-0011。
+      sock.binaryType = 'arraybuffer';
       ws = sock;
       sock.onopen = (): void => {
         if (ws === sock) self.onOpen?.();
