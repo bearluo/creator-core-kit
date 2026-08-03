@@ -1,4 +1,4 @@
-import { _decorator, Component } from 'cc';
+import { _decorator, Component, Prefab } from 'cc';
 import { EDITOR } from 'cc/env';
 import {
   defaultLaunchSteps,
@@ -22,8 +22,9 @@ import {
   loadScene,
   resolutionModule,
 } from '@cck/engine';
+import { createLaunchOverlay } from './LaunchOverlay';
 
-const { ccclass } = _decorator;
+const { ccclass, property } = _decorator;
 const TAG = '[CCK-BOOT]';
 
 /**
@@ -54,7 +55,7 @@ const APP_CONFIG: AppConfig = {
  * 这正是 `LaunchStep` 可插拔的用途：登录、SDK 初始化、公告、隐私协议都插在这里，kit 不预设。
  */
 function launchSteps(): readonly LaunchStep[] {
-  const steps = [...defaultLaunchSteps()];
+  const steps = Array.from(defaultLaunchSteps()); // 别用 [...x]：Cocos 构建会降级成 [].concat(x)
   const globalI18n: LaunchStep = {
     name: 'demo-i18n',
     phase: 'shared',
@@ -86,6 +87,13 @@ function launchSteps(): readonly LaunchStep[] {
  */
 @ccclass('Bootstrap')
 export class Bootstrap extends Component {
+  /**
+   * 启动界面 prefab。**序列化引用随 Boot.scene 一起进 main 包**，启动第一帧就在手上——
+   * 不用路径加载、不依赖任何 bundle，正好覆盖「`shared` 都还没加载」的这段空窗。
+   */
+  @property(Prefab)
+  launchOverlay: Prefab | null = null;
+
   async start(): Promise<void> {
     // 开发期守卫：Creator 的 Game View 停止再播放**不重载 JS 上下文**，模块级状态（含挂在
     // globalThis 上的 DI 根容器）会活着 → 二次 bootCoreKit 抛 'already booted'。
@@ -125,18 +133,20 @@ export class Bootstrap extends Component {
     });
     console.log(`${TAG} kit 就绪[${kit.modules.join(', ')}] → app.launch()`);
 
-    // 进度 / 失败订阅必须在 launch 之前挂上。真实项目在这里驱动启动 loading UI：
-    // 这阶段 lobby 还没加载、用不了任何 prefab，所以只能是代码化 UI（挂 UIManager 的 'loading' 层）。
+    // 进度 / 失败订阅必须在 launch 之前挂上，否则漏掉前几个阶段。
+    // 界面在 LaunchOverlay.prefab（kit 只出事件，样式归项目）：一条进度条 + 按失败分类给出路
+    //（network→重试 / needFullUpdate→去商店 / fatal→重启），跑到 running 自毁。
     const app = getApp();
-    app.onProgress((p) =>
+    const overlay = createLaunchOverlay(app, this.launchOverlay);
+    app.onProgress((p) => {
       console.log(
         `${TAG} 启动阶段 → ${p.phase}${p.ratio === undefined ? '' : ` ${Math.round(p.ratio * 100)}%`}`,
-      ),
-    );
+      );
+      overlay.onProgress(p);
+    });
     app.onFailure((f) => {
       console.error(`${TAG} 启动失败：${f.kind}`, f);
-      // 三种失败给用户看的东西完全不同：network 给「重试」按钮（app.retry()）、
-      // needFullUpdate 引导去商店 / 整包更新、fatal 兜底提示。demo 只打日志。
+      overlay.onFailure(f);
     });
     await app.launch();
   }

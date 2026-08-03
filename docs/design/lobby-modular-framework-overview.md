@@ -28,7 +28,7 @@
 ## 1. 目标与定位
 
 - **做什么**：教一个新项目「大厅 + 一切功能皆可分包」怎么在 kit 上搭。既是 `apps/demo` 的接入样例，也是 kit 里「模块作用域资源」这套原语的使用现场。
-- **和验证探针的关系**：旧的逐模块验证探针（`DemoBoot` / `Demo.scene` / `fixtures-bundle`）在 `assets/test/`，与本样例物理隔离，继续作回归用。
+- **和验证探针的关系**：旧的逐模块验证探针（`DemoBoot` / `Demo.scene` / `fixtures-bundle`）在 `assets/probes/`，与本样例物理隔离，继续作回归用。
 - **YAGNI（本版不做）**：模块间深层导航历史；模块 A 直接依赖模块 B（模块只经 catalog + 事件解耦，不互相 import）；模块预下载优先级。
 
 ## 2. 架构：三类场景 + 常驻相机组
@@ -151,5 +151,6 @@ apps/demo/assets/
 - **直接播放 `Lobby.scene` 会全黑**：预览起始场景取「当前在编辑器里打开的场景」，跳过 Boot 就没有 kit、没有相机组。`LobbyHost` 已对这种情况打一条指路的 `console.error`——验证启动流程前先打开 `Boot.scene`。
 - **导航状态跨场景常驻靠 module-level 单例**：`Lobby.scene` 会被 game 场景顶掉再重新加载，但 JS 模块不随 `loadScene` 重载，所以 `LobbyNav` 单例活着；场景内节点（大厅 UI）则随场景销毁重建。
 - **kit 换了要整套重建导航状态**：编辑器 Game View 重播走 `shutdown → reboot`，上一轮的 EventBus / SceneFlow 已作废，旧订阅永远收不到事件 → `LobbyNav` 记住自己是绑在哪个 `Kit` 上建的，kit 变了就重建订阅。
-- **代码化 UI 节点必须置 `Layers.Enum.UI_2D`**，否则 UI 相机 `visibility` 不含它 → 不可见且无日志。
+- **UI 节点必须置 `Layers.Enum.UI_2D`**，否则 UI 相机 `visibility` 不含它 → 不可见且无日志。prefab 生成器（`apps/demo/scripts/prefab-gen/`）已统一置好；手搭节点或运行时 `new Node` 时要自己注意。
+- **大厅界面是 prefab 不是代码**：`LobbyPanel.prefab`（布局）+ `LobbyItem.prefab`（入口按钮模板），由 `LobbyHost` 的两个 `@property(Prefab)` 在 `Lobby.scene` 里绑；代码只按 `MODULE_CATALOG` 克隆模板、填标题、绑点击。**节点名 `Items` / `Label` 是契约**，改 prefab 时别改，否则代码静默取不到（只打一条 error）。
 - **面板打开失败要走同一条回滚链**（`scope.dispose()`），否则 bundle 计数与 DI 子作用域会泄漏。

@@ -144,7 +144,7 @@ steps.splice(steps.findIndex((s) => s.name === 'lobby'), 0, myI18nStep);  // 按
 - **失败分类** `classify(e)`：先看结构标记 `e.__cckLaunchFailure`（由 `abortLaunch` 打上）；没有则**默认判 `network` 可重试**——启动期偶发失败绝大多数是网络 / IO，真是代码 bug 时重试也只是再失败一次，代价小于把可恢复失败判成 `fatal` 让用户无路可走（`ponytail:` 注释在案）。
 - **回调集合快照**：`report` / `onFailure` 派发前 `Array.from(...)`，允许回调里退订自己。
 - **`bag` 的用法**：`platform` 写 `APP_INFO`，`hotupdate` 的 web 分支读它做闸判定。项目自定义步骤（登录 → 拿到 token → 后面的步骤要用）走同一个 `bag`，kit 不预设键名。
-- **engine 半 `appModule`**：`install` 时 ① 若容器没有 `BUNDLE_RELOADER` 则注册 `createCcBundleReloader()`；② `createApp(config, { steps, deps: { restart: platformRestart } })` → 注册 `APP`。**不调 `launch()`**。
+- **engine 半 `appModule`**：`install` 时 ① 若容器没有 `BUNDLE_RELOADER` 则注册 `createCcBundleReloader()`；② `createApp(config, { steps, deps: { restart: platformRestart } })` → 注册 `APP`。**不调 `launch()`**。`stop` 时注销这两个 token（`BUNDLE_RELOADER` 只注销自己注册的那份），使 `shutdown()` 后能重新 `bootCoreKit`。
 - **`platformRestart`**：`sys.isNative` → `getHotUpdateService().restart()`（backend 内是 `game.restart`，同进程 PID 不变）；否则 `globalThis.location?.reload()`——web **必须整页重来**，`game.restart()` 只重启引擎不重新拉脚本，而 web 的新代码在 `index.<md5>.js` 这个新 URL 里。
 
 ## Key design decisions（决策表）
@@ -157,7 +157,7 @@ steps.splice(steps.findIndex((s) => s.name === 'lobby'), 0, myI18nStep);  // 按
 | 4 | 失败处理 | 三分类 + 从失败步 `retry()` | 网络重试 / 引导商店 / 兜底，给用户看的东西完全不同 |
 | 5 | 失败默认分类 | 未标记的异常一律 `network`（可重试） | 见上「失败分类」；把可恢复失败判死代价更大 |
 | 6 | 中止方式 | `abortLaunch()` 抛**带结构标记的 Error**，不用自定义 Error 子类 | 跨 bundle `instanceof` 不可靠（[[adr-0001]]） |
-| 7 | 启动 loading UI | kit 只出 `onProgress` 事件 | 这阶段 lobby 未加载、用不了任何 prefab，只能代码化；样式是项目的事 |
+| 7 | 启动 loading UI | kit 只出 `onProgress` 事件，界面归项目（样例：demo 的 `LaunchOverlay.prefab` + 同名薄壳脚本） | 样式是项目的事，kit 不预设任何界面。**能用 prefab**：随 Boot.scene `@property` 序列化进 main 包，启动第一帧就在手上；受限的只是 `shared`/`lobby` 这些还没加载的 bundle |
 | 8 | compat 闸位置 | native 仍在 `apply` 前（AssetsManager 自带）；**web 移到 `setVersions` 前** | ADR-0001 的真实暴雷点是第一个业务 bundle 加载时；web 没有 apply 这个时机 |
 | 9 | 版本表落点 | `BundleManager.setVersions`，不放 App | UIManager 打开界面时也会 load bundle，放上层会漏（见 [[bundle-manager]] 决策 #10） |
 | 10 | 造与跑分离 | `appModule` 只 `createApp` 并注册，`launch()` 由调用方发起 | 进度 / 失败订阅必须先于 `launch` 挂上，否则第一批事件全丢 |
@@ -185,7 +185,7 @@ steps.splice(steps.findIndex((s) => s.name === 'lobby'), 0, myI18nStep);  // 按
 
 - **core**：`packages/core/src/app/app.ts`（全部）、`index.ts`；core `index.ts` re-export。
 - **engine**：`packages/engine/src/app-module.ts`（`appModule` + `platformRestart` + `createCcBundleReloader`）。
-- **样例**：`apps/demo/assets/scenes/Bootstrap.ts`（`APP_CONFIG` + `launchSteps()` 插一步 `demo-i18n` + 订阅 progress/failure 后 `app.launch()`）。
+- **样例**：`apps/demo/assets/scenes/Bootstrap.ts`（`APP_CONFIG` + `launchSteps()` 插一步 `demo-i18n` + `@property(Prefab) launchOverlay` + 订阅 progress/failure 后 `app.launch()`）、`apps/demo/assets/scenes/LaunchOverlay.{prefab,ts}`（界面在 prefab，脚本只填文案 / 推进度 / 切失败按钮）。
 
 ### 反直觉行为 / 坑
 
@@ -195,6 +195,7 @@ steps.splice(steps.findIndex((s) => s.name === 'lobby'), 0, myI18nStep);  // 按
 - **web 上 `getHotUpdateService().restart()` 没用**：那是 `game.restart()`，只重启引擎不重新拉脚本 → 必须由 engine 注入 `location.reload()`。这也是 `AppDeps.restart` 存在的唯一理由。
 - **`onProgress` / `onFailure` 必须在 `launch()` 之前挂**：`appModule` 只造不跑正是为此。挂晚了第一批事件（`platform` 阶段）直接丢。
 - **失败不会抛给 `launch()` 的调用方**——`launch()` 永远 resolve，失败只经 `onFailure` 透出。不订阅就完全静默（只有一行 logger.warn）。
+- **`appModule.stop` 必须注销 `APP`**：Creator 的 Game View 停止再播放**不重载 JS 上下文**，走的是「`shutdown()` → 重新 `bootCoreKit`」这条路；少了注销就撞 `DI: token "cck.app" already registered in scope "root"`，整个 kit 装不起来。也**不能**改成 `hasLocal` 守卫复用旧 `App` 了事——它的游标已停在 `running`，复用等于启动序列不再跑。真机进程全新，这个坑只在开发期显形。
 
 ### 当前限制（ponytail / YAGNI）
 

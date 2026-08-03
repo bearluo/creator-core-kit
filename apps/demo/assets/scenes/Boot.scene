@@ -113,7 +113,10 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "firstScene": "Lobby",
+    "launchOverlay": {
+      "__uuid__": "d8061b9a-2325-41a1-baf4-3d266cb4801f",
+      "__expectedType__": "cc.Prefab"
+    },
     "_id": "6ejfsoBCJAGKLap2+pSjkz"
   },
   {

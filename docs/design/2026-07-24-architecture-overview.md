@@ -166,7 +166,7 @@ creator-core-kit/
 
 - **一个空引导场景**，其余全部 prefab + 代码加载 → 从源头消灭 scene 合并冲突。
 - **feature-based 目录**，一个模块一个 bundle，交叉最小化。
-- prefab 拆细、专人管理；代码化 UI 优先（减少 prefab 冲突）。
+- prefab 拆细、专人管理；**UI 一律走 prefab**（工作分配保证不会两人同改一个 prefab，「prefab 冲突」前提不成立；代码拼节点把样式锁死在 TS 里，美术策划碰不了）。首次创建用脚本生成（描述数据 → 编辑器 `create-prefab`），改已有 prefab 走 MCP。
 - `.gitignore` 覆盖 `library/ temp/ build/ profiles/ native/` 等生成物；`.meta` 提交规范。
 - 线性历史：沿用 fast-forward 合并约定（rebase-before-merge）。
 - 兜底：必要时引入 FireMerge 类 scene/prefab 合并工具。
@@ -187,7 +187,7 @@ creator-core-kit/
 - 选型主力：**FunplayAI/funplay-cocos-mcp**（MIT、最活跃、105 工具可裁剪、`execute_javascript` + 截图闭环、支持 Claude Code）。
 - 备选：caravanglory/cocos-mcp-server（工具最多，交叉参考工具划分）。
 - 排除：DaxianLee（非商用协议）、RomaRogov（已废弃）。
-- 装在 `apps/demo` 工程内实测；MCP 操作产物是 scene/prefab（协作冲突源），须配合 §8 的"少场景/代码化 UI"约定。
+- 装在 `apps/demo` 工程内实测；MCP 是**改已有** scene/prefab 的手段，**首次创建走脚本生成**（§8）。
 
 ---
 

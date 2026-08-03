@@ -1,0 +1,53 @@
+{
+  "specs": [
+    {
+      "url": "db://assets/modules/lobby/LobbyPanel.prefab",
+      "root": {
+        "name": "LobbyPanel",
+        "size": [600, 520],
+        "children": [
+          {
+            "name": "Title",
+            "pos": [0, 200],
+            "size": [600, 52],
+            "label": { "string": "大厅 · Lobby", "fontSize": 40, "color": [120, 200, 255] }
+          },
+          {
+            "name": "Subtitle",
+            "pos": [0, 150],
+            "size": [600, 32],
+            "label": {
+              "string": "点下面任一功能 → 按需加载它的 bundle",
+              "fontSize": 22,
+              "color": [150, 160, 180]
+            }
+          },
+          { "name": "Items", "pos": [0, 60], "size": [360, 260] }
+        ]
+      }
+    },
+    {
+      "url": "db://assets/modules/lobby/LobbyItem.prefab",
+      "root": {
+        "name": "LobbyItem",
+        "size": [360, 66],
+        "children": [
+          {
+            "name": "Bg",
+            "size": [360, 66],
+            "sprite": {
+              "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+              "type": "sliced",
+              "color": [70, 78, 98]
+            }
+          },
+          {
+            "name": "Label",
+            "size": [340, 44],
+            "label": { "string": "模块", "fontSize": 32, "color": [255, 220, 120] }
+          }
+        ]
+      }
+    }
+  ]
+}

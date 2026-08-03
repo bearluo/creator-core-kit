@@ -1,0 +1,79 @@
+{
+  "url": "db://assets/scenes/LaunchOverlay.prefab",
+  "root": {
+    "name": "LaunchOverlay",
+    "size": [560, 420],
+    "children": [
+      {
+        "name": "Title",
+        "pos": [0, 120],
+        "size": [560, 52],
+        "label": { "string": "cck-demo", "fontSize": 40, "color": [210, 220, 235] }
+      },
+      {
+        "name": "Status",
+        "pos": [0, 20],
+        "size": [560, 38],
+        "label": { "string": "准备中…", "fontSize": 26, "color": [210, 220, 235] }
+      },
+      {
+        "name": "Hint",
+        "pos": [0, -20],
+        "size": [560, 32],
+        "label": { "string": "", "fontSize": 20, "color": [120, 130, 150] }
+      },
+      {
+        "name": "Bar",
+        "pos": [0, -60],
+        "size": [520, 12],
+        "children": [
+          {
+            "name": "Bg",
+            "size": [520, 12],
+            "sprite": {
+              "frame": "7d8f9b89-4fd1-4c9f-a3ab-38ec7cded7ca@f9941",
+              "type": "simple",
+              "color": [52, 58, 74]
+            }
+          },
+          {
+            "name": "Fill",
+            "size": [520, 12],
+            "anchor": [0, 0.5],
+            "pos": [-260, 0],
+            "sprite": {
+              "frame": "7d8f9b89-4fd1-4c9f-a3ab-38ec7cded7ca@f9941",
+              "type": "filled",
+              "fill": "horizontal",
+              "fillStart": 0,
+              "fillRange": 0,
+              "color": [120, 200, 255]
+            }
+          }
+        ]
+      },
+      {
+        "name": "Action",
+        "pos": [0, -140],
+        "size": [320, 64],
+        "active": false,
+        "children": [
+          {
+            "name": "Bg",
+            "size": [320, 64],
+            "sprite": {
+              "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+              "type": "sliced",
+              "color": [70, 78, 98]
+            }
+          },
+          {
+            "name": "Label",
+            "size": [320, 40],
+            "label": { "string": "重试", "fontSize": 28, "color": [255, 220, 120] }
+          }
+        ]
+      }
+    ]
+  }
+}
