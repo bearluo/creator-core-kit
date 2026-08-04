@@ -11,6 +11,7 @@
 | **做新业务功能 / 写测试** | **`docs/design/testing-strategy-overview.md`（分层测试边界 + 单例禁令 + 动作清单）** |
 | 了解架构全貌与关键决策 | `docs/design/2026-07-24-architecture-overview.md` |
 | 设计 / 使用某个模块 | `packages/<pkg>/docs/modules/<module>.md`（随包，如 `packages/core/docs/modules/`） |
+| **查 `@cck/core` 某个 API 的精确签名** | `packages/core/docs/api/README.md`（typedoc 生成，一模块一页；**勿手改**，跑 `pnpm docs:api` 重生成） |
 | 看整体进度、谁在做什么 | `docs/progress.md` |
 | 了解选型依据（MCP / 框架 / 热更调研） | `docs/research/2026-07-24-cocos-ecosystem-survey.md` |
 | **接服务端 / 定协议 / 定更新策略** | **`docs/adr/0011-server-framework-split-and-protocol-contract.md`**（决策）→ `docs/research/2026-08-03-game-server-survey.md`（依据） |

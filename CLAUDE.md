@@ -46,7 +46,7 @@ docs/design       设计文档
 3. **测试不进 `assets/`**——Creator 会把 `.test.ts` 当游戏脚本打包并炸构建。放 `apps/<project>/test/`，路径**镜像** `assets/`（`assets/a/B.ts` → `test/a/B.test.ts`）。运行时验证探针另有去处（`assets/probes/`），别和单测混。
 
 > 业务侧 lint 规则要写进 `apps/<project>/eslint.config.mjs`（`pnpm lint:demo`）——根 `eslint.config.js` 把 `apps/**` 整个 ignore 了，加在那里**静默失效**。
-> 四道门：`pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm check:vm-tests`（每个 `*VM.ts` 必须有镜像路径的测试）。
+> 五道门：`pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm check:vm-tests`（每个 `*VM.ts` 必须有镜像路径的测试）/ `pnpm docs:api`（改了 `core` 公开 API 就重新生成并一起提交，CI 会挡不同步）。
 
 ---
 
@@ -80,6 +80,9 @@ docs/                                        顶层 = 跨包 / 跨项目
 packages/<pkg>/docs/modules/<module>.md      单模块**当前功能文档**（随包，单一时态）
                                              core 模块归 core、engine 专属归 engine；
                                              跨 core+engine 的按「逻辑主场」归属（多在 core），适配层作文档内小节
+
+packages/core/docs/api/                      **typedoc 生成物，勿手改**（`pnpm docs:api`）
+                                             精确签名去这里查；模块文档只讲「怎么用、为什么这么设计」
 ```
 
 > **模块文档 = 现状，不是编年史。** 打开它读到的就是**代码此刻的样子**，不得出现 v1/v2 并列、「推翻了旧决策」这类演进叙事——读者不该在脑子里做版本减法。过程（改造动机、变更清单、迁移步骤、决策沿革）放 `docs/design/…-proposal.md` 与 `docs/adr/`，沿革本身另有 git 历史。踩坑与已知行为**留在模块文档**——它们描述的是当前系统的真实行为，属现状而非过程。

@@ -4,6 +4,9 @@
 # Cocos 的 .meta 是文本，需提交且统一 LF
 *.meta text eol=lf
 
+# typedoc 生成物：入库供 GitLab 直接阅读，但 MR diff 里折叠，别淹没人工改动
+packages/core/docs/api/** gitlab-generated=true linguist-generated=true
+
 # 二进制资源：不做换行/diff 转换
 *.png  binary
 *.jpg  binary

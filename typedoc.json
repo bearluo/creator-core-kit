@@ -1,0 +1,16 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["packages/core/src/*/index.ts"],
+  "tsconfig": "packages/core/tsconfig.json",
+  "out": "packages/core/docs/api",
+  "plugin": ["typedoc-plugin-markdown"],
+  "name": "@cck/core API",
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "hideGenerator": true,
+  "githubPages": false,
+  "outputFileStrategy": "modules",
+  "gitRevision": "main",
+  "sourceLinkTemplate": "https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/{path}#L{line}"
+}

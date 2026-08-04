@@ -1,4 +1,4 @@
-# creator-core-kit CI —— 四门：typecheck / build / test(coverage) / lint
+# creator-core-kit CI —— 五门：typecheck / build / test(coverage) / lint / api-docs
 #
 # 铁律由 lint 强制执行（core 禁 import 'cc'，规则见 eslint.config.js / CLAUDE.md）。
 # runner：hlgit 共享 docker runner（linux/amd64，run_untagged=true，故不加 tags）。
@@ -30,5 +30,10 @@ verify:
     - pnpm build
     - pnpm coverage
     - pnpm lint
+    # core 的 API 文档是 typedoc 生成物且入库（本实例未配 GitLab Pages，Pages 域名还是
+    # 默认的 example.com，HTML artifact 也因此不能在线渲染 → 只有入库的 md 能在 GitLab 上直接看）。
+    # 这里不推回仓库，只挡「生成物与代码不同步」：本地 pnpm docs:api 后一起提交。
+    - pnpm docs:api
+    - test -z "$(git status --porcelain -- packages/core/docs/api)" || { git status --short -- packages/core/docs/api; git --no-pager diff -- packages/core/docs/api; echo 'API 文档过期：本地跑 pnpm docs:api 并把 packages/core/docs/api 一起提交'; exit 1; }
   # 从 v8 text reporter 的 "All files | xx.xx |" 抓 core 总覆盖率
   coverage: '/All files\s*\|\s*([\d.]+)/'
