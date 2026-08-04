@@ -3,6 +3,12 @@
 # 铁律由 lint 强制执行（core 禁 import 'cc'，规则见 eslint.config.js / CLAUDE.md）。
 # runner：hlgit 共享 docker runner（linux/amd64，run_untagged=true，故不加 tags）。
 # node 22 而非 20：pnpm 11.3.0 在 node 20 上启动即崩（ERR_UNKNOWN_BUILTIN_MODULE）。
+#
+# 镜像走内网 Harbor 而不是 docker.io：**runner 没有公网**，直连 registry-1.docker.io
+# 每次 30s 超时 ×2 后整个 job 失败（连 clone 都到不了）。基础镜像已搬运到
+# harbor.5518game.com:6443/match/，与 remove-bg-api 等仓同一套路；拉取凭据是项目
+# CI/CD Variable `DOCKER_AUTH_CONFIG`（match 只读 robot，不入库）。
+# 换 node 版本要先把新 tag 推进 Harbor，否则同样拉不到。
 
 workflow:
   rules:
@@ -13,7 +19,7 @@ workflow:
     - if: $CI_COMMIT_BRANCH
 
 verify:
-  image: node:22-slim
+  image: harbor.5518game.com:6443/match/node:22-slim
   variables:
     COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
   cache:
