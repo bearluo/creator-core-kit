@@ -15,10 +15,11 @@ export default defineConfig({
   // CI 上没有 → 转译 demo 的 VM 时 `Cannot find module './temp/tsconfig.cocos.json'`。
   // 给了 tsconfigRaw 就不再往上找 tsconfig，本机与 CI 行为一致。
   // experimentalDecorators 必须开：engine 薄壳（cck-ui-view / kit-context）带 @ccclass。
+  // ⚠️ 必须是**字符串**：vite 只有 `typeof tsconfigRaw === 'string'` 才跳过查找，
+  // 传对象它照样先读 tsconfig 再合并（vite 5.4 transformWithEsbuild），坑照踩。
   esbuild: {
-    tsconfigRaw: {
-      compilerOptions: { experimentalDecorators: true, useDefineForClassFields: false },
-    },
+    tsconfigRaw:
+      '{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}',
   },
   test: {
     // 业务侧测试在 assets 之外（Creator 会编译 assets 下所有 .ts 并打进包）——
