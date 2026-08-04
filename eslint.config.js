@@ -7,6 +7,10 @@ export default tseslint.config(
       '**/dist/**',
       '**/dist-types/**',
       '**/node_modules/**',
+      // CI 把 pnpm store 放进仓库目录里做缓存（--store-dir .pnpm-store），git 依赖
+      // 会在它的 tmp/ 下留一份契约仓的完整签出 —— 别人的源码不该被本仓的 lint 契约管。
+      // 本机默认用全局 store，所以这条只在 CI 上生效（也只有 CI 会踩）。
+      '.pnpm-store/**',
       'coverage/**',
       '**/*.tsbuildinfo',
       // spike 是不上传的实验工程；Cocos 生成物一并忽略
