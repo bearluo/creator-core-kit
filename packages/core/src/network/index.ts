@@ -18,3 +18,5 @@ export { createJsonCodec } from './codec';
 export type { ICodec, NetMessage } from './codec';
 export { createProtobufCodec, createPbSchema } from './pb-codec';
 export type { PbSchema } from './pb-codec';
+export { getHttp, postJson, HTTP } from './http';
+export type { HttpRequest, HttpResponse, IHttp } from './http';

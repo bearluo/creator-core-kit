@@ -1,8 +1,11 @@
-export { abortLaunch, createApp, defaultLaunchSteps, getApp, APP, APP_INFO } from './app';
+export { abortLaunch, createApp, defaultLaunchSteps, getApp, APP, APP_INFO, DISPATCH } from './app';
 export type {
   App,
   AppConfig,
   AppDeps,
+  DispatchAction,
+  DispatchResult,
+  DispatcherConfig,
   LaunchContext,
   LaunchFailure,
   LaunchPhase,

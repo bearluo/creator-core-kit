@@ -115,7 +115,8 @@ describe('App · 启动编排', () => {
     app.onProgress((p) => phases.push(p.phase));
     await app.launch();
     expect(app.phase).toBe('running');
-    expect(phases).toEqual(['platform', 'hotupdate', 'shared', 'lobby', 'running']);
+    // dispatch 阶段照常上报（步骤本身在没配 dispatcher 时空跑，见 dispatch.test.ts 用例 2）
+    expect(phases).toEqual(['platform', 'dispatch', 'hotupdate', 'shared', 'lobby', 'running']);
     expect(e.calls).toEqual([
       'asset.load:cck-app-compat', // 本例未预置戳 → 降级（见用例 8）
       'hot.check',

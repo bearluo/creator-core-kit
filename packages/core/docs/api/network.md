@@ -42,7 +42,7 @@ ping 消息 type，默认 '__ping'。
 
 ### HttpRequest
 
-Defined in: packages/core/src/network/http.ts:11
+Defined in: [packages/core/src/network/http.ts:11](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L11)
 
 HTTP 短请求接缝。长连接之外还需要它：启动握手（dispatcher）、版本表、公告这类
 一问一答的东西架在 socket 上要先连上才能问，而「能不能连」正是握手要回答的。
@@ -56,7 +56,7 @@ core 只定义形状，真实 IO 在 engine（`createXhrHttp`）。**不返回�
 
 > `readonly` `optional` **body**: `string`
 
-Defined in: packages/core/src/network/http.ts:16
+Defined in: [packages/core/src/network/http.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L16)
 
 已序列化的请求体。
 
@@ -64,13 +64,13 @@ Defined in: packages/core/src/network/http.ts:16
 
 > `readonly` `optional` **headers**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: packages/core/src/network/http.ts:17
+Defined in: [packages/core/src/network/http.ts:17](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L17)
 
 ##### method?
 
 > `readonly` `optional` **method**: `"GET"` \| `"POST"`
 
-Defined in: packages/core/src/network/http.ts:14
+Defined in: [packages/core/src/network/http.ts:14](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L14)
 
 默认 `'GET'`。
 
@@ -78,7 +78,7 @@ Defined in: packages/core/src/network/http.ts:14
 
 > `readonly` `optional` **timeoutSec**: `number`
 
-Defined in: packages/core/src/network/http.ts:19
+Defined in: [packages/core/src/network/http.ts:19](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L19)
 
 默认由适配层定（engine 侧 10s）。
 
@@ -86,13 +86,13 @@ Defined in: packages/core/src/network/http.ts:19
 
 > `readonly` **url**: `string`
 
-Defined in: packages/core/src/network/http.ts:12
+Defined in: [packages/core/src/network/http.ts:12](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L12)
 
 ***
 
 ### HttpResponse
 
-Defined in: packages/core/src/network/http.ts:22
+Defined in: [packages/core/src/network/http.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L22)
 
 #### Properties
 
@@ -100,13 +100,13 @@ Defined in: packages/core/src/network/http.ts:22
 
 > `readonly` **status**: `number`
 
-Defined in: packages/core/src/network/http.ts:23
+Defined in: [packages/core/src/network/http.ts:23](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L23)
 
 ##### text
 
 > `readonly` **text**: `string`
 
-Defined in: packages/core/src/network/http.ts:24
+Defined in: [packages/core/src/network/http.ts:24](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L24)
 
 ***
 
@@ -159,7 +159,7 @@ Defined in: [packages/core/src/network/codec.ts:17](https://hlgit.5518game.com/l
 
 ### IHttp
 
-Defined in: packages/core/src/network/http.ts:27
+Defined in: [packages/core/src/network/http.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L27)
 
 #### Methods
 
@@ -167,7 +167,7 @@ Defined in: packages/core/src/network/http.ts:27
 
 > **request**(`req`): `Promise`\<[`HttpResponse`](network.md#httpresponse)\>
 
-Defined in: packages/core/src/network/http.ts:29
+Defined in: [packages/core/src/network/http.ts:29](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L29)
 
 传输层出错（DNS / 连不上 / 超时）reject；服务器有回应即 resolve，状态码由调用方判。
 
@@ -728,7 +728,7 @@ Defined in: [packages/core/src/network/network.ts:9](https://hlgit.5518game.com/
 
 > `const` **HTTP**: [`Token`](di.md#tokent)\<[`IHttp`](network.md#ihttp)\>
 
-Defined in: packages/core/src/network/http.ts:33
+Defined in: [packages/core/src/network/http.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L33)
 
 DI token：engine 的 `ccHttpModule()` 注册 XHR 实现。
 
@@ -858,7 +858,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:63](https://hlgit.5518game.co
 
 > **getHttp**(): [`IHttp`](network.md#ihttp)
 
-Defined in: packages/core/src/network/http.ts:36
+Defined in: [packages/core/src/network/http.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L36)
 
 取全局 IHttp。core 做不了 IO，所以没有默认实现——没注册就是装配漏了，响亮地说。
 
@@ -886,7 +886,7 @@ Defined in: [packages/core/src/network/network.ts:275](https://hlgit.5518game.co
 
 > **postJson**(`http`, `url`, `body`, `timeoutSec`?): `Promise`\<`unknown`\>
 
-Defined in: packages/core/src/network/http.ts:51
+Defined in: [packages/core/src/network/http.ts:51](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L51)
 
 POST 一个 JSON 并解析回来。服务端契约是 **POST-only RPC**（`POST /api/<Method>`），
 且**业务错误一律 HTTP 200** + body 里带 code——CDN / 渠道 SDK 代理 / 企业网关会篡改

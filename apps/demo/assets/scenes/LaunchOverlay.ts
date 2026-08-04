@@ -40,6 +40,7 @@ const N_ACTION_LABEL = 'Action/Label';
 const PHASE: Readonly<Record<LaunchPhase, { readonly text: string; readonly ratio: number }>> = {
   idle: { text: '准备中…', ratio: 0 },
   platform: { text: '初始化…', ratio: 0.1 },
+  dispatch: { text: '连接服务器…', ratio: 0.2 },
   hotupdate: { text: '检查更新…', ratio: 0.3 },
   shared: { text: '加载公共资源…', ratio: 0.6 },
   lobby: { text: '进入大厅…', ratio: 0.85 },
@@ -143,10 +144,19 @@ export function createLaunchOverlay(app: App, prefab: Prefab | null): LaunchOver
           showAction('重试', () => void app.retry());
           break;
         case 'needFullUpdate':
-          // 热更换不动的东西（引擎 / AOT chunks / 主包）变了 —— 只能整包更新，重试没有意义
+          // 热更换不动的东西（引擎 / AOT chunks / 主包）变了，或版本已被 dispatcher 退休
+          // —— 只能整包更新，重试没有意义
           setText(status, '需要下载完整安装包');
           setText(hint, f.reason);
-          showAction('前往应用商店', () => console.log(`${TAG} 引导整包更新（demo 只打日志）`));
+          showAction('前往应用商店', () =>
+            console.log(`${TAG} 引导整包更新（demo 只打日志）：${f.storeUrl ?? '未下发 storeUrl'}`),
+          );
+          break;
+        case 'maintenance':
+          // 停服维护不是网络异常：能重试，但要先把公告讲清楚，否则玩家会连点重试
+          setText(status, '服务器维护中');
+          setText(hint, f.notice || '请稍后再试');
+          showAction('重试', () => void app.retry());
           break;
         default:
           setText(status, '启动失败');

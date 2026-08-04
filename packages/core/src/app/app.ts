@@ -10,6 +10,7 @@ import {
   type VersionGate,
 } from '../hotupdate';
 import { getLogger, type ILogger } from '../logging';
+import { getHttp, postJson, type IHttp } from '../network';
 
 /**
  * App —— 启动编排层：把「读戳 → 热更 → 装共享包 → 进大厅」串成一条可插拔、可上报、可重试的序列。
@@ -23,6 +24,7 @@ import { getLogger, type ILogger } from '../logging';
 export type LaunchPhase =
   | 'idle'
   | 'platform'
+  | 'dispatch'
   | 'hotupdate'
   | 'shared'
   | 'lobby'
@@ -53,6 +55,39 @@ export interface AppConfig {
   readonly stampBundle?: string;
   /** app 戳资源路径，默认 `'cck-app-compat'`（tools 的 `cck-manifest stamp` 出包期生成）。 */
   readonly stampPath?: string;
+  /** 启动握手。不配则跳过该步（单机 / 尚未接服务端）。 */
+  readonly dispatcher?: DispatcherConfig;
+}
+
+/** dispatcher 的判定结论。 */
+export type DispatchAction = 'play' | 'update' | 'maintenance';
+
+/**
+ * dispatcher 下发的内容。字段是服务端 `HandshakeResponse` 的归一形状。
+ *
+ * `cdnUrl` **就是个 URL** —— 服务端不认识 Cocos 的 manifest 也不认识 Godot 的 pck，
+ * 各客户端框架自己解释（ADR-0011）。
+ */
+export interface DispatchResult {
+  readonly action: DispatchAction;
+  /** `'play'` 时有效：按客户端版本路由到的那个部署单元。 */
+  readonly wsUrl: string;
+  readonly cdnUrl: string;
+  readonly notice: string;
+  readonly storeUrl: string;
+  /** 服务器权威时间（Unix 毫秒）。本地时钟玩家可改，体力恢复 / 日常重置 / 限时活动一律以此为准。 */
+  readonly serverTimeMs: number;
+}
+
+export interface DispatcherConfig {
+  /** 完整地址，如 `https://dispatch.example.com/api/Handshake`。 */
+  readonly url: string;
+  /** 协议契约版本。**由项目传入** —— core 不含任何协议常量（ADR-0011）。 */
+  readonly protoVersion: number;
+  /** `android` / `ios` / `web` / `wechat` …（engine 侧按 `cc.sys` 填）。 */
+  readonly platform: string;
+  readonly deviceId?: string;
+  readonly timeoutSec?: number;
 }
 
 /** 远程版本表：web 热更的全部输入。 */
@@ -73,10 +108,11 @@ export interface LaunchProgress {
   readonly messageKey?: string;
 }
 
-/** 失败分类：三种给用户看的东西完全不同（重试 / 去商店 / 兜底），不能糊成一个 Error。 */
+/** 失败分类：给用户看的东西完全不同（重试 / 去商店 / 等公告 / 兜底），不能糊成一个 Error。 */
 export type LaunchFailure =
   | { kind: 'network'; retryable: true; error: unknown }
-  | { kind: 'needFullUpdate'; reason: string }
+  | { kind: 'needFullUpdate'; reason: string; storeUrl?: string }
+  | { kind: 'maintenance'; notice: string; retryable: true }
   | { kind: 'fatal'; error: unknown };
 
 export interface LaunchContext {
@@ -111,6 +147,7 @@ export interface AppDeps {
   assets?: Pick<IAssetLoader, 'load' | 'loadRemote' | 'release'>;
   hotUpdate?: Pick<HotUpdateService, 'check' | 'update' | 'restart'>;
   gate?: VersionGate;
+  http?: IHttp;
   logger?: ILogger;
   /**
    * 重启应用。默认走 `HotUpdateService.restart()`（native 的 `game.restart`）。
@@ -121,6 +158,9 @@ export interface AppDeps {
 
 /** `ctx.bag` 里 AppInfo 的键——platform 步写入，compat 闸与项目自定义步骤读取。 */
 export const APP_INFO = 'cck.app.info';
+
+/** `ctx.bag` 里 {@link DispatchResult} 的键——dispatch 步写入，业务读 wsUrl / cdnUrl / 服务器时间。 */
+export const DISPATCH = 'cck.app.dispatch';
 
 const DEFAULT_SHARED = ['shared'] as const;
 const DEFAULT_STAMP_BUNDLE = 'main';
@@ -145,6 +185,49 @@ function classify(e: unknown): LaunchFailure {
   // ponytail: 启动期偶发失败绝大多数是网络/IO（下载、加载资源、切场景）→ 默认判可重试。
   // 真是代码 bug 时重试也只是再失败一次，代价小于把可恢复的失败判成 fatal 让用户无路可走。
   return { kind: 'network', retryable: true, error: e };
+}
+
+/**
+ * 服务端枚举归一。proto3 JSON 默认发**枚举名**，但打开 `useEnumNumbers` 就变数字——
+ * 两种都收，免得服务端换个序列化选项客户端就集体启动失败。
+ */
+const ACTIONS: Readonly<Record<string, DispatchAction>> = {
+  ACTION_PLAY: 'play',
+  '1': 'play',
+  ACTION_UPDATE: 'update',
+  '2': 'update',
+  ACTION_MAINTENANCE: 'maintenance',
+  '3': 'maintenance',
+};
+
+/** 取第一个是 string 的字段。proto3 JSON 的字段名可能是 snake_case 也可能是 camelCase，两种都认。 */
+function pickStr(o: Readonly<Record<string, unknown>>, ...keys: readonly string[]): string {
+  for (const k of keys) {
+    const v = o[k];
+    if (typeof v === 'string') return v;
+  }
+  return '';
+}
+
+function parseDispatch(payload: unknown): DispatchResult {
+  const env = (payload ?? {}) as { code?: unknown; msg?: unknown; data?: unknown };
+  const code = String(env.code ?? '');
+  // 业务错误一律 HTTP 200 + body 带 code（CDN / 渠道代理会吞 4xx/5xx）→ 判定看 code 不看状态码。
+  if (code !== 'ERROR_CODE_OK' && code !== '1') {
+    throw new Error(`dispatcher 拒绝握手：${code} ${String(env.msg ?? '')}`);
+  }
+  const d = (env.data ?? {}) as Readonly<Record<string, unknown>>;
+  const action = ACTIONS[String(d['action'] ?? '')];
+  if (!action) throw new Error(`dispatcher 返回未知 action：${String(d['action'])}`);
+  const t = d['server_time_ms'] ?? d['serverTimeMs'];
+  return {
+    action,
+    wsUrl: pickStr(d, 'ws_url', 'wsUrl'),
+    cdnUrl: pickStr(d, 'cdn_url', 'cdnUrl'),
+    notice: pickStr(d, 'notice'),
+    storeUrl: pickStr(d, 'store_url', 'storeUrl'),
+    serverTimeMs: typeof t === 'number' ? t : 0,
+  };
 }
 
 /** kit 的默认启动序列。项目可整体替换，或取本函数结果再插队自己的步骤（登录 / SDK / 公告）。 */
@@ -179,6 +262,44 @@ export function defaultLaunchSteps(deps?: AppDeps): readonly LaunchStep[] {
           );
         }
         ctx.bag.set(APP_INFO, info);
+      },
+    },
+
+    {
+      name: 'dispatch',
+      phase: 'dispatch',
+      async run(ctx: LaunchContext): Promise<void> {
+        const cfg = ctx.config.dispatcher;
+        if (!cfg) return;
+        const info = ctx.bag.get(APP_INFO) as AppInfo | undefined;
+        // 请求体是契约里 HandshakeRequest 的 proto3 JSON。**排在 platform 之后**：
+        // capabilityStamp 就是那一步读出来的 coreApiHash——服务端不解释它怎么算出来的，
+        // 只做等值比对，这是「同一套服务端能接 Godot 客户端」的关键（ADR-0011）。
+        const payload = await postJson(
+          deps?.http ?? getHttp(),
+          cfg.url,
+          {
+            protoVersion: cfg.protoVersion,
+            appVersion: info?.appVersion ?? ctx.config.version,
+            platform: cfg.platform,
+            channel: ctx.config.channel,
+            capabilityStamp: info?.coreApiHash ?? '',
+            deviceId: cfg.deviceId ?? '',
+          },
+          cfg.timeoutSec,
+        );
+        const r = parseDispatch(payload);
+        ctx.bag.set(DISPATCH, r); // 先落 bag 再判 —— 失败态的 UI 也要拿 notice / storeUrl
+        if (r.action === 'update') {
+          abortLaunch({
+            kind: 'needFullUpdate',
+            reason: r.notice || '当前客户端版本已停止服务',
+            storeUrl: r.storeUrl,
+          });
+        }
+        if (r.action === 'maintenance') {
+          abortLaunch({ kind: 'maintenance', notice: r.notice, retryable: true });
+        }
       },
     },
 

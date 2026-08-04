@@ -1,12 +1,14 @@
-import { _decorator, Component, Prefab } from 'cc';
+import { _decorator, Component, Prefab, sys } from 'cc';
 import { EDITOR } from 'cc/env';
 import {
   defaultLaunchSteps,
   getApp,
   getI18n,
   getRootContainer,
+  DISPATCH,
   KIT,
   type AppConfig,
+  type DispatchResult,
   type LaunchStep,
 } from '@cck/core';
 import {
@@ -16,6 +18,7 @@ import {
   ccAssetModule,
   ccAudioModule,
   ccBundleModule,
+  ccHttpModule,
   ccStorageModule,
   ccUIModule,
   loadLocaleTable,
@@ -37,7 +40,8 @@ const TAG = '[CCK-BOOT]';
  */
 const APP_CONFIG: AppConfig = {
   appId: 'cck-demo',
-  version: '1.0.0',
+  // 1.3.0 起才被本机 dispatcher 放行（低于它会拿到 ACTION_UPDATE —— 想看版本闸生效就把这里调到 1.2.0）
+  version: '1.3.0',
   channel: 'dev',
   env: 'dev',
   shared: ['shared'],
@@ -46,8 +50,16 @@ const APP_CONFIG: AppConfig = {
     // core 不持场景接缝（切场景是 engine 直接行为）→ 进大厅这一下由这里给。
     enter: () => loadScene('Lobby', { bundle: 'lobby' }),
   },
+  dispatcher: {
+    // 本机 docker（server-core-kit 仓 `docker compose up -d`）。
+    // ⚠️ 写局域网 IP 而不是 127.0.0.1：真机 / 模拟器打开时 localhost 指的是它自己。
+    url: 'http://172.25.50.135:9100/api/Handshake',
+    // 契约版本来自 kit-proto，**由项目提供** —— kit 里不出现任何协议常量（ADR-0011）。
+    protoVersion: 1,
+    platform: sys.isNative ? String(sys.os).toLowerCase() : 'web',
+  },
   // versionUrl 不配：demo 的热更走 native AssetsManager 那条已 e2e 验证的路径（ADR-0006）。
-  // web 版本表要真 CDN 才有意义，接入方按 env 拼自己的地址。
+  // web 版本表要真 CDN 才有意义，接入方按 env 拼自己的地址（dispatcher 下发的 cdnUrl 就是它的基址）。
 };
 
 /**
@@ -67,7 +79,20 @@ function launchSteps(): readonly LaunchStep[] {
       console.log(`${TAG} 全局 i18n 就绪（来自 shared bundle）`);
     },
   };
+  // 服务端接入的落点：wsUrl（按本客户端版本路由到的那个部署单元）、cdnUrl（热更内容基址）、
+  // serverTimeMs（权威时间，本地时钟玩家可改）都在这里拿。demo 只打日志；真实项目在这一步
+  // 用 wsUrl 连长连接、用 cdnUrl 拼版本表地址。
+  const netInfo: LaunchStep = {
+    name: 'demo-net-info',
+    phase: 'dispatch',
+    run(ctx) {
+      const d = ctx.bag.get(DISPATCH) as DispatchResult | undefined;
+      console.log(`${TAG} dispatcher 放行：ws=${d?.wsUrl} cdn=${d?.cdnUrl} t=${d?.serverTimeMs}`);
+      return Promise.resolve();
+    },
+  };
   // 按名字定位而不是写死下标——kit 以后往默认序列里加步骤时这里不会错位
+  steps.splice(steps.findIndex((s) => s.name === 'hotupdate'), 0, netInfo);
   steps.splice(
     steps.findIndex((s) => s.name === 'lobby'),
     0,
@@ -125,6 +150,8 @@ export class Bootstrap extends Component {
         cameraRigModule(), // 常驻 bg + ui 相机；此后场景一律不自带相机
         ccAssetModule(),
         ccBundleModule(),
+        ccHttpModule(), // IHttp（XHR）—— dispatch 启动步要它打握手请求
+
         ccStorageModule(),
         ccAudioModule(),
         ccUIModule(),
