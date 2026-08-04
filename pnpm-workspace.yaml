@@ -1,5 +1,15 @@
 packages:
   - "packages/*"
   - "apps/*"
+
+# 扁平 node_modules：Cocos 的模块解析器对 pnpm 默认的 .pnpm 深层 symlink 支持存疑
+# （scaffold 决策表 #2）。这条**必须写在这里**——pnpm 10 起 `.npmrc` 的 node-linker
+# 不再生效，写在 .npmrc 里会静默失效（本仓踩过：@cck/* 是工作区直连 symlink 所以照常，
+# 直到接入 @kit/proto 带进第三方传递依赖才暴露）。
+nodeLinker: hoisted
+
 allowBuilds:
   esbuild: true
+  # protobufjs 的 postinstall 只是「依赖方版本范围写法」的告警检查（scripts/postinstall.js
+  # 读父级 package.json 比对 versionScheme），与运行时无关，不放行。
+  protobufjs: false

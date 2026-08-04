@@ -19,12 +19,14 @@ import {
   ccAudioModule,
   ccBundleModule,
   ccHttpModule,
+  ccNetworkModule,
   ccStorageModule,
   ccUIModule,
   loadLocaleTable,
   loadScene,
   resolutionModule,
 } from '@cck/engine';
+import { netConnectStep } from './kit-net';
 import { createLaunchOverlay } from './LaunchOverlay';
 
 const { ccclass, property } = _decorator;
@@ -92,7 +94,7 @@ function launchSteps(): readonly LaunchStep[] {
     },
   };
   // 按名字定位而不是写死下标——kit 以后往默认序列里加步骤时这里不会错位
-  steps.splice(steps.findIndex((s) => s.name === 'hotupdate'), 0, netInfo);
+  steps.splice(steps.findIndex((s) => s.name === 'hotupdate'), 0, netInfo, netConnectStep());
   steps.splice(
     steps.findIndex((s) => s.name === 'lobby'),
     0,
@@ -151,6 +153,7 @@ export class Bootstrap extends Component {
         ccAssetModule(),
         ccBundleModule(),
         ccHttpModule(), // IHttp（XHR）—— dispatch 启动步要它打握手请求
+        ccNetworkModule(), // ISocket（WebSocket）—— 缺了它 createNetwork 会静默回退到空 socket
 
         ccStorageModule(),
         ccAudioModule(),

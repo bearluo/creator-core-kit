@@ -9,6 +9,10 @@
 # harbor.5518game.com:6443/match/，与 remove-bg-api 等仓同一套路；拉取凭据是项目
 # CI/CD Variable `DOCKER_AUTH_CONFIG`（match 只读 robot，不入库）。
 # 换 node 版本要先把新 tag 推进 Harbor，否则同样拉不到。
+#
+# `-git` 后缀的镜像 = node:22-slim + git。协议契约 `@kit/proto` 是 **git 依赖**
+# （kit-proto 把 gen/ 提交进仓，消费方直接拿，不必各自装 protoc/pbjs 工具链），
+# pnpm 要用 git 命令去拉它，而 node:*-slim 不带 git。
 
 workflow:
   rules:
@@ -19,7 +23,7 @@ workflow:
     - if: $CI_COMMIT_BRANCH
 
 verify:
-  image: harbor.5518game.com:6443/match/node:22-slim
+  image: harbor.5518game.com:6443/match/node:22-slim-git
   variables:
     COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
   cache:
@@ -29,6 +33,10 @@ verify:
     paths:
       - .pnpm-store
   before_script:
+    # 拉私有契约仓 kit-proto 用**本次 job 的令牌**，不放长期密钥：
+    # 读权限由 kit-proto 侧的 CI_JOB_TOKEN inbound allowlist 授予（那边加了本项目 id=49）。
+    # 撤销就是从那个白名单里删一行，本仓不留任何凭据。
+    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@hlgit.5518game.com/".insteadOf "https://hlgit.5518game.com/"
     - corepack enable
     - pnpm install --frozen-lockfile --store-dir .pnpm-store
   script:

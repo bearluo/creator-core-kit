@@ -164,4 +164,17 @@ export function createPbSchema(
 `packages/core/src/__tests__/e2e-server.test.ts` 打**真服务器**（server-core-kit 的本机 docker）：dispatcher 握手 → 按下发的 `wsUrl` 连网关 → `request('Ping')` 拿到 seq 对得上的 `Pong`。**服务器没起就整体跳过**（top-level 探一下 `/healthz`，不看环境变量），所以 CI 上恒跳过、本机 `docker compose up -d` 后跑 `pnpm test` 即自动生效。
 
 它证的是单测证不了的那部分：帧头字节序、seq 被服务端原样回传、dispatcher 信封形状。用例里的 Ping/Pong body 是**手写的两个 double 字段**而非生成代码——本例要证的是帧头与 seq，手写反而自校验（字节错了 Go 那边 `proto.Unmarshal` 直接回 `BAD_FRAME`）。真实业务协议照常用契约仓的生成代码实现 `PbSchema`。
+
+### 接入方怎么喂 `PbSchema`
+
+kit 里**不出现任何 cmd 号或消息定义**（ADR-0011），契约的生成产物由接入方接进来。样例是 `apps/demo/assets/scenes/kit-net.ts`（约 30 行）：契约仓 `@kit/proto` 的 `CMD`（消息名 → cmd 号）配 `kit.v1.*`（protobufjs static-module 生成的消息类）正好凑成 `createPbSchema` 的两个入参，
+
+```ts
+createPbSchema(CMD, {
+  encodeBody: (type, body) => types[type].encode(body ?? {}).finish(),
+  decodeBody: (type, bytes) => types[type].decode(bytes),
+});
+```
+
+`?? {}` 不能省：心跳走 `send(type)` 不带 body，而 pb 的 `encode` 会读 message 的字段。心跳类型也要设成契约里有的消息（demo 用 `Ping`）——默认的 `'__ping'` 不在 schema 里，编码当场抛。
 - **验证**：四门全绿；**真机 gameView 预览已验证**（DI 接入 + 真 echo 端到端往返）：`NETWORK_SOCKET (WebSocket) registered=true` + `WebSocket 全局可用=true`（证明拾取 cc 壳而非 memory socket）。**真 echo 往返闭环**：起本地 `docker run --rm -p 9099:8080 jmalloc/echo-server`，DemoBoot 用 `createNetwork({url:'ws://localhost:9099/'})`（不传 socket → 取 DI 注册的真 WebSocket 适配器）走 `request('echo',{n:42,s:'cck'})`，日志 `body={"n":42,"s":"cck"} → OK`——`connect→onOpen→send(带 seq)→onMessage→seq 匹配→resolve` 全链路经真 WebSocket 适配器打通（echo-server 首条问候语非 JSON，codec.decode 失败被忽略，无害）。DemoBoot 的 echo 块自带 5s 超时，无 echo 服务器时优雅跳过。

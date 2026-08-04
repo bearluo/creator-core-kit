@@ -6,6 +6,11 @@
   "compilerOptions": {
     "strict": false,
     "baseUrl": ".",
+    // 覆盖 Creator 基配的 "node"（= node10，不读 package.json 的 exports 字段）。
+    // @kit/proto 只用 exports 声明入口（没有 main），node10 解析下 tsc 直接
+    // "Cannot find module '@kit/proto'"。Creator 自己的打包解析器是另一套、认 exports，
+    // 所以这里只是把类型侧对齐到运行期的实际行为。
+    "moduleResolution": "bundler",
     // 不配 @cck/core 的 paths：类型与运行期解析都走 node_modules
     // (apps/demo/node_modules/@cck/core -> packages/core，按 package.json
     //  types->dist/index.d.ts、main->dist/index.js)。与 bearluo game-template 一致，

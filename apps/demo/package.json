@@ -6,6 +6,7 @@
   },
   "dependencies": {
     "@cck/core": "workspace:*",
-    "@cck/engine": "workspace:*"
+    "@cck/engine": "workspace:*",
+    "@kit/proto": "git+https://hlgit.5518game.com/luohao/kit-proto.git#v0.1.0"
   }
 }
