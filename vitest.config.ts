@@ -10,6 +10,16 @@ export default defineConfig({
       '@cck/core': fileURLToPath(new URL('./packages/core/src/index.ts', import.meta.url)),
     },
   },
+  // 固定 esbuild 的 TS 选项，**顺带关掉 tsconfig 自动查找**——apps/demo/tsconfig.json
+  // extends 的是 Creator 生成的 temp/tsconfig.cocos.json（gitignore 里），本机有、
+  // CI 上没有 → 转译 demo 的 VM 时 `Cannot find module './temp/tsconfig.cocos.json'`。
+  // 给了 tsconfigRaw 就不再往上找 tsconfig，本机与 CI 行为一致。
+  // experimentalDecorators 必须开：engine 薄壳（cck-ui-view / kit-context）带 @ccclass。
+  esbuild: {
+    tsconfigRaw: {
+      compilerOptions: { experimentalDecorators: true, useDefineForClassFields: false },
+    },
+  },
   test: {
     // 业务侧测试在 assets 之外（Creator 会编译 assets 下所有 .ts 并打进包）——
     // 目录镜像 assets，见 docs/design/testing-strategy-overview.md §5。
