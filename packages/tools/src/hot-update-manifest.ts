@@ -125,15 +125,109 @@ export function toVersionManifest(m: Manifest): VersionManifest {
   };
 }
 
-/** buildManifest + toVersionManifest 后写两份到 outDir（默认 = root）。 */
-export function writeManifests(opts: ManifestOptions & { outDir?: string }): WriteResult {
-  const manifest = buildManifest(opts);
-  const outDir = opts.outDir ?? opts.root;
-  const projectPath = join(outDir, opts.manifestFilename ?? 'project.manifest');
-  const versionPath = join(outDir, opts.versionFilename ?? 'version.manifest');
+/** 落一对 project/version manifest 到 outDir。 */
+function writePair(outDir: string, manifest: Manifest, projFile: string, verFile: string): WriteResult {
+  const projectPath = join(outDir, projFile);
+  const versionPath = join(outDir, verFile);
   writeFileSync(projectPath, JSON.stringify(manifest, null, 2));
   writeFileSync(versionPath, JSON.stringify(toVersionManifest(manifest), null, 2));
   return { projectPath, versionPath, manifest };
+}
+
+/** buildManifest + toVersionManifest 后写两份到 outDir（默认 = root）。 */
+export function writeManifests(opts: ManifestOptions & { outDir?: string }): WriteResult {
+  return writePair(
+    opts.outDir ?? opts.root,
+    buildManifest(opts),
+    opts.manifestFilename ?? 'project.manifest',
+    opts.versionFilename ?? 'version.manifest',
+  );
+}
+
+/**
+ * 归入 base 的 `assets/<name>/`：Cocos native 产物里的主包与内置包，和 `src/` 同属「换了要重启」层，
+ * 本就该跟 base 同批更新。其余 `assets/<name>/` 各自成包。
+ */
+const DEFAULT_AOT_BUNDLES = ['main', 'internal', 'resources'];
+
+export interface SplitManifestOptions extends ManifestOptions {
+  /** 归入 base 的 assets 子目录名。默认 {@link DEFAULT_AOT_BUNDLES}。 */
+  aotBundles?: readonly string[];
+}
+
+export interface SplitManifests {
+  base: Manifest;
+  /** 键 = bundle 名；空目录不产出。 */
+  bundles: Record<string, Manifest>;
+}
+
+export interface SplitWriteResult {
+  base: WriteResult;
+  bundles: Record<string, WriteResult>;
+}
+
+/**
+ * 切分成「base 一份 + 每个模块 bundle 一份」，供 native 分包热更（一 bundle 一 AssetsManager）。
+ *
+ * **所有 manifest 的 asset key 一律相对 data 根**（`assets/shop/index.js`），bundle manifest 只是全表的
+ * 子集——下载落盘后相对各自 storagePath 的目录结构必须与包内一致，搜索路径前缀一挂才解析得到；
+ * key 若相对 bundle 目录，引擎按 `assets/shop/index.js` 查会直接 miss。
+ */
+export function buildSplitManifests(opts: SplitManifestOptions): SplitManifests {
+  const whole = buildManifest(opts);
+  const aot = new Set(opts.aotBundles ?? DEFAULT_AOT_BUNDLES);
+  const packageUrl = withSlash(opts.packageUrl);
+
+  const baseAssets: Record<string, AssetEntry> = {};
+  const byBundle = new Map<string, Record<string, AssetEntry>>();
+  for (const [key, entry] of Object.entries(whole.assets)) {
+    // 只有 assets/<name>/… 才可能独立成包；assets/ 下的散文件与其它顶层目录归 base。
+    const name = /^assets\/([^/]+)\//.exec(key)?.[1];
+    if (name === undefined || aot.has(name)) {
+      baseAssets[key] = entry;
+      continue;
+    }
+    let table = byBundle.get(name);
+    if (!table) byBundle.set(name, (table = {}));
+    table[key] = entry;
+  }
+
+  const mk = (assets: Record<string, AssetEntry>, projFile: string, verFile: string): Manifest => ({
+    packageUrl,
+    remoteManifestUrl: packageUrl + projFile,
+    remoteVersionUrl: packageUrl + verFile,
+    version: opts.version,
+    assets,
+    searchPaths: opts.searchPaths ?? [],
+  });
+
+  const bundles: Record<string, Manifest> = {};
+  for (const [name, assets] of byBundle) {
+    bundles[name] = mk(assets, `${name}.manifest`, `${name}.version.manifest`);
+  }
+  return {
+    base: mk(baseAssets, opts.manifestFilename ?? 'project.manifest', opts.versionFilename ?? 'version.manifest'),
+    bundles,
+  };
+}
+
+/** buildSplitManifests 后逐份落盘到 outDir（默认 = root）。 */
+export function writeSplitManifests(opts: SplitManifestOptions & { outDir?: string }): SplitWriteResult {
+  const outDir = opts.outDir ?? opts.root;
+  const { base, bundles } = buildSplitManifests(opts);
+  const out: SplitWriteResult = {
+    base: writePair(
+      outDir,
+      base,
+      opts.manifestFilename ?? 'project.manifest',
+      opts.versionFilename ?? 'version.manifest',
+    ),
+    bundles: {},
+  };
+  for (const [name, m] of Object.entries(bundles)) {
+    out.bundles[name] = writePair(outDir, m, `${name}.manifest`, `${name}.version.manifest`);
+  }
+  return out;
 }
 
 /** 自校验：读回 project.manifest，对 root 下每条 asset 重算 md5/size 比对，返回不符项。 */

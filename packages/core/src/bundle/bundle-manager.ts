@@ -1,4 +1,5 @@
 import { createToken, getRootContainer, type Token } from '../di';
+import { BUNDLE_UPDATER, type BundleUpdater } from '../hotupdate';
 import { getLogger, type ILogger } from '../logging';
 import {
   BUNDLE_SOURCE,
@@ -25,6 +26,13 @@ export interface BundleInfo {
 export interface BundleManagerOptions {
   /** 引擎 IO 后端。默认：DI BUNDLE_SOURCE，未注册则内存 fake。 */
   source?: IBundleSource;
+  /**
+   * 加载前的分包热更。默认：DI BUNDLE_UPDATER，未注册则不做（直接用包内版本）。
+   *
+   * 放这里而不是上层 App，理由同 {@link BundleManager.setVersions}：UIManager 打开界面时也会
+   * load 它所属的 bundle，挂上层就会漏掉那条路径。
+   */
+  updater?: BundleUpdater;
   logger?: ILogger;
 }
 
@@ -63,6 +71,10 @@ interface Entry {
 export function createBundleManager(opts?: BundleManagerOptions): BundleManager {
   const source = opts?.source ?? getRootContainer().tryResolve(BUNDLE_SOURCE) ?? createMemoryBundleSource();
   const logger = opts?.logger ?? getLogger('BundleManager');
+  // 每次 load 现取，不像 source 那样建时定死：updater 要带 app 戳（coreApiHash 闸），
+  // 而戳是启动后从资源里读出来的，注册必然晚于本管理器创建。
+  const resolveUpdater = (): BundleUpdater | undefined =>
+    opts?.updater ?? getRootContainer().tryResolve(BUNDLE_UPDATER);
   const table = new Map<string, Entry>();
   let versions: Readonly<Record<string, string>> = {};
 
@@ -83,11 +95,19 @@ export function createBundleManager(opts?: BundleManagerOptions): BundleManager 
 
       const version = loadOpts?.version ?? versions[name];
       const entry: Entry = { version, refCount: 1 };
-      const p = source.loadBundle(name, {
-        version,
-        onProgress: loadOpts?.onProgress,
-        url,
-      });
+      const p = (async (): Promise<void> => {
+        // 加载前先把该 bundle 更到最新。远程 url 加载不走 manifest 热更，跳过。
+        // updater 契约是「永不 reject」，但自定义实现可能违约——热更失败绝不该让加载失败。
+        const updater = url === undefined ? resolveUpdater() : undefined;
+        if (updater) {
+          try {
+            await updater.ensureLatest(name);
+          } catch (e) {
+            logger.warn(`bundle '${name}' 加载前更新异常，用包内版本`, e);
+          }
+        }
+        await source.loadBundle(name, { version, onProgress: loadOpts?.onProgress, url });
+      })();
       entry.inflight = p;
       table.set(name, entry);
       try {

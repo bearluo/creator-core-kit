@@ -33,8 +33,13 @@ export { loadLocaleTable, setupLocalePersistence } from './i18n-loader';
 export { loadTable } from './config-loader';
 
 // —— 第 3 批 · 进阶（HotUpdateService engine 半：native.AssetsManager 后端，仅原生）——
-export { createCcHotUpdateBackend, ccHotUpdateModule } from './hotupdate-backend';
+export {
+  createCcHotUpdateBackend,
+  createCcBundleBackendFactory,
+  ccHotUpdateModule,
+} from './hotupdate-backend';
 export type { CcHotUpdateOptions } from './hotupdate-backend';
+export { normalizeSearchPaths, bundleStoragePath, bundleManifestName } from './hotupdate-paths';
 
 // —— 第 3 批 · 进阶（Network engine 半：ISocket 的 WebSocket 实现）——
 export { createWebSocketSocket, ccNetworkModule } from './net-socket';

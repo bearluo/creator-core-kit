@@ -35,6 +35,17 @@ export const HOTUPDATE_BACKEND: Token<IHotUpdateBackend> =
   createToken<IHotUpdateBackend>('cck.hotUpdateBackend');
 
 /**
+ * 按 bundle 名造后端 —— 分包热更的接缝（一 bundle 一份 manifest、一个独立更新目标）。
+ * native 实现给每个 bundle 一份独立 storagePath：`AssetsManagerEx` 的缓存 manifest 路径写死成
+ * `<storagePath>/project.manifest`，共用目录会让各 bundle 互相覆盖。
+ */
+export type HotUpdateBackendFactory = (bundle: string) => IHotUpdateBackend;
+
+/** DI token：engine 仅 native 注册；未注册 → BundleUpdater 恒 no-op（bundle 用包内版本）。 */
+export const HOTUPDATE_BACKEND_FACTORY: Token<HotUpdateBackendFactory> =
+  createToken<HotUpdateBackendFactory>('cck.hotUpdateBackendFactory');
+
+/**
  * 空后端（null object）：恒报「已最新」、下载/应用/重启皆 no-op。
  * 默认实现（非 native 或未接热更时）+ 可预置 check 结果供测试。
  */

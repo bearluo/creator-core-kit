@@ -1,6 +1,7 @@
 /**
  * cck-manifest CLI（node:util.parseArgs，零依赖）——native 热更出包期工具。
  *   生成 manifest: cck-manifest --root <dir> --url <packageUrl> --version <v> [--out <dir>] [--dirs a,b] [--search-paths ...]
+ *                  加 --split 则切成 base + 每个模块 bundle 一份（[--aot-bundles main,internal,resources]）
  *   校验 manifest: cck-manifest verify --root <dir> [--manifest <path>]
  *   打戳:          cck-manifest stamp --core <core-dist-或-index.d.ts> --version <v> [--min-app-version <v>] --out <path>
  *   兼容校验:      cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <path>) [--min-app-version <v>]
@@ -8,7 +9,7 @@
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { computeCoreApiHash, readStamp, verifyCompat, writeStamp } from './api-stamp';
-import { verifyManifest, writeManifests } from './hot-update-manifest';
+import { verifyManifest, writeManifests, writeSplitManifests, type WriteResult } from './hot-update-manifest';
 
 function die(msg: string): never {
   console.error(`cck-manifest: ${msg}`);
@@ -34,6 +35,8 @@ function main(): void {
       'min-app-version': { type: 'string' },
       'app-stamp': { type: 'string' },
       'update-stamp': { type: 'string' },
+      split: { type: 'boolean' },
+      'aot-bundles': { type: 'string' },
     },
   });
 
@@ -84,17 +87,31 @@ function main(): void {
   const packageUrl = values.url ?? die('需要 --url（远程资源根 URL）');
   const version = values.version ?? die('需要 --version');
 
-  const { projectPath, versionPath, manifest } = writeManifests({
+  const common = {
     root,
     packageUrl,
     version,
     outDir: values.out,
     dirs: values.dirs ? values.dirs.split(',') : undefined,
     searchPaths: values['search-paths'] ? values['search-paths'].split(',') : undefined,
-  });
-  console.log(`✅ 生成 manifest（${Object.keys(manifest.assets).length} 个资源，version=${version}）`);
-  console.log(`   ${projectPath}`);
-  console.log(`   ${versionPath}`);
+  };
+  const report = ({ projectPath, versionPath, manifest }: WriteResult, label: string): void => {
+    console.log(`✅ ${label}（${Object.keys(manifest.assets).length} 个资源，version=${version}）`);
+    console.log(`   ${projectPath}`);
+    console.log(`   ${versionPath}`);
+  };
+
+  if (values.split) {
+    const { base, bundles } = writeSplitManifests({
+      ...common,
+      aotBundles: values['aot-bundles'] ? values['aot-bundles'].split(',') : undefined,
+    });
+    report(base, '生成 base manifest');
+    for (const [name, r] of Object.entries(bundles)) report(r, `生成 bundle manifest '${name}'`);
+    return;
+  }
+
+  report(writeManifests(common), '生成 manifest');
 }
 
 main();

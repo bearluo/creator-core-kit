@@ -48,10 +48,16 @@ export function createMemoryBundleSource(preset?: { present?: string[] }): IBund
 // —— ② BundleManager（core 纯逻辑）——
 export type BundleHandle = { readonly name: string; readonly version?: string };  // 不透明句柄
 export interface BundleInfo { readonly name: string; readonly version?: string; readonly refCount: number }
-export interface BundleManagerOptions { source?: IBundleSource; logger?: ILogger }
+export interface BundleManagerOptions {
+  source?: IBundleSource;
+  /** 加载前的分包热更。默认 tryResolve(BUNDLE_UPDATER)（**每次 load 现取**）；未注册则不更新。 */
+  updater?: BundleUpdater;
+  logger?: ILogger;
+}
 
 export interface BundleManager {
-  /** 已加载→计数+1 立即返回；并发同名→共享 inflight；失败→reject 且不留计数。 */
+  /** 已加载→计数+1 立即返回；并发同名→共享 inflight；失败→reject 且不留计数。
+   *  未加载且有 updater → 先 `ensureLatest(name)` 再 `source.loadBundle`（远程 url 加载跳过）。 */
   load(nameOrUrl: string, opts?: BundleLoadOptions & { name?: string }): Promise<BundleHandle>;
   /** 计数−1，归零→`source.releaseBundle`；未加载名→告警 no-op。 */
   release(name: string): void;
@@ -106,6 +112,8 @@ export const BUNDLE_RELOADER: Token<IBundleReloader>;
 - **release**：无条目 → 告警 no-op；否则 `refCount--`，`<=0` → `source.releaseBundle(name)` + 删表（计数夹 0 不为负）。
 - **默认 source 解析**：`opts.source ?? tryResolve(BUNDLE_SOURCE) ?? createMemoryBundleSource()`——同 [[save-manager]] 的接缝拾取范式。
 - **`setVersions` 为什么在这一层**：UIManager 打开界面时也会 load 它所属的 bundle。版本表放上层（App）就会漏掉那条路径；放这里则所有调用点零改自动带上版本。整体替换而非合并——版本表是服务器下发的一份快照，合并会让删掉的条目阴魂不散。
+- **`updater` 为什么也在这一层，且为什么"现取"**：位置同 `setVersions`（所有 load 调用点在这里汇合）。但解析时机不同——`source` 建时定死，`updater` **每次 load 才 `tryResolve`**：它要带 app 戳（`coreApiHash` 闸），而戳是启动后从资源里读出来的，注册必然晚于 BundleManager 创建。定死就等于永远拿不到。
+- **更新失败绝不阻断加载**：`BundleUpdater.ensureLatest` 契约是「永不 reject」，这里仍包一层 try/catch 兜自定义实现的违约——离线时退回包内版本继续玩，比进不去游戏轻得多。远程 url 加载（`opts.name` 形式）跳过更新：那条路径不走 manifest 热更。
 - **`BundleHandle` 为何不透明**：core 不持真 `cc.AssetManager.Bundle`。句柄只带 `name`/`version`；engine 要真 Bundle 时 `assetManager.getBundle(name)` 按名反解。
 
 ### BundleScope 的回收顺序（有语义，不是随手排的）

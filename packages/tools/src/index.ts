@@ -4,8 +4,10 @@
  */
 export {
   buildManifest,
+  buildSplitManifests,
   toVersionManifest,
   writeManifests,
+  writeSplitManifests,
   verifyManifest,
 } from './hot-update-manifest';
 export type {
@@ -13,6 +15,9 @@ export type {
   Manifest,
   VersionManifest,
   ManifestOptions,
+  SplitManifestOptions,
+  SplitManifests,
+  SplitWriteResult,
   WriteResult,
   VerifyIssue,
 } from './hot-update-manifest';

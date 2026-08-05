@@ -1,0 +1,4 @@
+{
+  "tag": "v1",
+  "_note": "分包热更验证锚点：随 shop bundle 走。远端把 tag 改成 v2 + 打 shop.manifest，客户端加载 shop 前应自动更到 v2（免重启）。"
+}

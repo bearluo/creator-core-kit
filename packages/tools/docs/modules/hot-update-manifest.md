@@ -57,6 +57,16 @@ export interface ManifestOptions {
   searchPaths?: string[];       // 默认 []
 }
 
+/** 分包切分：base 一份 + 每个模块 bundle 一份。见 [[adr-0013]]。 */
+export interface SplitManifestOptions extends ManifestOptions {
+  /** 归入 base 的 assets 子目录名，默认 ['main','internal','resources']。 */
+  aotBundles?: readonly string[];
+}
+export interface SplitManifests { base: Manifest; bundles: Record<string, Manifest> }
+export interface SplitWriteResult { base: WriteResult; bundles: Record<string, WriteResult> }
+export function buildSplitManifests(opts: SplitManifestOptions): SplitManifests;
+export function writeSplitManifests(opts: SplitManifestOptions & { outDir?: string }): SplitWriteResult;
+
 /** 遍历 root/dirs 算 md5+size，产出完整 project manifest 对象（读 fs 但不落盘，便于测）。 */
 export function buildManifest(opts: ManifestOptions): Manifest;
 
@@ -81,10 +91,17 @@ CLI（`bin: cck-manifest`）：
 ```
 cck-manifest --root build/android/data --url http://host/remote-assets/ --version 1.0.0
              [--out build/android/data] [--dirs src,assets,jsb-adapter] [--search-paths ...]
+             [--split] [--aot-bundles main,internal,resources]
 cck-manifest verify --root build/android/data --manifest build/android/data/project.manifest
 ```
 
+`--split` 把一张全表切成 base + 每个模块 bundle 各一份（`<bundle>.manifest` / `<bundle>.version.manifest`），
+供 native 分包热更用 —— 一 bundle 一个 `AssetsManager` 目标，玩家点进模块前才下它那份。
+demo 实测：47 条全表 → base 22 条（`src/` 6 + `jsb-adapter/` 2 + `assets/{main,internal}` 14）+ 6 个模块包 25 条。
+
 ## Behavior & data flow（行为与数据流）
+
+0. `buildSplitManifests`（`--split`）：先跑一次 `buildManifest` 拿全表，再按 key 前缀分派——`assets/<name>/…` 且 `<name>` 不在 `aotBundles` 里的归该 bundle，其余（含 `assets/` 下的散文件）归 base。**只分派不重算**，所以 base ∪ bundles 恒等于不切时的全表，无重叠无遗漏（有测试守）。**各 manifest 的 asset key 一律相对 data 根**，bundle manifest 只是全表的子集——下载落盘后相对 storagePath 的结构必须与包内一致，搜索路径前缀一挂才解析得到（[[adr-0013]] 决策 2）。空目录不产出空 manifest。
 
 1. `buildManifest`：对 `dirs` 里每个存在的子目录，`fs.readdirSync(..,{recursive})`（或递归 walk）取全部文件；跳过**隐藏文件/目录**（basename 以 `.` 开头，对齐官方）。每文件：
    - `size = fs.statSync(f).size`；

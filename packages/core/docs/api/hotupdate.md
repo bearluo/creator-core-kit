@@ -34,6 +34,104 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:18](https://hlgit.5518g
 
 ***
 
+### BundleUpdater
+
+Defined in: packages/core/src/hotupdate/bundle-updater.ts:21
+
+BundleUpdater —— 「加载前把这个 bundle 更到最新」。分包热更的编排半，纯逻辑、零 cc。
+
+每个 bundle 一个 [createHotUpdateService](hotupdate.md#createhotupdateservice) 实例（状态机 / 版本闸 / 进度全复用），后端由
+[HotUpdateBackendFactory](hotupdate.md#hotupdatebackendfactory) 按名产出。挂在 `BundleManager.load` 之前——UIManager 打开界面时
+也会 load 它所属的 bundle，挂上层 App 必漏那条路径。
+
+native 上模块 bundle 更新**不需要重启也不需要启动还原**：`AssetsManagerEx` 在 `create()` 与
+`updateSucceed()` 里都会自行 `prependSearchPaths`，而模块 bundle 此刻尚未加载。
+
+#### Methods
+
+##### ensureLatest()
+
+> **ensureLatest**(`bundle`): `Promise`\<`void`\>
+
+Defined in: packages/core/src/hotupdate/bundle-updater.ts:28
+
+把该 bundle 更到最新。同名重复调用只跑一次，并发共享同一次。
+
+**永不 reject**：离线 / CDN 挂 / 版本闸拒（该发整包了）一律记日志后正常返回，退回包内版本继续加载。
+热更失败让玩家进不去游戏，比不热更严重得多。
+
+###### Parameters
+
+###### bundle
+
+`string`
+
+###### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### BundleUpdaterOptions
+
+Defined in: packages/core/src/hotupdate/bundle-updater.ts:31
+
+#### Properties
+
+##### app?
+
+> `optional` **app**: [`AppInfo`](hotupdate.md#appinfo)
+
+Defined in: packages/core/src/hotupdate/bundle-updater.ts:37
+
+本地客户端信息（版本 / coreApiHash），透传给闸。
+
+##### factory?
+
+> `optional` **factory**: [`HotUpdateBackendFactory`](hotupdate.md#hotupdatebackendfactory)
+
+Defined in: packages/core/src/hotupdate/bundle-updater.ts:33
+
+按名造后端。默认 DI [HOTUPDATE\_BACKEND\_FACTORY](hotupdate.md#hotupdate_backend_factory)；未注册 → 恒 no-op。
+
+##### gate?
+
+> `optional` **gate**: [`VersionGate`](hotupdate.md#versiongate)
+
+Defined in: packages/core/src/hotupdate/bundle-updater.ts:35
+
+版本闸，透传给每个 bundle 的 HotUpdateService。
+
+##### logger?
+
+> `optional` **logger**: [`ILogger`](logging.md#ilogger)
+
+Defined in: packages/core/src/hotupdate/bundle-updater.ts:40
+
+##### onProgress()?
+
+> `optional` **onProgress**: (`bundle`, `p`) => `void`
+
+Defined in: packages/core/src/hotupdate/bundle-updater.ts:39
+
+下载进度，带上是哪个 bundle。
+
+###### Parameters
+
+###### bundle
+
+`string`
+
+###### p
+
+[`HotUpdateProgress`](hotupdate.md#hotupdateprogress)
+
+###### Returns
+
+`void`
+
+***
+
 ### GateResult
 
 Defined in: [packages/core/src/hotupdate/version-gate.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L22)
@@ -365,6 +463,28 @@ check 结果：已最新 / 发现新版本（带远程信息）。
 
 ***
 
+### HotUpdateBackendFactory()
+
+> **HotUpdateBackendFactory**: (`bundle`) => [`IHotUpdateBackend`](hotupdate.md#ihotupdatebackend)
+
+Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:42](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L42)
+
+按 bundle 名造后端 —— 分包热更的接缝（一 bundle 一份 manifest、一个独立更新目标）。
+native 实现给每个 bundle 一份独立 storagePath：`AssetsManagerEx` 的缓存 manifest 路径写死成
+`<storagePath>/project.manifest`，共用目录会让各 bundle 互相覆盖。
+
+#### Parameters
+
+##### bundle
+
+`string`
+
+#### Returns
+
+[`IHotUpdateBackend`](hotupdate.md#ihotupdatebackend)
+
+***
+
 ### HotUpdateState
 
 > **HotUpdateState**: `"idle"` \| `"checking"` \| `"up-to-date"` \| `"update-available"` \| `"rejected"` \| `"downloading"` \| `"applying"` \| `"ready"` \| `"failed"`
@@ -385,6 +505,16 @@ update 产出。
 
 ## Variables
 
+### BUNDLE\_UPDATER
+
+> `const` **BUNDLE\_UPDATER**: [`Token`](di.md#tokent)\<[`BundleUpdater`](hotupdate.md#bundleupdater)\>
+
+Defined in: packages/core/src/hotupdate/bundle-updater.ts:86
+
+DI token：项目可 register 自己的 BundleUpdater 覆盖默认；未注册则 BundleManager 不做加载前更新。
+
+***
+
 ### HOTUPDATE\_BACKEND
 
 > `const` **HOTUPDATE\_BACKEND**: [`Token`](di.md#tokent)\<[`IHotUpdateBackend`](hotupdate.md#ihotupdatebackend)\>
@@ -392,6 +522,16 @@ update 产出。
 Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:34](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L34)
 
 DI token：engine Bootstrap register 平台适配；未注册时 HotUpdateService 回退空后端（恒 up-to-date）。
+
+***
+
+### HOTUPDATE\_BACKEND\_FACTORY
+
+> `const` **HOTUPDATE\_BACKEND\_FACTORY**: [`Token`](di.md#tokent)\<[`HotUpdateBackendFactory`](hotupdate.md#hotupdatebackendfactory)\>
+
+Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L45)
+
+DI token：engine 仅 native 注册；未注册 → BundleUpdater 恒 no-op（bundle 用包内版本）。
 
 ***
 
@@ -431,6 +571,26 @@ ponytail: 忽略 pre-release/build 元数据（-rc.1、+build），首版按纯�
 
 ***
 
+### createBundleUpdater()
+
+> **createBundleUpdater**(`opts`?): [`BundleUpdater`](hotupdate.md#bundleupdater)
+
+Defined in: packages/core/src/hotupdate/bundle-updater.ts:44
+
+造 BundleUpdater（纯逻辑、零 cc；平台 IO 经 HotUpdateBackendFactory 注入）。
+
+#### Parameters
+
+##### opts?
+
+[`BundleUpdaterOptions`](hotupdate.md#bundleupdateroptions)
+
+#### Returns
+
+[`BundleUpdater`](hotupdate.md#bundleupdater)
+
+***
+
 ### createHotUpdateService()
 
 > **createHotUpdateService**(`opts`?): [`HotUpdateService`](hotupdate.md#hotupdateservice)
@@ -455,7 +615,7 @@ Defined in: [packages/core/src/hotupdate/hotupdate-service.ts:65](https://hlgit.
 
 > **createMemoryHotUpdateBackend**(`preset`?): [`IHotUpdateBackend`](hotupdate.md#ihotupdatebackend)
 
-Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:41](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L41)
+Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:52](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L52)
 
 空后端（null object）：恒报「已最新」、下载/应用/重启皆 no-op。
 默认实现（非 native 或未接热更时）+ 可预置 check 结果供测试。

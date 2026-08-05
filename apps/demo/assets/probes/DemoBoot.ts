@@ -24,8 +24,11 @@ import {
   NETWORK_SOCKET,
   getHotUpdateService,
   createHotUpdateService,
+  createBundleUpdater,
   HOTUPDATE_BACKEND,
+  HOTUPDATE_BACKEND_FACTORY,
   HOTUPDATE_SERVICE,
+  BUNDLE_UPDATER,
   TIMER,
   type ITimer,
   type AppInfo,
@@ -386,10 +389,12 @@ export class DemoBoot extends Component {
     // —— 戳的运行时读入（app 侧）：读 app 戳 → AppInfo → 注册带 app 的 HotUpdateService，激活 coreApiHash 闸 ——
     // app 戳 resources/cck-app-compat.json 由 tools 的 `cck-manifest stamp --core <core-dist> --version <appVer>` 出包期生成。
     // 缺戳 → 用默认 AppInfo{appVersion:'0.0.0'}，闸对 coreApiHash 休眠（单边缺失恒放行，不阻断）。
+    let appInfo: AppInfo | undefined;
     try {
       const stamp = await loader.load<JsonAsset>('cck-app-compat', { bundle: FB, type: 'json' });
       const j = stamp.json as { version: string; coreApiHash: string };
       const app: AppInfo = { appVersion: j.version, coreApiHash: j.coreApiHash };
+      appInfo = app;
       this.kit.container.register(
         HOTUPDATE_SERVICE,
         { useValue: createHotUpdateService({ app }) },
@@ -400,6 +405,24 @@ export class DemoBoot extends Component {
     } catch (e) {
       console.warn(`${tag} app 戳未读到（缺 ${FB}/cck-app-compat.json），coreApiHash 闸休眠：`, (e as Error).message);
     }
+
+    // —— 分包热更：注册 BundleUpdater，让 BundleManager.load 在真加载前把该 bundle 更到最新 ——
+    // 后端工厂由 ccHotUpdateModule 在 native 下注册（web 预览不注册 → updater 恒 no-op）。
+    // 带上同一份 app 戳，模块更新和 base 走同一道 coreApiHash 闸。
+    this.kit.container.register(
+      BUNDLE_UPDATER,
+      {
+        useValue: createBundleUpdater({
+          app: appInfo,
+          onProgress: (b, p) =>
+            console.log(`${tag} ⏳ bundle '${b}' 更新 ${p.filesDone}/${p.filesTotal} 文件 · ${p.bytesDone}/${p.bytesTotal} 字节`),
+        }),
+      },
+      { allowOverride: true },
+    );
+    console.log(
+      `${tag} 📦 HOTUPDATE_BACKEND_FACTORY registered = ${this.kit.container.has(HOTUPDATE_BACKEND_FACTORY)}（web 应 false）`,
+    );
 
     // HotUpdate：ccHotUpdateModule 用 sys.isNative 守门——web 预览下 no-op（HOTUPDATE_BACKEND 不注册），
     // HotUpdateService 回退空后端 → check() 恒 up-to-date（web 不触碰 native.AssetsManager 不崩）。
@@ -429,6 +452,20 @@ export class DemoBoot extends Component {
       }
     } catch (e) {
       console.warn(`${tag} HotUpdate 驱动异常：`, (e as Error).message);
+    }
+
+    // —— 分包热更验证：加载 shop 模块 bundle，读它自带的版本锚点 ——
+    // load 前 BundleManager 会跑 ensureLatest('shop')：check <shop.manifest> → 下载 → apply。
+    // **不重启**：AssetsManagerEx 在 create() 与 updateSucceed() 里都会自行 prependSearchPaths，
+    // 而此刻 shop 尚未加载，紧随其后的 loadBundle 直接读到新文件。
+    try {
+      await bundleMgr.load('shop');
+      const ver = await loader.load<JsonAsset>('shop-version', { bundle: 'shop', type: 'json' });
+      console.log(`${tag} 🛒 SHOP_TAG = ${(ver.json as { tag: string }).tag}`);
+      loader.release('shop-version', { bundle: 'shop', type: 'json' });
+      bundleMgr.release('shop');
+    } catch (e) {
+      console.warn(`${tag} shop 分包热更验证异常：`, (e as Error).message);
     }
 
     // fixtures 用毕 → 释放 bundle（验 BundleManager release 生命周期收尾）。

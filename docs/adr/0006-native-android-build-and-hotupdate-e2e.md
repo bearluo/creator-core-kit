@@ -39,6 +39,23 @@ HotUpdateService（core 半）+ `ccHotUpdateModule`（engine 半 `native.AssetsM
   - 首次构建工具链（JDK17 + NDK r23c + build-tools 34 + cmake 3.22.1）为一次性机器准备，非仓库资产。
 - **落地锚点**：包名 `com.cck.demo` / 主 Activity `com.cocos.game.AppActivity` / APK `apps/demo/build/android/proj/build/demo/outputs/apk/debug/demo-debug.apk` / 验证信号 = logcat `[CCK-DEMO]` 前缀（Cocos native 转发 JS console 到 logcat）/ 热更锚点 `BUILD_TAG = vN`。
 
+## 补充（2026-08-05）：决策 2 的 options 形状——`apiLevel` 必须是数字
+
+`packages.android.apiLevel` 传 **`34`（数字）**，不是 `'android-34'`（字符串）。传字符串时 Creator 照样"构建成功"，但生成的 `proj/gradle.properties` 里 `PROP_COMPILE_SDK_VERSION=NaN` / `PROP_MIN_SDK_VERSION=NaN`，随后 gradle 在 `app/build.gradle:10` 的 `PROP_COMPILE_SDK_VERSION.toInteger()` 上炸 `For input string: "NaN"`——**报错点离病根很远**，且 data 产物是好的、只有原生工程坏，容易误判成工具链问题。
+
+一次可用的完整 options（从 `apps/demo/profiles/v2/packages/android.json` 的 `builder.taskOptionsMap` 里取历史成功那条最省事，编辑器每次构建都会把实际用的 options 存在那儿）：
+
+```json
+{"packageName":"com.cck.demo","apiLevel":34,"appABIs":["x86_64"],
+ "orientation":{"portrait":true,"upsideDown":false,"landscapeRight":false,"landscapeLeft":false},
+ "useDebugKeystore":true,"appBundle":false,"androidInstant":false,
+ "sdkPath":"…","ndkPath":"…","javaHome":"…",
+ "resizeableActivity":true,"maxAspectRatio":"2.4",
+ "renderBackEnd":{"vulkan":false,"gles3":true,"gles2":true},"swappy":false,
+ "keystorePath":"","keystorePassword":"","keystoreAlias":"","keystoreAliasPassword":"",
+ "inputSDK":false,"remoteUrl":"","javaPath":""}
+```
+
 ## 修正（2026-08-05）：决策 5 的持久化路径
 
 决策 5 当时留的待办写「生产应放 `build-templates/android/data/main.js`」——**路径不对**，实测的正确落点是：

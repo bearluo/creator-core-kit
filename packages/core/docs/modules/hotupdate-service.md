@@ -99,7 +99,7 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
   |---|---|---|
   | L0 还原之前 | native `.so`（引擎 C++ + jsb 绑定）、`jsb-adapter/web-adapter.js`、**`main.js` 自身** | **不能**，只能发版 |
   | L1 还原之后 · 需重启 | `src/`（`system.bundle.js` / `cocos-js/cc.js` / `chunks/*` / `settings.json` / `import-map.json`）、`assets/main`、`assets/res`、`jsb-adapter/engine-adapter.js` | 能，`game.restart()` 生效 |
-  | L2 模块 bundle | 各功能模块 Asset Bundle | 能，可不重启（[[adr-0010]]） |
+  | L2 模块 bundle | 各功能模块 Asset Bundle | 能，可不重启（[[adr-0010]]），且**按需分包更新**（[[adr-0013]]，见下） |
 
   `web-adapter.js` 是 `platforms/native/builtin/index.js` 的打包产物：jsb 命名空间与 native 引用管理、DOM/BOM 垫片、`XMLHttpRequest`/`WebSocket`、**`localStorage`**、`setTimeout`/rAF、Promise polyfill、`jsb.fileUtils` 单例。落到实处的影响：
   - 定时器 / Promise polyfill / DOM 垫片 / 音频 / 输入 / `jsb.WebSocket`（本仓 net 层就架在它上面）出问题，**热更修不了**。
@@ -107,6 +107,22 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
   - **`main.js` 在 L0**：热更包里放新 `main.js` 无效（下了也不会被加载）。`cck-manifest` 默认只收 `src`/`assets`/`jsb-adapter` 三个子目录、根级 `main.js` 天然在外，这条恰好是对的；但 `jsb-adapter` 目录里 **`web-adapter.js`（~170KB）被收进 manifest 是死重量**——它属 L0，下载了也不会被用（`engine-adapter.js` 属 L1，收它有效）。
   - `cc.js` 属 L1 **能**被换，但它与 L0 的 `.so` 是配套的（jsb 绑定签名要对齐）→ **热更包必须由与线上包同一 Creator 版本、同一引擎裁剪配置构建产出**，跨版本换 `cc.js` 会崩在绑定层。这比 `coreApiHash` 闸挡的东西更底层，闸目前不覆盖。
   - 逃生口（**未验证**）：`native/engine/common/Classes/Game.cpp` 是项目文件且在 `BaseGame::init()` 之前跑，理论上可在那里先 `FileUtils::setSearchPaths` 把 L0 也纳入热更；但要先确认 `CocosApplication::init()` 会不会重置搜索路径，且引入它本身仍需发一次版。
+- **native 分包更新（一 bundle 一 manifest，[[adr-0013]]）**：base 与模块是**两个独立更新目标**。
+
+  | | base（AOT 层） | 模块 bundle |
+  |---|---|---|
+  | manifest | `project.manifest`（`src/` + `jsb-adapter/` + `assets/{main,internal,resources}`） | `<bundle>.manifest`（该 bundle 一份，`cck-manifest --split` 产出） |
+  | storagePath | `<writable>cck-remote-asset/` | `<writable>cck-bundle-asset/<bundle>/`（并列不嵌套） |
+  | 触发时机 | 启动期 `HotUpdateService.check/update` | `BundleManager.load(name)` 之前，经 `BundleUpdater.ensureLatest` |
+  | 生效 | `game.restart()` | **免重启**——模块此刻尚未加载 |
+  | 启动还原 | **必需**（`build-templates/native/index.ejs` 读 localStorage） | **不需要** |
+
+  模块不需要启动还原，是因为 `AssetsManagerEx` 在 `create()`（`prepareLocalManifest → Manifest::prependSearchPaths`）与 `updateSucceed()` 第 4–5 步都会**自行** `prependSearchPaths` —— 冷启动只要在 `loadBundle` 前造一次 AssetsManager 就够了。base 则绕不开：造 AssetsManager 的代码自己就在 `assets/main/index.js` 里，鸡生蛋。
+
+  **搜索路径由 C++ 负责生效，`apply()` 只负责归一化与持久化**。`updateSucceed` 第 7 步才 `dispatchUpdateEvent(UPDATE_FINISHED)`（= `download()` 的 resolve 点），前插在第 5 步 —— promise 兑现时路径早已生效，再 unshift 就是重复条目。`apply()` 保留的那次 `setSearchPaths` 不能省：它顺带 `_fullPathCache.clear()`，而 `prependSearchPaths` 在路径已存在时不会调它 —— 同一 bundle 第二次更新若**删掉**了某文件，旧解析结果会一直缓存在 `_fullPathCache` 里，既解析不到也不回退包内那份。（C++ 的 `purgeCachedEntries()` **无 JS 绑定**，`setSearchPaths` 是它的超集，不必改引擎。）
+
+  **一 bundle 一 storagePath 是硬约束**：`_cacheManifestPath = _storagePath + MANIFEST_FILENAME` 而 `MANIFEST_FILENAME` 硬编码为 `"project.manifest"` —— 共用目录 = 各 bundle 缓存 manifest 互相覆盖。真机上 `cck-bundle-asset/shop/` 里那份缓存文件确实叫 `project.manifest`，尽管远端叫 `shop.manifest`。
+
 - **Web**：无 jsb；`assetManager.loadBundle(url, {version})` 换 bundle 版本即“热更”；主包/AOT 不可换（刷页面加载新 index）。
 - **小游戏**：各家分包/远程包机制，资源/子包远程版本化；主包更新走平台审核。
 - **AOT 缺代码防护**：版本闸 `coreApiHash`/`minAppVersion` 是运行时兜底；配套出包期打戳/校验脚本（tools 层，见 Open Questions）是另一半。跨 bundle 服务走全局 token（[[adr-0001]]）。
@@ -180,6 +196,24 @@ check() = {"kind":"up-to-date"}   ← 本地 manifest 已是 1.0.1，读的是�
 5. **原生构建**：Creator 3.8.7 经 builder `add-task` 消息程序化触发（复用运行中的编辑器，无锁冲突），NDK/SDK/JDK 路径直填任务 options（`sdkPath`/`ndkPath`/`javaHome`）绕开偏好设置；ABI 选 **x86_64**（对齐 x86_64 模拟器，原生跑不靠 ARM 转译，Cocos 3.8 支持）；产物 gradle 工程 `gradlew assembleDebug` 编 APK。详见 [[adr-0006]]。
 
 至此「三种热」之**线上热更**在 native 真机端到端闭环验证完成（Web/小游戏远程 bundle backend 仍随需再接）。
+
+### 分包更新 e2e（2026-08-05，真 Android APK · PASS）
+
+干净安装（先 `adb uninstall`），远端 base 停在 1.0.0（与包内 manifest **md5 完全一致**）、只有 `shop.manifest` 提到 1.0.1：
+
+```
+BUILD_TAG = v1                            ← AOT 代码全程没换
+app 戳读入 appVersion=1.0.0 coreApiHash=03cb152c725e
+HOTUPDATE_BACKEND_FACTORY registered = true
+HotUpdateService.check() = up-to-date      ← base 无更新 → 不触发 restart
+bundle 'shop' 更新 1/1 文件 · 271 字节     ← BundleManager.load 前自动更新，只下那一个变更文件
+SHOP_TAG = v2                              ← 免重启读到新内容
+
+am force-stop 冷启动（服务端在）  → SHOP_TAG = v2，base check up-to-date
+断开托管后再冷启动               → SHOP_TAG = v2，check 优雅 error 不崩
+```
+
+最后一次是关键判据：`localStorage` 里**确无** `HotUpdateSearchPaths`（base 从未更新过，模块的 apply 不写），v2 只可能来自 `create()` 时 C++ 的 `prependSearchPaths`。设备落盘形态也与设计一致——`cck-bundle-asset/shop/{project.manifest, assets/shop/import/…}`，与 `cck-remote-asset/` 并列。全程无 FATAL / native signal。
 
 ### coreApiHash 版本闸激活（戳的运行时读入，2026-07-29 · 真机 e2e PASS）
 

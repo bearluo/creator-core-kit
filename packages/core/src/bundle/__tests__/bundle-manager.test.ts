@@ -11,6 +11,7 @@ import {
   type IBundleSource,
 } from '../bundle-source';
 import { getRootContainer } from '../../di';
+import { BUNDLE_UPDATER, type BundleUpdater } from '../../hotupdate';
 import { LogLevel, type ILogger } from '../../logging';
 
 function fakeLogger(): { logger: ILogger; warns: unknown[][] } {
@@ -272,6 +273,85 @@ describe('BundleManager', () => {
     const h = await bm.load('shop');
     expect(h.version).toBeUndefined();
     expect(s.loadOptions[0]?.version).toBeUndefined();
+  });
+});
+
+describe('BundleManager × BundleUpdater（加载前分包热更）', () => {
+  afterEach(() => {
+    const root = getRootContainer();
+    root.unregister(BUNDLE_SOURCE);
+    root.unregister(BUNDLE_UPDATER);
+  });
+
+  /** 记录调用时序：更新与加载各往同一条轨迹里写。 */
+  function makeTraced(updaterImpl?: (bundle: string) => Promise<void>) {
+    const trace: string[] = [];
+    const s = makeSource();
+    const source: IBundleSource = {
+      ...s.source,
+      loadBundle: (name, opts) => {
+        trace.push(`load:${name}`);
+        return s.source.loadBundle(name, opts);
+      },
+    };
+    const updater: BundleUpdater = {
+      ensureLatest: async (bundle) => {
+        trace.push(`update:${bundle}`);
+        await updaterImpl?.(bundle);
+      },
+    };
+    return { trace, source, updater };
+  }
+
+  it('ensureLatest 在 source.loadBundle 之前跑', async () => {
+    const t = makeTraced();
+    const bm = createBundleManager({ source: t.source, updater: t.updater });
+    await bm.load('shop');
+    expect(t.trace).toEqual(['update:shop', 'load:shop']);
+  });
+
+  it('已加载的 bundle 再 load 不重复更新', async () => {
+    const t = makeTraced();
+    const bm = createBundleManager({ source: t.source, updater: t.updater });
+    await bm.load('shop');
+    await bm.load('shop');
+    expect(t.trace).toEqual(['update:shop', 'load:shop']); // 第二次只加计数
+  });
+
+  it('updater 违约抛异常 → 记日志、照常加载，不带崩', async () => {
+    const t = makeTraced(() => Promise.reject(new Error('更新炸了')));
+    const { logger, warns } = fakeLogger();
+    const bm = createBundleManager({ source: t.source, updater: t.updater, logger });
+    await expect(bm.load('shop')).resolves.toMatchObject({ name: 'shop' });
+    expect(t.trace).toEqual(['update:shop', 'load:shop']);
+    expect(warns.length).toBeGreaterThan(0);
+  });
+
+  it('远程 url 加载跳过 manifest 热更', async () => {
+    const t = makeTraced();
+    const bm = createBundleManager({ source: t.source, updater: t.updater });
+    await bm.load('http://cdn/shop', { name: 'shop' });
+    expect(t.trace).toEqual(['load:shop']);
+  });
+
+  it('BUNDLE_UPDATER 晚于 BundleManager 注册也生效（app 戳是启动后才读到的）', async () => {
+    const t = makeTraced();
+    getRootContainer().register(BUNDLE_SOURCE, { useValue: t.source });
+    const bm = createBundleManager(); // 此刻 BUNDLE_UPDATER 尚未注册
+    getRootContainer().register(BUNDLE_UPDATER, { useValue: t.updater });
+    await bm.load('shop');
+    expect(t.trace).toEqual(['update:shop', 'load:shop']);
+  });
+
+  it('updater 默认从 DI 的 BUNDLE_UPDATER 拾取；未注册则不更新', async () => {
+    const t = makeTraced();
+    getRootContainer().register(BUNDLE_SOURCE, { useValue: t.source });
+    await createBundleManager().load('a');
+    expect(t.trace).toEqual(['load:a']);
+
+    getRootContainer().register(BUNDLE_UPDATER, { useValue: t.updater });
+    await createBundleManager().load('b');
+    expect(t.trace).toEqual(['load:a', 'update:b', 'load:b']);
   });
 });
 

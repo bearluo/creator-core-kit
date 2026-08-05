@@ -10,7 +10,7 @@
 
 ### BundleInfo
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:19](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L19)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:20](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L20)
 
 已加载 bundle 的快照信息。
 
@@ -20,19 +20,19 @@ Defined in: [packages/core/src/bundle/bundle-manager.ts:19](https://hlgit.5518ga
 
 > `readonly` **name**: `string`
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:20](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L20)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:21](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L21)
 
 ##### refCount
 
 > `readonly` **refCount**: `number`
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L22)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:23](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L23)
 
 ##### version?
 
 > `readonly` `optional` **version**: `string`
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:21](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L21)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L22)
 
 ***
 
@@ -80,7 +80,7 @@ Defined in: [packages/core/src/bundle/bundle-source.ts:10](https://hlgit.5518gam
 
 ### BundleManager
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:31](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L31)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L39)
 
 #### Methods
 
@@ -88,7 +88,7 @@ Defined in: [packages/core/src/bundle/bundle-manager.ts:31](https://hlgit.5518ga
 
 > **get**(`name`): `undefined` \| [`BundleHandle`](bundle.md#bundlehandle)
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:43](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L43)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:51](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L51)
 
 取已就绪句柄（加载中或未加载 → undefined）。
 
@@ -106,7 +106,7 @@ Defined in: [packages/core/src/bundle/bundle-manager.ts:43](https://hlgit.5518ga
 
 > **isLoaded**(`name`): `boolean`
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:41](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L41)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:49](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L49)
 
 计数>0、非加载中、且引擎侧就绪。
 
@@ -124,7 +124,7 @@ Defined in: [packages/core/src/bundle/bundle-manager.ts:41](https://hlgit.5518ga
 
 > **list**(): [`BundleInfo`](bundle.md#bundleinfo)[]
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L45)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:53](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L53)
 
 已跟踪 bundle 快照（name 升序）。
 
@@ -136,7 +136,7 @@ Defined in: [packages/core/src/bundle/bundle-manager.ts:45](https://hlgit.5518ga
 
 > **load**(`nameOrUrl`, `opts`?): `Promise`\<[`BundleHandle`](bundle.md#bundlehandle)\>
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:37](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L37)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L45)
 
 加载 / 引用一个 bundle。
 - nameOrUrl：不带 opts.name 时是本地 bundle 名；带 opts.name 时 nameOrUrl 视为远程 url、以 name 注册。
@@ -160,7 +160,7 @@ Defined in: [packages/core/src/bundle/bundle-manager.ts:37](https://hlgit.5518ga
 
 > **release**(`name`): `void`
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L39)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:47](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L47)
 
 释放 / 解引用。计数−1，归零 → source.releaseBundle。未加载名 → 告警 no-op。
 
@@ -178,7 +178,7 @@ Defined in: [packages/core/src/bundle/bundle-manager.ts:39](https://hlgit.5518ga
 
 > **setVersions**(`map`): `void`
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:53](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L53)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:61](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L61)
 
 设置 bundle → 版本映射（web 出包的 md5）。**整体替换**，不是合并。
 load 时 `opts.version` 优先，否则查此表。
@@ -200,7 +200,7 @@ load 时 `opts.version` 优先，否则查此表。
 
 ### BundleManagerOptions
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:25](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L25)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:26](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L26)
 
 #### Properties
 
@@ -208,15 +208,26 @@ Defined in: [packages/core/src/bundle/bundle-manager.ts:25](https://hlgit.5518ga
 
 > `optional` **logger**: [`ILogger`](logging.md#ilogger)
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:28](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L28)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L36)
 
 ##### source?
 
 > `optional` **source**: [`IBundleSource`](bundle.md#ibundlesource)
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L27)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:28](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L28)
 
 引擎 IO 后端。默认：DI BUNDLE_SOURCE，未注册则内存 fake。
+
+##### updater?
+
+> `optional` **updater**: [`BundleUpdater`](hotupdate.md#bundleupdater)
+
+Defined in: [packages/core/src/bundle/bundle-manager.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L35)
+
+加载前的分包热更。默认：DI BUNDLE_UPDATER，未注册则不做（直接用包内版本）。
+
+放这里而不是上层 App，理由同 [BundleManager.setVersions](bundle.md#setversions)：UIManager 打开界面时也会
+load 它所属的 bundle，挂上层就会漏掉那条路径。
 
 ***
 
@@ -516,7 +527,7 @@ Defined in: [packages/core/src/bundle/bundle-source.ts:19](https://hlgit.5518gam
 
 > **BundleHandle**: `object`
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L16)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:17](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L17)
 
 不透明句柄：core 不持真 cc.Bundle，只带 name/version 只读元信息；engine 按 name 反解。
 
@@ -536,7 +547,7 @@ Defined in: [packages/core/src/bundle/bundle-manager.ts:16](https://hlgit.5518ga
 
 > `const` **BUNDLE\_MANAGER**: [`Token`](di.md#tokent)\<[`BundleManager`](bundle.md#bundlemanager)\>
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:139](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L139)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:159](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L159)
 
 DI token：项目可 register 自己的 BundleManager 覆盖默认。
 
@@ -566,7 +577,7 @@ DI token：engine 注册 cc.assetManager 适配，createBundleManager() 自动�
 
 > **createBundleManager**(`opts`?): [`BundleManager`](bundle.md#bundlemanager)
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:63](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L63)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:71](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L71)
 
 造 BundleManager（纯逻辑、零 cc；引擎 IO 经接缝注入）。
 
@@ -631,7 +642,7 @@ preset.present 里的名字视为一开始就已就绪（免加载）。不含�
 
 > **getBundleManager**(): [`BundleManager`](bundle.md#bundlemanager)
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:144](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L144)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:164](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L164)
 
 便捷取用：优先 tryResolve(BUNDLE_MANAGER)；未注册则进程级默认（BUNDLE_SOURCE/内存背书）。
 

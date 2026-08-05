@@ -13,8 +13,16 @@ export type {
 export {
   createMemoryHotUpdateBackend,
   HOTUPDATE_BACKEND,
+  HOTUPDATE_BACKEND_FACTORY,
 } from './hotupdate-backend';
-export type { IHotUpdateBackend, CheckResult, HotUpdateProgress } from './hotupdate-backend';
+export type {
+  IHotUpdateBackend,
+  HotUpdateBackendFactory,
+  CheckResult,
+  HotUpdateProgress,
+} from './hotupdate-backend';
+export { createBundleUpdater, BUNDLE_UPDATER } from './bundle-updater';
+export type { BundleUpdater, BundleUpdaterOptions } from './bundle-updater';
 export {
   createSemverVersionGate,
   compareVersion,
