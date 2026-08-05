@@ -1,3 +1,4 @@
+import { createToken, type Token } from '../di';
 import type { ICodec, NetMessage } from './codec';
 
 /**
@@ -97,27 +98,102 @@ export function createProtobufCodec(schema: PbSchema): ICodec {
   };
 }
 
+/** 一段协议的 body 编解码（由该段的生成代码提供）。 */
+export type SegmentBody = Pick<PbSchema, 'encodeBody' | 'decodeBody'>;
+
 /**
- * 从一张 `{type: cmd}` 表建 schema 的辅助器，body 编解码仍要调用方给。
- * 生成代码通常直接实现 {@link PbSchema}；这个只是省掉手写双向表的样板。
+ * 可增量注册的 schema —— **分包的那一半**。
+ *
+ * 协议不能一股脑塞进不可热更的 AOT 层：客户端把 npm 依赖统统打进主包，
+ * 所以只有 AOT 装「基础段」（握手 / 心跳 / 错误 / 分配器），各功能模块的协议
+ * 随自己的 Asset Bundle 走，加载时 {@link add} 进来、释放时注销。
+ * 整个过程 `INetwork` 和 codec 实例不变，连接不断。
+ */
+export interface PbSchemaRegistry extends PbSchema {
+  /**
+   * 注册一段协议。type 重名或 cmd 撞号**当场抛**（模块 cmd 段划错要在加载时炸，
+   * 不能等线上错发）；校验全过才落库，不留半注册的表。
+   *
+   * @returns 注销函数，交给模块的 `BundleScope.add()` 托管即可。可重复调用；
+   *   若该段已被热更后的新段顶替，旧注销函数不会误删新段。
+   */
+  add(cmds: Readonly<Record<string, number>>, body: SegmentBody): () => void;
+}
+
+/**
+ * DI token：项目在启动时把注册表放进来（基础段已注册好），
+ * 各模块 bundle 加载时取出来注册自己那段——模块不认识 `INetwork`，只认这张表。
+ */
+export const PB_SCHEMA: Token<PbSchemaRegistry> = createToken<PbSchemaRegistry>('cck.pbSchema');
+
+/** 建一个空的协议注册表，等各段自己 {@link PbSchemaRegistry.add} 进来。 */
+export function createPbSchemaRegistry(): PbSchemaRegistry {
+  /** 用对象引用当这一次注册的身份，注销时按引用比对。 */
+  interface Entry {
+    readonly cmd: number;
+    readonly body: SegmentBody;
+  }
+  const byType = new Map<string, Entry>();
+  const byCmd = new Map<number, string>();
+
+  const entryOf = (type: string): Entry => {
+    const e = byType.get(type);
+    if (e === undefined) {
+      throw new Error(`pb-codec: 未知消息类型 '${type}'（所属协议段没注册，或已随 bundle 释放）`);
+    }
+    return e;
+  };
+
+  return {
+    cmdOf: (type) => byType.get(type)?.cmd,
+    typeOf: (cmd) => byCmd.get(cmd),
+    encodeBody: (type, body) => entryOf(type).body.encodeBody(type, body),
+    decodeBody: (type, bytes) => entryOf(type).body.decodeBody(type, bytes),
+
+    add(cmds, body) {
+      const pairs = Object.entries(cmds);
+      // 先全量校验再落库——半注册的表比没注册更难查。`pending` 兜住同一批内部撞号。
+      const pending = new Map<number, string>();
+      for (const [type, cmd] of pairs) {
+        if (byType.has(type)) {
+          throw new Error(`pb-codec: 消息类型 '${type}' 已被注册（两段协议重名？）`);
+        }
+        const dup = byCmd.get(cmd) ?? pending.get(cmd);
+        if (dup !== undefined) {
+          throw new Error(`pb-codec: cmd ${cmd} 被 '${dup}' 和 '${type}' 同时占用`);
+        }
+        pending.set(cmd, type);
+      }
+
+      const added = pairs.map(([type, cmd]): [string, Entry] => {
+        const entry: Entry = { cmd, body };
+        byType.set(type, entry);
+        byCmd.set(cmd, type);
+        return [type, entry];
+      });
+
+      return () => {
+        for (const [type, entry] of added) {
+          // 按引用比对：模块热更重载后同 cmd 可能已归新段，旧注销函数不许把新段摘掉。
+          if (byType.get(type) === entry) {
+            byType.delete(type);
+            byCmd.delete(entry.cmd);
+          }
+        }
+      };
+    },
+  };
+}
+
+/**
+ * 从一张 `{type: cmd}` 表建**单段**不可变 schema，body 编解码仍要调用方给。
+ * 只有一段协议（不分包）时用它；要分包见 {@link createPbSchemaRegistry}。
  */
 export function createPbSchema(
   cmds: Readonly<Record<string, number>>,
-  body: Pick<PbSchema, 'encodeBody' | 'decodeBody'>,
+  body: SegmentBody,
 ): PbSchema {
-  const byType = new Map<string, number>(Object.entries(cmds));
-  const byCmd = new Map<number, string>();
-  for (const [type, cmd] of byType) {
-    const dup = byCmd.get(cmd);
-    if (dup !== undefined) {
-      throw new Error(`pb-codec: cmd ${cmd} 被 '${dup}' 和 '${type}' 同时占用`);
-    }
-    byCmd.set(cmd, type);
-  }
-  return {
-    cmdOf: (type) => byType.get(type),
-    typeOf: (cmd) => byCmd.get(cmd),
-    encodeBody: body.encodeBody,
-    decodeBody: body.decodeBody,
-  };
+  const registry = createPbSchemaRegistry();
+  registry.add(cmds, body);
+  return registry;
 }

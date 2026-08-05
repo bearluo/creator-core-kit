@@ -80,10 +80,15 @@ export interface PbSchema {
   decodeBody(type: string, bytes: Uint8Array): unknown;
 }
 export function createProtobufCodec(schema: PbSchema): ICodec;
-export function createPbSchema(
-  cmds: Readonly<Record<string, number>>,
-  body: Pick<PbSchema, 'encodeBody' | 'decodeBody'>,
-): PbSchema;
+export type SegmentBody = Pick<PbSchema, 'encodeBody' | 'decodeBody'>;
+export function createPbSchema(cmds: Readonly<Record<string, number>>, body: SegmentBody): PbSchema;
+
+// 分包：AOT 只装基础段，各模块 bundle 加载时注册自己那段、释放时注销
+export interface PbSchemaRegistry extends PbSchema {
+  add(cmds: Readonly<Record<string, number>>, body: SegmentBody): () => void;  // 返回注销函数
+}
+export function createPbSchemaRegistry(): PbSchemaRegistry;
+export const PB_SCHEMA: Token<PbSchemaRegistry>;
 ```
 
 ## Behavior & data flow（行为与数据流）
@@ -177,4 +182,27 @@ createPbSchema(CMD, {
 ```
 
 `?? {}` 不能省：心跳走 `send(type)` 不带 body，而 pb 的 `encode` 会读 message 的字段。心跳类型也要设成契约里有的消息（demo 用 `Ping`）——默认的 `'__ping'` 不在 schema 里，编码当场抛。
+
+### 协议分包：模块的协议跟着它的 bundle 走
+
+**协议不能一股脑塞进 AOT 层。** Cocos 把所有 npm 依赖统一打进 `src/chunks/bundle.js`，那是需整包更新的 AOT 层——协议以 npm 包形式引入，就意味着**加一个子游戏的协议要用户重装**。所以只有基础段（握手 / 心跳 / 错误 / 分配器，本来就不该常变）留 AOT，功能模块的协议随自己的 Asset Bundle 走。
+
+承接这件事的是 `createPbSchemaRegistry()`：codec 拿的是这张**可增量的表**，模块 bundle 加载时把自己那段 `add` 进来，注销函数交给 `BundleScope.add()` 托管，bundle 释放时自动摘掉。全程 `INetwork` 与 codec 实例不换、连接不断。
+
+```ts
+// AOT 启动时：注册表进 DI，基础段先装上
+const schema = createPbSchemaRegistry();
+schema.add(CMD, { encodeBody, decodeBody });
+root.register(PB_SCHEMA, { useValue: schema });
+createNetwork({ codec: createProtobufCodec(schema), ... });
+
+// 模块 bundle 加载时：注册自己那段，释放时自动注销
+ctx.scope.add(getRootContainer().resolve(PB_SCHEMA).add(CLICKER_CMD, clickerBody));
+```
+
+三条已知行为：
+
+- **type 重名或 cmd 撞号在 `add` 当场抛**，且校验全过才落库——模块 cmd 段划错要在加载时炸，不能等线上错发。cmd 分段由契约仓统一分配。
+- **注销按引用比对**：模块热更重载后同一段 cmd 可能已归新注册的代码，旧注销函数不会误删新段（重复调用也安全，`dispose` 重入很常见）。
+- **模块卸载后它的在途请求会解不出来**：响应帧回来时 cmd 已注销，`decode` 抛错被 core 吞成一条 warn、该请求走超时。这是可接受的降级——真要紧的请求别跨模块卸载。
 - **验证**：四门全绿；**真机 gameView 预览已验证**（DI 接入 + 真 echo 端到端往返）：`NETWORK_SOCKET (WebSocket) registered=true` + `WebSocket 全局可用=true`（证明拾取 cc 壳而非 memory socket）。**真 echo 往返闭环**：起本地 `docker run --rm -p 9099:8080 jmalloc/echo-server`，DemoBoot 用 `createNetwork({url:'ws://localhost:9099/'})`（不传 socket → 取 DI 注册的真 WebSocket 适配器）走 `request('echo',{n:42,s:'cck'})`，日志 `body={"n":42,"s":"cck"} → OK`——`connect→onOpen→send(带 seq)→onMessage→seq 匹配→resolve` 全链路经真 WebSocket 适配器打通（echo-server 首条问候语非 JSON，codec.decode 失败被忽略，无害）。DemoBoot 的 echo 块自带 5s 超时，无 echo 服务器时优雅跳过。

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPbSchema, createProtobufCodec, type PbSchema } from '../pb-codec';
+import {
+  createPbSchema,
+  createPbSchemaRegistry,
+  createProtobufCodec,
+  type PbSchema,
+} from '../pb-codec';
 
 /**
  * 帧头（`[u16 cmd][u32 seq][pb body]`）的拆装测试。body 编解码用**透传假 schema**——
@@ -121,5 +126,82 @@ describe('createPbSchema', () => {
 
   it('13. cmd 撞号 → 建表时就抛（别等线上错发）', () => {
     expect(() => fakeSchema({ a: 5, b: 5 })).toThrow(/cmd 5 被/);
+  });
+});
+
+/**
+ * 分包场景：AOT 层只装基础段，每个功能模块 bundle 加载时把自己那段协议注册进来、
+ * 释放时摘掉（挂 `BundleScope.add`）。同一个 codec 实例全程不换。
+ */
+describe('createPbSchemaRegistry', () => {
+  /** 段内 body 编成一个可辨认的常量，用来验路由到了哪一段。 */
+  const seg = (mark: number) => ({
+    encodeBody: () => Uint8Array.from([mark]),
+    decodeBody: (_t: string, b: Uint8Array) => `seg${b[0]}`,
+  });
+
+  it('14. 增量注册两段：各段 type/cmd 都能查到，body 编解码路由到自己那段', () => {
+    const r = createPbSchemaRegistry();
+    r.add({ base: 1 }, seg(10));
+    r.add({ clicker: 1000 }, seg(20));
+    expect(r.cmdOf('base')).toBe(1);
+    expect(r.cmdOf('clicker')).toBe(1000);
+    expect(r.typeOf(1000)).toBe('clicker');
+    expect(r.encodeBody('base', {})).toEqual(Uint8Array.from([10]));
+    expect(r.encodeBody('clicker', {})).toEqual(Uint8Array.from([20]));
+    expect(r.decodeBody('clicker', Uint8Array.from([20]))).toBe('seg20');
+  });
+
+  it('15. 注销只摘自己那段，别的段不受影响（bundle 释放走这条）', () => {
+    const r = createPbSchemaRegistry();
+    r.add({ base: 1 }, seg(10));
+    const off = r.add({ clicker: 1000, clickerAck: 1001 }, seg(20));
+    off();
+    expect(r.cmdOf('clicker')).toBeUndefined();
+    expect(r.typeOf(1001)).toBeUndefined();
+    expect(r.cmdOf('base')).toBe(1); // 基础段还在
+  });
+
+  it('16. 跨段撞 cmd → add 当场抛（模块 cmd 段划错要在加载时就炸）', () => {
+    const r = createPbSchemaRegistry();
+    r.add({ base: 1 }, seg(10));
+    expect(() => r.add({ other: 1 }, seg(20))).toThrow(/cmd 1 被/);
+  });
+
+  it('17. 跨段 type 重名 → add 当场抛（否则路由会静默串到旧段）', () => {
+    const r = createPbSchemaRegistry();
+    r.add({ Ping: 1 }, seg(10));
+    expect(() => r.add({ Ping: 1000 }, seg(20))).toThrow(/'Ping' 已被注册/);
+  });
+
+  it('18. add 失败不留半注册（校验全过才落库）', () => {
+    const r = createPbSchemaRegistry();
+    r.add({ base: 1 }, seg(10));
+    expect(() => r.add({ good: 1000, bad: 1 }, seg(20))).toThrow();
+    expect(r.cmdOf('good')).toBeUndefined(); // 同一批里的好条目也不许留下
+  });
+
+  it('19. 重复注销幂等，且不误删后来占用同 cmd 的新段', () => {
+    const r = createPbSchemaRegistry();
+    const off = r.add({ clicker: 1000 }, seg(10));
+    off();
+    r.add({ reloaded: 1000 }, seg(20)); // 热更后重新加载，同段号换了新代码
+    off(); // 旧 teardown 又被调一次（dispose 重入）
+    expect(r.cmdOf('reloaded')).toBe(1000);
+  });
+
+  it('20. 未注册 type 的 body 编解码 → 抛，不静默产出空帧', () => {
+    const r = createPbSchemaRegistry();
+    expect(() => r.encodeBody('nope', {})).toThrow(/未知消息类型/);
+    expect(() => r.decodeBody('nope', new Uint8Array())).toThrow(/未知消息类型/);
+  });
+
+  it('21. 配 codec 后，模块段注册前发它的消息报未知类型，注册后即可用', () => {
+    const r = createPbSchemaRegistry();
+    const codec = createProtobufCodec(r);
+    expect(() => codec.encode({ type: 'clicker' })).toThrow(/未知消息类型/);
+    r.add({ clicker: 1000 }, seg(20));
+    const buf = codec.encode({ type: 'clicker', seq: 3 }) as ArrayBuffer;
+    expect(header(buf)).toEqual({ cmd: 1000, seq: 3, body: [20] });
   });
 });

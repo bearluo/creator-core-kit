@@ -543,12 +543,16 @@ Defined in: [packages/core/src/network/network.ts:61](https://hlgit.5518game.com
 
 ### PbSchema
 
-Defined in: [packages/core/src/network/pb-codec.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L27)
+Defined in: [packages/core/src/network/pb-codec.ts:28](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L28)
 
 协议 schema 接缝，由 `.proto` 的生成代码实现。
 
 `cmdOf`/`typeOf` 是同一张表的两个方向：框架用字符串 `type` 路由（`INetwork.on(type)`），
 线上用数字 `cmd` 省字节。
+
+#### Extended by
+
+- [`PbSchemaRegistry`](network.md#pbschemaregistry)
 
 #### Methods
 
@@ -556,7 +560,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:27](https://hlgit.5518game.co
 
 > **cmdOf**(`type`): `undefined` \| `number`
 
-Defined in: [packages/core/src/network/pb-codec.ts:29](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L29)
+Defined in: [packages/core/src/network/pb-codec.ts:30](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L30)
 
 消息类型名 → cmd 号。未知类型返回 `undefined`。
 
@@ -574,7 +578,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:29](https://hlgit.5518game.co
 
 > **decodeBody**(`type`, `bytes`): `unknown`
 
-Defined in: [packages/core/src/network/pb-codec.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L35)
+Defined in: [packages/core/src/network/pb-codec.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L36)
 
 解码消息体（不含帧头）。
 
@@ -596,7 +600,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:35](https://hlgit.5518game.co
 
 > **encodeBody**(`type`, `body`): `Uint8Array`
 
-Defined in: [packages/core/src/network/pb-codec.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L33)
+Defined in: [packages/core/src/network/pb-codec.ts:34](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L34)
 
 编码消息体（不含帧头）。
 
@@ -618,7 +622,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:33](https://hlgit.5518game.co
 
 > **typeOf**(`cmd`): `undefined` \| `string`
 
-Defined in: [packages/core/src/network/pb-codec.ts:31](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L31)
+Defined in: [packages/core/src/network/pb-codec.ts:32](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L32)
 
 cmd 号 → 消息类型名。未知 cmd 返回 `undefined`。
 
@@ -631,6 +635,151 @@ cmd 号 → 消息类型名。未知 cmd 返回 `undefined`。
 ###### Returns
 
 `undefined` \| `string`
+
+***
+
+### PbSchemaRegistry
+
+Defined in: [packages/core/src/network/pb-codec.ts:112](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L112)
+
+可增量注册的 schema —— **分包的那一半**。
+
+协议不能一股脑塞进不可热更的 AOT 层：客户端把 npm 依赖统统打进主包，
+所以只有 AOT 装「基础段」（握手 / 心跳 / 错误 / 分配器），各功能模块的协议
+随自己的 Asset Bundle 走，加载时 [add](network.md#add) 进来、释放时注销。
+整个过程 `INetwork` 和 codec 实例不变，连接不断。
+
+#### Extends
+
+- [`PbSchema`](network.md#pbschema)
+
+#### Methods
+
+##### add()
+
+> **add**(`cmds`, `body`): () => `void`
+
+Defined in: [packages/core/src/network/pb-codec.ts:120](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L120)
+
+注册一段协议。type 重名或 cmd 撞号**当场抛**（模块 cmd 段划错要在加载时炸，
+不能等线上错发）；校验全过才落库，不留半注册的表。
+
+###### Parameters
+
+###### cmds
+
+`Readonly`\<`Record`\<`string`, `number`\>\>
+
+###### body
+
+[`SegmentBody`](network.md#segmentbody)
+
+###### Returns
+
+`Function`
+
+注销函数，交给模块的 `BundleScope.add()` 托管即可。可重复调用；
+  若该段已被热更后的新段顶替，旧注销函数不会误删新段。
+
+###### Returns
+
+`void`
+
+##### cmdOf()
+
+> **cmdOf**(`type`): `undefined` \| `number`
+
+Defined in: [packages/core/src/network/pb-codec.ts:30](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L30)
+
+消息类型名 → cmd 号。未知类型返回 `undefined`。
+
+###### Parameters
+
+###### type
+
+`string`
+
+###### Returns
+
+`undefined` \| `number`
+
+###### Inherited from
+
+[`PbSchema`](network.md#pbschema).[`cmdOf`](network.md#cmdof)
+
+##### decodeBody()
+
+> **decodeBody**(`type`, `bytes`): `unknown`
+
+Defined in: [packages/core/src/network/pb-codec.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L36)
+
+解码消息体（不含帧头）。
+
+###### Parameters
+
+###### type
+
+`string`
+
+###### bytes
+
+`Uint8Array`
+
+###### Returns
+
+`unknown`
+
+###### Inherited from
+
+[`PbSchema`](network.md#pbschema).[`decodeBody`](network.md#decodebody)
+
+##### encodeBody()
+
+> **encodeBody**(`type`, `body`): `Uint8Array`
+
+Defined in: [packages/core/src/network/pb-codec.ts:34](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L34)
+
+编码消息体（不含帧头）。
+
+###### Parameters
+
+###### type
+
+`string`
+
+###### body
+
+`unknown`
+
+###### Returns
+
+`Uint8Array`
+
+###### Inherited from
+
+[`PbSchema`](network.md#pbschema).[`encodeBody`](network.md#encodebody)
+
+##### typeOf()
+
+> **typeOf**(`cmd`): `undefined` \| `string`
+
+Defined in: [packages/core/src/network/pb-codec.ts:32](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L32)
+
+cmd 号 → 消息类型名。未知 cmd 返回 `undefined`。
+
+###### Parameters
+
+###### cmd
+
+`number`
+
+###### Returns
+
+`undefined` \| `string`
+
+###### Inherited from
+
+[`PbSchema`](network.md#pbschema).[`typeOf`](network.md#typeof)
 
 ***
 
@@ -722,6 +871,16 @@ Defined in: [packages/core/src/network/network.ts:9](https://hlgit.5518game.com/
 
 连接状态。
 
+***
+
+### SegmentBody
+
+> **SegmentBody**: `Pick`\<[`PbSchema`](network.md#pbschema), `"encodeBody"` \| `"decodeBody"`\>
+
+Defined in: [packages/core/src/network/pb-codec.ts:102](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L102)
+
+一段协议的 body 编解码（由该段的生成代码提供）。
+
 ## Variables
 
 ### HTTP
@@ -751,6 +910,17 @@ DI token：项目可 register 自己的 Network 覆盖默认。
 Defined in: [packages/core/src/network/socket.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L27)
 
 DI token：engine Bootstrap register 平台 socket 适配；未注册时 Network 回退空 socket（永不 open）。
+
+***
+
+### PB\_SCHEMA
+
+> `const` **PB\_SCHEMA**: [`Token`](di.md#tokent)\<[`PbSchemaRegistry`](network.md#pbschemaregistry)\>
+
+Defined in: [packages/core/src/network/pb-codec.ts:127](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L127)
+
+DI token：项目在启动时把注册表放进来（基础段已注册好），
+各模块 bundle 加载时取出来注册自己那段——模块不认识 `INetwork`，只认这张表。
 
 ## Functions
 
@@ -806,10 +976,10 @@ Defined in: [packages/core/src/network/network.ts:74](https://hlgit.5518game.com
 
 > **createPbSchema**(`cmds`, `body`): [`PbSchema`](network.md#pbschema)
 
-Defined in: [packages/core/src/network/pb-codec.ts:104](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L104)
+Defined in: [packages/core/src/network/pb-codec.ts:192](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L192)
 
-从一张 `{type: cmd}` 表建 schema 的辅助器，body 编解码仍要调用方给。
-生成代码通常直接实现 [PbSchema](network.md#pbschema)；这个只是省掉手写双向表的样板。
+从一张 `{type: cmd}` 表建**单段**不可变 schema，body 编解码仍要调用方给。
+只有一段协议（不分包）时用它；要分包见 [createPbSchemaRegistry](network.md#createpbschemaregistry)。
 
 #### Parameters
 
@@ -819,7 +989,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:104](https://hlgit.5518game.c
 
 ##### body
 
-`Pick`\<[`PbSchema`](network.md#pbschema), `"encodeBody"` \| `"decodeBody"`\>
+[`SegmentBody`](network.md#segmentbody)
 
 #### Returns
 
@@ -827,11 +997,25 @@ Defined in: [packages/core/src/network/pb-codec.ts:104](https://hlgit.5518game.c
 
 ***
 
+### createPbSchemaRegistry()
+
+> **createPbSchemaRegistry**(): [`PbSchemaRegistry`](network.md#pbschemaregistry)
+
+Defined in: [packages/core/src/network/pb-codec.ts:130](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L130)
+
+建一个空的协议注册表，等各段自己 [PbSchemaRegistry.add](network.md#add) 进来。
+
+#### Returns
+
+[`PbSchemaRegistry`](network.md#pbschemaregistry)
+
+***
+
 ### createProtobufCodec()
 
 > **createProtobufCodec**(`schema`): [`ICodec`](network.md#icodec)
 
-Defined in: [packages/core/src/network/pb-codec.ts:63](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L63)
+Defined in: [packages/core/src/network/pb-codec.ts:64](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L64)
 
 建 protobuf codec。
 
