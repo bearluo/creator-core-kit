@@ -45,6 +45,7 @@ import {
   createCcUIView,
   ccNetworkModule,
   ccHotUpdateModule,
+  pruneCcBundleStorage,
   loadLocaleTable,
   loadTable,
   loadScene,
@@ -423,6 +424,13 @@ export class DemoBoot extends Component {
     console.log(
       `${tag} 📦 HOTUPDATE_BACKEND_FACTORY registered = ${this.kit.container.has(HOTUPDATE_BACKEND_FACTORY)}（web 应 false）`,
     );
+
+    // —— 已下线模块回收：启动时对账一次，删掉不在名单里的 bundle 下载目录 ——
+    // 名单是本版本还在发的模块，写死在 app 侧：native 那边查不到「远端还发不发」，删错了下次
+    // load 只能退回包内旧版本。单包内的旧文件由 AssetsManagerEx 按 diff 删，这里只管整包下线。
+    const shipped = ['fixtures-bundle', 'lobby', 'mini-clicker', 'mini-dodge', 'shared', 'shop'];
+    const reclaimed = pruneCcBundleStorage(shipped);
+    console.log(`${tag} 🧹 回收已下线 bundle 目录 ${reclaimed.length} 个${reclaimed.length ? `：${reclaimed.join(', ')}` : ''}`);
 
     // HotUpdate：ccHotUpdateModule 用 sys.isNative 守门——web 预览下 no-op（HOTUPDATE_BACKEND 不注册），
     // HotUpdateService 回退空后端 → check() 恒 up-to-date（web 不触碰 native.AssetsManager 不崩）。

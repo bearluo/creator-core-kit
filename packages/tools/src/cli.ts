@@ -2,6 +2,7 @@
  * cck-manifest CLI（node:util.parseArgs，零依赖）——native 热更出包期工具。
  *   生成 manifest: cck-manifest --root <dir> --url <packageUrl> --version <v> [--out <dir>] [--dirs a,b] [--search-paths ...]
  *                  加 --split 则切成 base + 每个模块 bundle 一份（[--aot-bundles main,internal,resources]）
+ *                  再加 --prev <上次发布目录> 则内容未变的包沿用旧版本号（只有真改了的包才涨版本）
  *   校验 manifest: cck-manifest verify --root <dir> [--manifest <path>]
  *   打戳:          cck-manifest stamp --core <core-dist-或-index.d.ts> --version <v> [--min-app-version <v>] --out <path>
  *   兼容校验:      cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <path>) [--min-app-version <v>]
@@ -37,6 +38,7 @@ function main(): void {
       'update-stamp': { type: 'string' },
       split: { type: 'boolean' },
       'aot-bundles': { type: 'string' },
+      prev: { type: 'string' },
     },
   });
 
@@ -96,7 +98,9 @@ function main(): void {
     searchPaths: values['search-paths'] ? values['search-paths'].split(',') : undefined,
   };
   const report = ({ projectPath, versionPath, manifest }: WriteResult, label: string): void => {
-    console.log(`✅ ${label}（${Object.keys(manifest.assets).length} 个资源，version=${version}）`);
+    // 版本号取 manifest 自己的：--prev 命中时它会沿用上一版，与 --version 不同。
+    const carried = manifest.version !== version ? '（内容未变，沿用旧版本）' : '';
+    console.log(`✅ ${label}（${Object.keys(manifest.assets).length} 个资源，version=${manifest.version}）${carried}`);
     console.log(`   ${projectPath}`);
     console.log(`   ${versionPath}`);
   };
@@ -105,6 +109,7 @@ function main(): void {
     const { base, bundles } = writeSplitManifests({
       ...common,
       aotBundles: values['aot-bundles'] ? values['aot-bundles'].split(',') : undefined,
+      prevDir: values.prev,
     });
     report(base, '生成 base manifest');
     for (const [name, r] of Object.entries(bundles)) report(r, `生成 bundle manifest '${name}'`);

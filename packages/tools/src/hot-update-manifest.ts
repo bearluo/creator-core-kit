@@ -153,6 +153,16 @@ const DEFAULT_AOT_BUNDLES = ['main', 'internal', 'resources'];
 export interface SplitManifestOptions extends ManifestOptions {
   /** 归入 base 的 assets 子目录名。默认 {@link DEFAULT_AOT_BUNDLES}。 */
   aotBundles?: readonly string[];
+  /**
+   * **上一次发布**的 manifest 所在目录（通常就是 CDN 目录）。给了之后，内容与上一版逐字节相同的
+   * manifest **沿用上一版的 version**，只有真改了的包才涨版本 → 没动的 bundle 客户端直接
+   * ALREADY_UP_TO_DATE，不再空跑一轮「下载 0 个文件」。
+   *
+   * ⚠️ 必须指向**紧邻的上一次发布**，不能是更早的历史版本：内容比对只看一版。若指向两版之前、
+   * 而本次内容恰好与那一版相同，就会发出一个比客户端手里更旧的版本号，客户端判定 up-to-date
+   * 而停在中间那版的内容上。
+   */
+  prevDir?: string;
 }
 
 export interface SplitManifests {
@@ -164,6 +174,36 @@ export interface SplitManifests {
 export interface SplitWriteResult {
   base: WriteResult;
   bundles: Record<string, WriteResult>;
+}
+
+/** 读上一版已发布的 manifest；不存在 / 读不动 / 不是 JSON → undefined（当没有上一版，照常用新版本号）。 */
+function readPrevManifest(dir: string, file: string): Manifest | undefined {
+  const p = join(dir, file);
+  if (!existsSync(p)) return undefined;
+  try {
+    const m = JSON.parse(readFileSync(p, 'utf8')) as Manifest;
+    return typeof m.version === 'string' && m.assets ? m : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 内容是否与上一版完全一致——**比 version 之外的一切**：资产表（key + md5 + size + compressed）、
+ * packageUrl、searchPaths。packageUrl 变了也得涨版本，否则客户端缓存里留着旧 URL，后续增量下载还去老地址。
+ */
+function sameContent(a: Manifest, b: Manifest): boolean {
+  if (a.packageUrl !== b.packageUrl) return false;
+  if (JSON.stringify(a.searchPaths ?? []) !== JSON.stringify(b.searchPaths ?? [])) return false;
+  const ka = Object.keys(a.assets).sort();
+  const kb = Object.keys(b.assets).sort();
+  if (ka.length !== kb.length) return false;
+  return ka.every((k, i) => {
+    if (k !== kb[i]) return false;
+    const x = a.assets[k];
+    const y = b.assets[k];
+    return x.md5 === y.md5 && x.size === y.size && !!x.compressed === !!y.compressed;
+  });
 }
 
 /**
@@ -192,14 +232,20 @@ export function buildSplitManifests(opts: SplitManifestOptions): SplitManifests 
     table[key] = entry;
   }
 
-  const mk = (assets: Record<string, AssetEntry>, projFile: string, verFile: string): Manifest => ({
-    packageUrl,
-    remoteManifestUrl: packageUrl + projFile,
-    remoteVersionUrl: packageUrl + verFile,
-    version: opts.version,
-    assets,
-    searchPaths: opts.searchPaths ?? [],
-  });
+  const mk = (assets: Record<string, AssetEntry>, projFile: string, verFile: string): Manifest => {
+    const m: Manifest = {
+      packageUrl,
+      remoteManifestUrl: packageUrl + projFile,
+      remoteVersionUrl: packageUrl + verFile,
+      version: opts.version,
+      assets,
+      searchPaths: opts.searchPaths ?? [],
+    };
+    // 内容没动 → 沿用上一版的 version（见 prevDir 注释）。版本号只在内容变时前进，仍单调递增，
+    // 因此不碰引擎默认的 cmpVersion（它 sscanf "%d.%d.%d.%d" 逐段比，非数字才退化成 strcmp）。
+    const prev = opts.prevDir === undefined ? undefined : readPrevManifest(opts.prevDir, projFile);
+    return prev && sameContent(m, prev) ? { ...m, version: prev.version } : m;
+  };
 
   const bundles: Record<string, Manifest> = {};
   for (const [name, assets] of byBundle) {

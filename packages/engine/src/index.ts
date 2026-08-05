@@ -36,10 +36,16 @@ export { loadTable } from './config-loader';
 export {
   createCcHotUpdateBackend,
   createCcBundleBackendFactory,
+  pruneCcBundleStorage,
   ccHotUpdateModule,
 } from './hotupdate-backend';
 export type { CcHotUpdateOptions } from './hotupdate-backend';
-export { normalizeSearchPaths, bundleStoragePath, bundleManifestName } from './hotupdate-paths';
+export {
+  normalizeSearchPaths,
+  bundleStoragePath,
+  bundleManifestName,
+  retiredBundleDirs,
+} from './hotupdate-paths';
 
 // —— 第 3 批 · 进阶（Network engine 半：ISocket 的 WebSocket 实现）——
 export { createWebSocketSocket, ccNetworkModule } from './net-socket';

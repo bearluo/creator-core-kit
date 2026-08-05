@@ -40,3 +40,28 @@ export function bundleStoragePath(root: string, bundle: string): string {
 export function bundleManifestName(bundle: string): string {
   return `${bundle}.manifest`;
 }
+
+/**
+ * 从 `FileUtils::listFiles(bundleStorageRoot)` 的原始输出里，挑出**已下线 bundle** 的目录（返回完整路径）。
+ *
+ * `listFiles` 返回的是**完整路径**、目录带尾 `/`、且含 tinydir 给的 `.` 与 `..`——这两个必须滤掉，
+ * 否则会把存储根自己和它的父目录整个删了。文件（无尾 `/`）也一并跳过：只回收目录。
+ *
+ * `<bundle>_temp/` 归 `<bundle>` 管：`AssetsManagerEx` 在存储根**平级**建断点续传目录
+ * （`_tempStoragePath` = storagePath 去尾斜杠 + `TEMP_PACKAGE_SUFFIX`），真机上确实与 `shop/` 并排躺着。
+ * 不认这条就会把在用 bundle 的续传状态一起删掉，下次断点续传退化成从头下。
+ *
+ * `keep` = 当前这个包**还在发的** bundle 名单，由调用方给（app 自己知道有哪些模块）。
+ * 空名单会清光整个根，所以调用方拿不准时别调。
+ */
+export function retiredBundleDirs(entries: readonly string[], keep: readonly string[]): string[] {
+  const alive = new Set(keep);
+  const kept = (name: string): boolean =>
+    alive.has(name) || (name.endsWith('_temp') && alive.has(name.slice(0, -'_temp'.length)));
+  return entries.filter((e) => {
+    if (!e.endsWith('/')) return false;
+    const name = e.slice(0, -1).split('/').pop() ?? '';
+    if (name === '' || name === '.' || name === '..') return false;
+    return !kept(name);
+  });
+}

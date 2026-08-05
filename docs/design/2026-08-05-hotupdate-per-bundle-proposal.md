@@ -133,9 +133,9 @@ interface BundleManagerOptions { updater?: BundleUpdater; /* 默认 tryResolve(B
 
 ## Open Questions
 
-- **各 bundle 的版本节奏**：`cck-manifest --split --version <v>` 目前把**同一个版本号**写进 base 和所有 bundle 的 manifest。只发 shop 时 lobby 的远端版本也跟着涨 → lobby 的 `checkUpdate` 会报 `NEW_VERSION_FOUND`、下载 0 个文件后 `UPDATE_FINISHED`。**不算坏**（md5 全一致，没有多余字节），但每个 bundle 每次发版多一次往返、多写一份缓存 manifest。
-  两条出路：① 加 `--bundle-version shop=1.0.1` 之类的逐包覆盖；② **让版本由内容派生**（该 bundle 资产表的哈希），没改的包版本自然不动，"谁该 bump" 这个问题直接消失。倾向 ②，但要先确认 `Manifest::versionGreater` 对非 semver 字符串的比较行为（它有 `_versionCompareHandle` 可注入）。留到分包跑通之后单独处理。
-- **模块 bundle 的旧版本清理**：每个 bundle 的 storagePath 只保留当前版本（`updateSucceed` 按 diff 删旧文件），但 bundle 被彻底下线时它的整个目录没人回收。玩家装久了会留下已删模块的残留。需要一个按「当前 manifest 列表」对账的清理入口。
+- ~~**各 bundle 的版本节奏**~~ **已实施**（2026-08-05）：走 ②「版本由内容决定」，形态是 `cck-manifest --split --prev <上次发布目录>`——逐份与上一版比对，内容全等就沿用旧 `version`，只有真改了的包才用新号。
+  调研结论修正了原方案：**不能直接拿内容 hash 当版本号**。`Manifest::versionGreater` 无自定义 handle 时走 `cmpVersion`（`Manifest.cpp:57`），它先 `sscanf("%d.%d.%d.%d")`，**任一侧解析不出数字才退化成 `strcmp`**。纯 hash 若以数字开头（`03cb…`）会被吃成 `3`、与 `03aa…` 判等 → 永不更新；即便加前缀强制走 `strcmp`，字典序也不单调，而 `loadRemoteManifest` 是 `local >= remote → UP_TO_DATE`，约一半发版会被静默判成已最新。沿用旧号则版本仍单调递增，不碰这颗雷。
+- ~~**模块 bundle 的旧版本清理**~~ **已实施**（2026-08-05）：`pruneCcBundleStorage(keep)`（engine），启动时对账一次删掉不在名单里的目录。名单由 app 给：native 侧查不到「远端还发不发」，包内 `assets/` 有哪些目录跟这是两回事，删错了下次 `load` 只能退回包内旧版本。真机上还发现存储根里并排躺着 `<bundle>_temp/`（`AssetsManagerEx` 的断点续传目录），归对应 bundle 管、不能单独删。
 
 ## 实施步骤
 
@@ -144,3 +144,4 @@ interface BundleManagerOptions { updater?: BundleUpdater; /* 默认 tryResolve(B
 3. engine：工厂实现 + `apply()` 去重（含 cc mock 测试）。
 4. demo 接线 + 真机 e2e。
 5. 收尾：`hotupdate-service.md` / `bundle-manager.md` 改写为新现状，本提案标「已实施」封存，`progress.md` 更新。
+6. 补两个 Open Question（见上，同日实施）：tools `--prev` 逐包版本节奏 + engine `pruneCcBundleStorage` 下线目录回收，各带单测与真机 e2e。

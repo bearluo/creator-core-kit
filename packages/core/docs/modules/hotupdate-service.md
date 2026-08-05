@@ -123,6 +123,11 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
 
   **一 bundle 一 storagePath 是硬约束**：`_cacheManifestPath = _storagePath + MANIFEST_FILENAME` 而 `MANIFEST_FILENAME` 硬编码为 `"project.manifest"` —— 共用目录 = 各 bundle 缓存 manifest 互相覆盖。真机上 `cck-bundle-asset/shop/` 里那份缓存文件确实叫 `project.manifest`，尽管远端叫 `shop.manifest`。
 
+  **各 bundle 的版本节奏由内容决定**：`cck-manifest --split --prev <上次发布目录>` 只给内容真变了的包涨版本号，没动的包沿用旧号（见 [[hot-update-manifest]]）。客户端那边没动的包直接 `ALREADY_UP_TO_DATE`，不再空跑一轮「下载 0 个文件」。版本号仍单调递增，因此不碰引擎默认的 `cmpVersion`——它先 `sscanf("%d.%d.%d.%d")` 逐段比，**任一侧解析不出数字才退化成 `strcmp`**。这条排除了「直接拿内容 hash 当版本号」的路：纯 hash 若以数字开头（`03cb…`）会被 sscanf 吃成 `3`、与 `03aa…` 判等而永不更新；即使加前缀强制走 `strcmp`，字典序也不单调，约一半的发版会被判成 up-to-date 而静默丢失。
+
+  **已下线模块的目录回收**：`pruneCcBundleStorage(keep)` 启动时对账一次，删掉 `cck-bundle-asset/` 下不在名单里的目录。单个 bundle 内的旧文件由 `AssetsManagerEx::updateSucceed` 按 diff 删，这里只管**整包下线**的残留。`keep` 由 app 给——native 侧没有权威来源可查「远端还发不发」，删错了下次 `load` 只能退回包内旧版本。名单为空会清光整个根。
+  真机上存储根里除了 `<bundle>/` 还并排躺着 `<bundle>_temp/`（`_tempStoragePath` = storagePath 去尾斜杠 + `TEMP_PACKAGE_SUFFIX`），它是断点续传状态，归对应 bundle 管、不能单独删。
+
 - **Web**：无 jsb；`assetManager.loadBundle(url, {version})` 换 bundle 版本即“热更”；主包/AOT 不可换（刷页面加载新 index）。
 - **小游戏**：各家分包/远程包机制，资源/子包远程版本化；主包更新走平台审核。
 - **AOT 缺代码防护**：版本闸 `coreApiHash`/`minAppVersion` 是运行时兜底；配套出包期打戳/校验脚本（tools 层，见 Open Questions）是另一半。跨 bundle 服务走全局 token（[[adr-0001]]）。
@@ -214,6 +219,29 @@ am force-stop 冷启动（服务端在）  → SHOP_TAG = v2，base check up-to-
 ```
 
 最后一次是关键判据：`localStorage` 里**确无** `HotUpdateSearchPaths`（base 从未更新过，模块的 apply 不写），v2 只可能来自 `create()` 时 C++ 的 `prependSearchPaths`。设备落盘形态也与设计一致——`cck-bundle-asset/shop/{project.manifest, assets/shop/import/…}`，与 `cck-remote-asset/` 并列。全程无 FATAL / native signal。
+
+### 逐包版本节奏 + 下线目录回收 e2e（2026-08-05，真 Android APK · PASS）
+
+分包热更遗留的两个口子一并收掉。设备上先手植一个"已下线"包（`cck-bundle-asset/arena/` + `arena_temp/`，chown 成 app uid），远端用 `--prev`（基线 = 从已装 APK 里解出来的那批包内 manifest）重算：
+
+```
+base manifest        22 个资源 → 1.0.1              ← DemoBoot 改了，自动涨
+fixtures-bundle/lobby/mini-clicker/mini-dodge/shared → 1.0.0（内容未变，沿用旧版本）
+shop                 6 个资源 → 1.0.1              ← 只有它真变了
+```
+
+5/6 个模块包与包内 manifest **逐字节一致**，顺带证明 Creator 构建对未改内容是可复现的——`--prev` 这条路成立的前提。
+
+设备端（base 1.0.0 → 1.0.1 只下 2/22 个文件，`game.restart()` 后新 JS 生效）：
+
+```
+🧹 回收已下线 bundle 目录 2 个：…/cck-bundle-asset/arena/, …/cck-bundle-asset/arena_temp/
+HotUpdateService.check() = up-to-date      ← 重启后
+SHOP_TAG = v2                              ← shop/ 与 shop_temp/ 未被误删
+再 force-stop 冷启动 → 回收 0 个，SHOP_TAG = v2   ← 幂等
+```
+
+`shop_temp/` 在 up-to-date 后消失，是 `AssetsManagerEx::loadRemoteManifest` 自己 `removeDirectory(_tempStoragePath)` 清的，不是回收删的。全程无 FATAL / native signal。
 
 ### coreApiHash 版本闸激活（戳的运行时读入，2026-07-29 · 真机 e2e PASS）
 

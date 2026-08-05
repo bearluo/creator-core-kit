@@ -8,7 +8,12 @@ import type {
   KitModule,
   UpdateInfo,
 } from '@cck/core';
-import { bundleManifestName, bundleStoragePath, normalizeSearchPaths } from './hotupdate-paths';
+import {
+  bundleManifestName,
+  bundleStoragePath,
+  normalizeSearchPaths,
+  retiredBundleDirs,
+} from './hotupdate-paths';
 
 /**
  * IHotUpdateBackend 的 native 实现 —— HotUpdateService 的「引擎半」薄壳：包 `native.AssetsManager`
@@ -201,14 +206,41 @@ export function createCcHotUpdateBackend(opts: CcHotUpdateOptions): IHotUpdateBa
   );
 }
 
+/** 模块 bundle 存储根：显式给了用给的，否则默认与 base 的 storagePath 并列。 */
+function bundleRoot(opts: Pick<CcHotUpdateOptions, 'bundleStorageRoot'>): string {
+  return opts.bundleStorageRoot ?? `${native.fileUtils.getWritablePath()}cck-bundle-asset/`;
+}
+
 /**
  * 分包后端工厂：按 bundle 名解析 `<bundle>.manifest`（tools `cck-manifest --split` 的产物）
  * 与独立 storagePath。模块 bundle 加载前更新，**免重启也免启动还原**。
  */
 export function createCcBundleBackendFactory(opts: CcHotUpdateOptions): HotUpdateBackendFactory {
-  const root = opts.bundleStorageRoot ?? `${native.fileUtils.getWritablePath()}cck-bundle-asset/`;
+  const root = bundleRoot(opts);
   return (bundle) =>
     createBackend(bundleManifestName(bundle), bundleStoragePath(root, bundle), undefined, opts.compatFilename);
+}
+
+/**
+ * 回收已下线 bundle 的下载目录，返回实际删掉的路径。**启动时调一次即可**（在任何
+ * `bundleMgr.load()` 之前）。非原生 / 存储根还不存在 → 返回空数组。
+ *
+ * `keep` = 当前版本还在发的 bundle 名单，由 app 给——native 这边没有权威来源可查：包内
+ * `assets/` 下有哪些目录跟「远端还发不发」是两回事，删错了下次 load 只能退回包内旧版本。
+ * 单个 bundle 的旧文件不用管，`AssetsManagerEx::updateSucceed` 按 diff 删；这里只管整包下线。
+ */
+export function pruneCcBundleStorage(
+  keep: readonly string[],
+  opts?: Pick<CcHotUpdateOptions, 'bundleStorageRoot'>,
+): string[] {
+  if (!sys.isNative) return [];
+  const root = bundleRoot(opts ?? {});
+  if (!native.fileUtils.isDirectoryExist(root)) return [];
+  const removed: string[] = [];
+  for (const dir of retiredBundleDirs(native.fileUtils.listFiles(root), keep)) {
+    if (native.fileUtils.removeDirectory(dir)) removed.push(dir);
+  }
+  return removed;
 }
 
 /**

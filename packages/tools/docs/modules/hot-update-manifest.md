@@ -61,6 +61,8 @@ export interface ManifestOptions {
 export interface SplitManifestOptions extends ManifestOptions {
   /** 归入 base 的 assets 子目录名，默认 ['main','internal','resources']。 */
   aotBundles?: readonly string[];
+  /** 上一次发布的 manifest 目录；内容未变的包沿用其 version（必须是**紧邻**的上一版，见下）。 */
+  prevDir?: string;
 }
 export interface SplitManifests { base: Manifest; bundles: Record<string, Manifest> }
 export interface SplitWriteResult { base: WriteResult; bundles: Record<string, WriteResult> }
@@ -91,7 +93,7 @@ CLI（`bin: cck-manifest`）：
 ```
 cck-manifest --root build/android/data --url http://host/remote-assets/ --version 1.0.0
              [--out build/android/data] [--dirs src,assets,jsb-adapter] [--search-paths ...]
-             [--split] [--aot-bundles main,internal,resources]
+             [--split] [--aot-bundles main,internal,resources] [--prev <上次发布目录>]
 cck-manifest verify --root build/android/data --manifest build/android/data/project.manifest
 ```
 
@@ -99,7 +101,23 @@ cck-manifest verify --root build/android/data --manifest build/android/data/proj
 供 native 分包热更用 —— 一 bundle 一个 `AssetsManager` 目标，玩家点进模块前才下它那份。
 demo 实测：47 条全表 → base 22 条（`src/` 6 + `jsb-adapter/` 2 + `assets/{main,internal}` 14）+ 6 个模块包 25 条。
 
+`--prev` 让**版本号由内容决定**：逐份与上一版比对，一模一样就沿用旧 `version`，只有真改了的包才用 `--version` 给的新号。
+不给这个参数就是老行为（所有包一律盖新版本号），只发一个包时其余包客户端会各空跑一轮「NEW_VERSION_FOUND → 下载 0 个文件」。
+一次真实发布的输出长这样：
+
+```
+✅ 生成 base manifest（22 个资源，version=1.0.1）
+✅ 生成 bundle manifest 'lobby'（3 个资源，version=1.0.0）（内容未变，沿用旧版本）
+✅ 生成 bundle manifest 'shop'（6 个资源，version=1.0.1）
+```
+
+⚠️ **`--prev` 必须指向紧邻的上一次发布**（通常就是 CDN 目录本身，`--out` 与它同一个即可，读在写之前）。
+内容比对只看一版：指向两版之前、而本次内容恰好与那版相同的话，会发出一个比客户端手里更旧的版本号，
+客户端判 up-to-date 而停在中间那版的内容上。
+
 ## Behavior & data flow（行为与数据流）
+
+-1. `--prev` 的版本沿用（`buildSplitManifests` 内）：每份 manifest 落定前读 `<prevDir>/<同名文件>`，比对 **version 之外的一切**——资产表（key + md5 + size + compressed）、`packageUrl`、`searchPaths`；全等就把 `version` 换成上一版的。读不到 / 坏 JSON 一律当"没有上一版"，用新版本号（宁可多发一次，不可少发）。`packageUrl` 也算内容：它变了不涨版本的话，客户端缓存 manifest 里留着旧 URL，后续增量下载还去老地址。
 
 0. `buildSplitManifests`（`--split`）：先跑一次 `buildManifest` 拿全表，再按 key 前缀分派——`assets/<name>/…` 且 `<name>` 不在 `aotBundles` 里的归该 bundle，其余（含 `assets/` 下的散文件）归 base。**只分派不重算**，所以 base ∪ bundles 恒等于不切时的全表，无重叠无遗漏（有测试守）。**各 manifest 的 asset key 一律相对 data 根**，bundle manifest 只是全表的子集——下载落盘后相对 storagePath 的结构必须与包内一致，搜索路径前缀一挂才解析得到（[[adr-0013]] 决策 2）。空目录不产出空 manifest。
 
@@ -125,6 +143,7 @@ demo 实测：47 条全表 → base 22 条（`src/` 6 + `jsb-adapter/` 2 + `asse
 | 5 | CLI 参数解析 | commander/yargs / stdlib | **`node:util.parseArgs`** | stdlib 够用，零新依赖（ponytail 铁律） |
 | 6 | 打包形态 | tsup dist / tsx 直跑 | **tsup 出 CJS bin**（对齐 engine 既有 tsup 约定） | 是 node CLI 不进 cc，无需 external cc；`bin` 指向 dist |
 | 7 | 校验范围 | 自校验 / 远程 diff | **首版仅自校验** | 抓「产物被改/漏文件」够用；远程 diff 是运行时 AssetsManager 的职责，不重复 |
+| 9 | 逐包版本节奏 | 手工 `--bundle-version shop=1.0.1` / 内容派生 | **`--prev` 对账，内容未变则沿用旧版本号** | 手工覆盖把「哪个包改了」交回给人，忘了 bump 就是更新静默不发；对账由内容决定，这个问题消失。**不能直接拿内容 hash 当版本号**：引擎默认 `cmpVersion` 先 `sscanf("%d.%d.%d.%d")`，纯 hash 以数字开头（`03cb…`）会被吃成 `3`、与 `03aa…` 判等而永不更新；加前缀强制走 `strcmp` 则字典序不单调，约一半发版被判 up-to-date 静默丢失。一手源：`extensions/assets-manager/Manifest.cpp:57` |
 | 8 | 本地 remote-assets 托管 | `python -m http.server` / 本机 filebrowser CDN | **本机 filebrowser 分享** | 复用本机常驻 Docker filebrowser（8081，见 skill `filebrowser-cdn`）：绑 `0.0.0.0`，局域网/Tailscale/真机都够得着（http.server 绑 127.0.0.1 真机拿不到），免起进程；分享 base URL 即 `packageUrl`，子目录支持故 `packageUrl + src/xxx.js` 可解析。姊妹项目 [[godot-core-kit-reference]] 同法微信小游戏/Android 实测通过 |
 
 ## Platform considerations（全平台 / 小游戏兼容）

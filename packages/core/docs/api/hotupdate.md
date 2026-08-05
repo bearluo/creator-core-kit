@@ -36,7 +36,7 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:18](https://hlgit.5518g
 
 ### BundleUpdater
 
-Defined in: packages/core/src/hotupdate/bundle-updater.ts:21
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:21](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L21)
 
 BundleUpdater —— 「加载前把这个 bundle 更到最新」。分包热更的编排半，纯逻辑、零 cc。
 
@@ -53,7 +53,7 @@ native 上模块 bundle 更新**不需要重启也不需要启动还原**：`Ass
 
 > **ensureLatest**(`bundle`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/hotupdate/bundle-updater.ts:28
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:28](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L28)
 
 把该 bundle 更到最新。同名重复调用只跑一次，并发共享同一次。
 
@@ -74,7 +74,7 @@ Defined in: packages/core/src/hotupdate/bundle-updater.ts:28
 
 ### BundleUpdaterOptions
 
-Defined in: packages/core/src/hotupdate/bundle-updater.ts:31
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:31](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L31)
 
 #### Properties
 
@@ -82,7 +82,7 @@ Defined in: packages/core/src/hotupdate/bundle-updater.ts:31
 
 > `optional` **app**: [`AppInfo`](hotupdate.md#appinfo)
 
-Defined in: packages/core/src/hotupdate/bundle-updater.ts:37
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:37](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L37)
 
 本地客户端信息（版本 / coreApiHash），透传给闸。
 
@@ -90,7 +90,7 @@ Defined in: packages/core/src/hotupdate/bundle-updater.ts:37
 
 > `optional` **factory**: [`HotUpdateBackendFactory`](hotupdate.md#hotupdatebackendfactory)
 
-Defined in: packages/core/src/hotupdate/bundle-updater.ts:33
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L33)
 
 按名造后端。默认 DI [HOTUPDATE\_BACKEND\_FACTORY](hotupdate.md#hotupdate_backend_factory)；未注册 → 恒 no-op。
 
@@ -98,7 +98,7 @@ Defined in: packages/core/src/hotupdate/bundle-updater.ts:33
 
 > `optional` **gate**: [`VersionGate`](hotupdate.md#versiongate)
 
-Defined in: packages/core/src/hotupdate/bundle-updater.ts:35
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L35)
 
 版本闸，透传给每个 bundle 的 HotUpdateService。
 
@@ -106,13 +106,13 @@ Defined in: packages/core/src/hotupdate/bundle-updater.ts:35
 
 > `optional` **logger**: [`ILogger`](logging.md#ilogger)
 
-Defined in: packages/core/src/hotupdate/bundle-updater.ts:40
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:40](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L40)
 
 ##### onProgress()?
 
 > `optional` **onProgress**: (`bundle`, `p`) => `void`
 
-Defined in: packages/core/src/hotupdate/bundle-updater.ts:39
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L39)
 
 下载进度，带上是哪个 bundle。
 
@@ -509,7 +509,7 @@ update 产出。
 
 > `const` **BUNDLE\_UPDATER**: [`Token`](di.md#tokent)\<[`BundleUpdater`](hotupdate.md#bundleupdater)\>
 
-Defined in: packages/core/src/hotupdate/bundle-updater.ts:86
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:86](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L86)
 
 DI token：项目可 register 自己的 BundleUpdater 覆盖默认；未注册则 BundleManager 不做加载前更新。
 
@@ -575,7 +575,7 @@ ponytail: 忽略 pre-release/build 元数据（-rc.1、+build），首版按纯�
 
 > **createBundleUpdater**(`opts`?): [`BundleUpdater`](hotupdate.md#bundleupdater)
 
-Defined in: packages/core/src/hotupdate/bundle-updater.ts:44
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:44](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L44)
 
 造 BundleUpdater（纯逻辑、零 cc；平台 IO 经 HotUpdateBackendFactory 注入）。
 

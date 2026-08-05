@@ -151,6 +151,93 @@ describe('buildSplitManifests（分包：base + 每个模块 bundle 一份）', 
     expect(verifyManifest(r.base.projectPath, sroot)).toEqual([]);
     rmSync(out, { recursive: true, force: true });
   });
+
+  describe('prevDir：内容没动的包沿用旧版本号', () => {
+    /** 原地发布：读同一个目录里的上一版、再写回去（真实 CDN 目录的用法）。 */
+    const publish = (version: string, dir: string) =>
+      writeSplitManifests({ ...sopts(), version, outDir: dir, prevDir: dir });
+
+    let prev: string;
+    beforeAll(() => {
+      prev = mkdtempSync(join(tmpdir(), 'cck-prev-'));
+      writeSplitManifests({ ...sopts(), version: '1.0.0', outDir: prev });
+    });
+    afterAll(() => rmSync(prev, { recursive: true, force: true }));
+
+    it('全都没改 → base 和每个 bundle 都还是 1.0.0', () => {
+      const { base, bundles } = buildSplitManifests({ ...sopts(), version: '1.0.1', prevDir: prev });
+      expect(base.version).toBe('1.0.0');
+      expect(bundles.shop.version).toBe('1.0.0');
+      expect(bundles.lobby.version).toBe('1.0.0');
+    });
+
+    it('只改 shop → 只有 shop 涨到 1.0.1，lobby 与 base 不动', () => {
+      const file = join(sroot, 'assets', 'shop', 'index.js');
+      writeFileSync(file, '// shop v2');
+      try {
+        const { base, bundles } = buildSplitManifests({ ...sopts(), version: '1.0.1', prevDir: prev });
+        expect(bundles.shop.version).toBe('1.0.1');
+        expect(bundles.lobby.version).toBe('1.0.0');
+        expect(base.version).toBe('1.0.0');
+      } finally {
+        writeFileSync(file, '// shop');
+      }
+    });
+
+    it('改 AOT 里的文件 → base 涨版本，模块包不受影响', () => {
+      const file = join(sroot, 'src', 'settings.json');
+      writeFileSync(file, '{"changed":1}');
+      try {
+        const { base, bundles } = buildSplitManifests({ ...sopts(), version: '1.0.1', prevDir: prev });
+        expect(base.version).toBe('1.0.1');
+        expect(bundles.shop.version).toBe('1.0.0');
+      } finally {
+        writeFileSync(file, '{}');
+      }
+    });
+
+    it('packageUrl 变了也算改动——旧 URL 会留在客户端缓存 manifest 里', () => {
+      const { bundles } = buildSplitManifests({
+        ...sopts(),
+        packageUrl: 'http://other/cdn',
+        version: '1.0.1',
+        prevDir: prev,
+      });
+      expect(bundles.shop.version).toBe('1.0.1');
+    });
+
+    it('不给 prevDir → 一律用新版本号（老行为）', () => {
+      const { base, bundles } = buildSplitManifests({ ...sopts(), version: '1.0.1' });
+      expect(base.version).toBe('1.0.1');
+      expect(bundles.shop.version).toBe('1.0.1');
+    });
+
+    it('prevDir 指向空目录 / 缺某个包的 manifest → 那个包用新版本号', () => {
+      const empty = mkdtempSync(join(tmpdir(), 'cck-empty-'));
+      const { base, bundles } = buildSplitManifests({ ...sopts(), version: '1.0.1', prevDir: empty });
+      expect(base.version).toBe('1.0.1');
+      expect(bundles.shop.version).toBe('1.0.1');
+      rmSync(empty, { recursive: true, force: true });
+    });
+
+    it('prevDir 里是坏 JSON → 当没有上一版，不抛', () => {
+      const broken = mkdtempSync(join(tmpdir(), 'cck-broken-'));
+      writeFileSync(join(broken, 'shop.manifest'), '{ not json');
+      expect(() => buildSplitManifests({ ...sopts(), version: '1.0.1', prevDir: broken })).not.toThrow();
+      expect(buildSplitManifests({ ...sopts(), version: '1.0.1', prevDir: broken }).bundles.shop.version).toBe('1.0.1');
+      rmSync(broken, { recursive: true, force: true });
+    });
+
+    it('prevDir === outDir（原地发进 CDN 目录）：先读后写，沿用生效', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'cck-inplace-'));
+      publish('1.0.0', dir);
+      const again = publish('1.0.1', dir);
+      expect(again.bundles.shop.manifest.version).toBe('1.0.0');
+      const onDisk = JSON.parse(readFileSync(again.bundles.shop.versionPath, 'utf8')) as Manifest;
+      expect(onDisk.version).toBe('1.0.0');
+      rmSync(dir, { recursive: true, force: true });
+    });
+  });
 });
 
 describe('writeManifests + verifyManifest', () => {
