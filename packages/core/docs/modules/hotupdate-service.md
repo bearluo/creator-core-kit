@@ -93,6 +93,20 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
 
 - core（状态机/闸/内存 fake）纯 TS，全平台无差异。
 - **native**：`jsb.AssetsManager` 差量下载脚本+资源 → 写 `writablePath` → `setSearchPaths` 置顶 → `game.restart` 生效。
+- **native 的三层更新边界（搜索路径还原的时机决定的，2026-08-05 查证）**：C++ `BaseGame::init()` 依次 `runScript("jsb-adapter/web-adapter.js")` → `runScript("main.js")`，两者都用**默认搜索路径**解析，而还原逻辑就写在 `main.js` 里 —— 于是热更能覆盖的范围被这条时间线切成三段：
+
+  | 层 | 内容 | 能否热更 |
+  |---|---|---|
+  | L0 还原之前 | native `.so`（引擎 C++ + jsb 绑定）、`jsb-adapter/web-adapter.js`、**`main.js` 自身** | **不能**，只能发版 |
+  | L1 还原之后 · 需重启 | `src/`（`system.bundle.js` / `cocos-js/cc.js` / `chunks/*` / `settings.json` / `import-map.json`）、`assets/main`、`assets/res`、`jsb-adapter/engine-adapter.js` | 能，`game.restart()` 生效 |
+  | L2 模块 bundle | 各功能模块 Asset Bundle | 能，可不重启（[[adr-0010]]） |
+
+  `web-adapter.js` 是 `platforms/native/builtin/index.js` 的打包产物：jsb 命名空间与 native 引用管理、DOM/BOM 垫片、`XMLHttpRequest`/`WebSocket`、**`localStorage`**、`setTimeout`/rAF、Promise polyfill、`jsb.fileUtils` 单例。落到实处的影响：
+  - 定时器 / Promise polyfill / DOM 垫片 / 音频 / 输入 / `jsb.WebSocket`（本仓 net 层就架在它上面）出问题，**热更修不了**。
+  - **循环依赖**：`apply()` 靠 `localStorage` 存搜索路径，而 `localStorage` 实现本身在 L0 —— 存档机制自己不可热更。
+  - **`main.js` 在 L0**：热更包里放新 `main.js` 无效（下了也不会被加载）。`cck-manifest` 默认只收 `src`/`assets`/`jsb-adapter` 三个子目录、根级 `main.js` 天然在外，这条恰好是对的；但 `jsb-adapter` 目录里 **`web-adapter.js`（~170KB）被收进 manifest 是死重量**——它属 L0，下载了也不会被用（`engine-adapter.js` 属 L1，收它有效）。
+  - `cc.js` 属 L1 **能**被换，但它与 L0 的 `.so` 是配套的（jsb 绑定签名要对齐）→ **热更包必须由与线上包同一 Creator 版本、同一引擎裁剪配置构建产出**，跨版本换 `cc.js` 会崩在绑定层。这比 `coreApiHash` 闸挡的东西更底层，闸目前不覆盖。
+  - 逃生口（**未验证**）：`native/engine/common/Classes/Game.cpp` 是项目文件且在 `BaseGame::init()` 之前跑，理论上可在那里先 `FileUtils::setSearchPaths` 把 L0 也纳入热更；但要先确认 `CocosApplication::init()` 会不会重置搜索路径，且引入它本身仍需发一次版。
 - **Web**：无 jsb；`assetManager.loadBundle(url, {version})` 换 bundle 版本即“热更”；主包/AOT 不可换（刷页面加载新 index）。
 - **小游戏**：各家分包/远程包机制，资源/子包远程版本化；主包更新走平台审核。
 - **AOT 缺代码防护**：版本闸 `coreApiHash`/`minAppVersion` 是运行时兜底；配套出包期打戳/校验脚本（tools 层，见 Open Questions）是另一半。跨 bundle 服务走全局 token（[[adr-0001]]）。
@@ -131,28 +145,36 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
   - `restart()` → `game.restart()`。
 - **守门**：`ccHotUpdateModule` 用 `sys.isNative`——**仅原生注册真后端**；web/编辑器预览下 `native.AssetsManager` 为 undefined，故 no-op，core 回退空后端（恒 up-to-date），保证预览不崩。
 - **⚠️ native 集成步骤（本 npm 包管不到、须在原生工程侧手动做）**：
-  1. **启动还原**：原生工程 `main.js`（引擎起前、本 bundle 未加载时）须读同一 `localStorage[searchPathsKey]`（默认键 `'HotUpdateSearchPaths'`，对齐官方模板）→ `setSearchPaths` 还原上次 apply 的搜索路径，否则重启不生效。
+  1. **启动还原**：放 `apps/<项目>/build-templates/native/index.ejs`（Creator 3.8 官方的原生模板覆盖点，android/ios/windows 共用一份；`data/main.js` 就是它渲染出来的），在**任何 `require` 之前**读 `localStorage[searchPathsKey]`（默认键 `'HotUpdateSearchPaths'`，对齐官方模板）→ `setSearchPaths`。**别改构建产物 `data/main.js`**——每次构建重新渲染，改了必被覆盖。**冷启动（进程被杀）必需**；`game.restart()` 同进程热重启因 `apply()` 已在内存 `setSearchPaths`，不还原也能加载新版本，所以漏了这步很难当场发现。本仓样例：`apps/demo/build-templates/native/index.ejs`（2026-08-05 android 构建实测生效）。
   2. **manifest 产物**：`project.manifest` / `version.manifest`（远程 URL + 版本 + 文件 md5）由 tools 出包期生成（后置模块）。
 - **类型策略**：官方 `@cocos/creator-types@3.8.7` 的 `native.AssetsManager`/`native.EventAssetsManager`/`native.fileUtils` 真类型（ADR-0005），无 ambient hack。
 - **验证**：四门全绿；**真机 gameView 预览已验证**（web 侧守门 + 回退）：`sys.isNative=false → HOTUPDATE_BACKEND registered=false` + `HotUpdateService.check()={"kind":"up-to-date"}`（守门 no-op 正确、空后端回退正确、web 下触碰 `native.AssetsManager` 不崩）。
 
-### native 真机 e2e 验证（2026-07-28，真 Android APK · PASS）
+### native 真机 e2e 验证（2026-08-05，真 Android APK · PASS）
 
-**完整热更闭环在真 x86_64 Android 模拟器（`fortune_test`）上跑通**——同一 APK 内 `BUILD_TAG` 从 `v1` 跃迁到 `v2`，铁证下载来的新代码接管：
+**完整热更闭环在真 x86_64 Android 模拟器上跑通**——同一 APK 内 `BUILD_TAG` 从 `v1` 跃迁到 `v2`，且**杀进程冷启动后仍是 v2**，铁证下载来的新代码接管：
 
 ```
-BUILD_TAG = v1                    ← 首启，APK 内置 v1 代码
-check() = {"kind":"update-available","info":{"version":"1.0.1","totalBytes":17474}}
-⏳ 下载 → 17474/17474 字节（1 文件：assets/main/index.js）
+BUILD_TAG = v1                    ← 首启，APK 内置 v1 代码（PID 6157）
+app 戳读入 → appVersion=1.0.0 coreApiHash=03cb152c725e（闸已激活）
+check() = {"kind":"update-available","info":{"version":"1.0.1","totalBytes":53898,"coreApiHash":"03cb152c725e"}}
+⏳ 下载 → 53898/53898 字节（1 文件：assets/main/index.js）
 update() = {"kind":"ready"}
-✅ 就绪 → 2 秒后 restart
-BUILD_TAG = v2                    ← game.restart() 同进程热重启（PID 不变）后，v2 代码接管
+BUILD_TAG = v2                    ← game.restart() 同进程热重启（PID 6157 不变）后，v2 代码接管
+
+am force-stop → 冷启动（PID 6321，全新进程）
+BUILD_TAG = v2                    ← 只可能来自 main.js 的启动还原（见步骤 2）
+check() = {"kind":"up-to-date"}   ← 本地 manifest 已是 1.0.1，读的是可写路径那份
+断开托管后再冷启动（PID 6551）：BUILD_TAG 仍 = v2，check() 优雅 error 不崩 —— 排除「其实是又下了一遍」
 ```
+
+冷启动这段是 `game.restart()` 验不到的：热重启时内存里的 `setSearchPaths` 还在，漏掉启动还原也照样加载新版本。
 
 **已验证的 native 集成步骤（落实上文「⚠️ native 集成步骤」，可复现）**：
 
 1. **manifestUrl 解析**：`ccHotUpdateModule({ manifestUrl: 'project.manifest' })` 传裸文件名即可——把 `project.manifest` 放构建产物 `data/` 根（APK 内 `assets/` 根，是默认搜索路径），`native.AssetsManager.create('project.manifest', …)` 经 fileUtils 直接解析到。**比官方「导入 `.manifest` 资产取 `nativeUrl`」更省**，因 data 根本就是搜索路径。
-2. **main.js 启动还原**（原生工程侧手动加，见 `apps/demo/build/android/data/main.js` 顶部）：引擎/资源加载前读 `localStorage['HotUpdateSearchPaths']` → `jsb.fileUtils.setSearchPaths(...)`。键须与 backend `searchPathsKey`（默认 `'HotUpdateSearchPaths'`）一致。**冷启动必需**；`game.restart()` 热重启因 apply() 已在内存 `setSearchPaths`，同进程内即便不还原也能加载 v2，但冷启动（进程被杀）只靠这段。生产应放 `build-templates/android/data/main.js` 使其存活于每次构建（demo 为验证直接改生成物）。
+2. **main.js 启动还原**：源在 `apps/demo/build-templates/native/index.ejs`，构建时渲染进 `build/android/data/main.js` 顶部——引擎/资源加载前读 `localStorage['HotUpdateSearchPaths']` → `jsb.fileUtils.setSearchPaths(...)` + 官方那段 `_temp/` 断点修复。键须与 backend `searchPathsKey`（默认 `'HotUpdateSearchPaths'`）一致。**冷启动必需**；`game.restart()` 热重启因 apply() 已在内存 `setSearchPaths`，同进程内即便不还原也能加载 v2，但冷启动（进程被杀）只靠这段。
+   > 平台目录是 **`native` 不是 `android`**，也不带 `data/` 那层（原生三平台共用一份模板）。构建实测：渲染出的 `data/main.js` 4112 字节（默认模板 840 字节），注入块在最顶、`<%= systemJsBundleFile %>` 等占位符正常渲染；由该模板打出的 APK 冷启动直接进 v2（上文 PID 6321/6551 两次）。ADR-0006 决策 5 当初写的 `build-templates/android/data/main.js` 路径是错的，见该 ADR 文末修正。
 3. **manifest 产物**：`cck-manifest`（tools 半）对 `build/android/data` 生成 `project.manifest`/`version.manifest`——默认走 `src/assets/jsb-adapter` 三子目录（根级 main.js/manifest 自身不纳入，无自引用）；v1 打 `version 1.0.0` 烘进 APK，v2 改一处代码重构建后打 `1.0.1` + 同 `packageUrl` 托管远端。AssetsManager 按 md5 差量：仅变更的 `assets/main/index.js`（md5 `e815…`→`9c40…`）被下载。
 4. **远端托管**：宿主起 http server，模拟器经 `10.0.2.2:<port>`（user-net 网关映射宿主 loopback）直连，免 CDN/鉴权。Cocos 3.8 android 模板 `AndroidManifest.xml` 默认 `android:usesCleartextTraffic="true"`，HTTP 明文开箱可用。
 5. **原生构建**：Creator 3.8.7 经 builder `add-task` 消息程序化触发（复用运行中的编辑器，无锁冲突），NDK/SDK/JDK 路径直填任务 options（`sdkPath`/`ndkPath`/`javaHome`）绕开偏好设置；ABI 选 **x86_64**（对齐 x86_64 模拟器，原生跑不靠 ARM 转译，Cocos 3.8 支持）；产物 gradle 工程 `gradlew assembleDebug` 编 APK。详见 [[adr-0006]]。

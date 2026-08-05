@@ -16,7 +16,9 @@ coverage/
 **/local/
 **/build/
 **/profiles/
-**/native/
+# 只忽略 Creator 生成的原生工程目录（工程根下的 native/），别误伤
+# apps/*/build-templates/native/（那是要入库的构建模板，见 hotupdate-service.md）
+/apps/*/native/
 
 # funplay-cocos MCP 编辑器扩展（第三方 dev 工具，装在 demo 工程内实测，不入库；
 # 源码在 spike/bundle-probe/extensions 或 npm i -g funplay-cocos-mcp）

@@ -1,0 +1,89 @@
+// 定制版原生启动模板 —— 覆盖 Creator 内置 templates/native/index.ejs 渲染出的 data/main.js。
+//
+// 为什么要覆盖：热更 apply() 把新资源目录写进 localStorage['HotUpdateSearchPaths'] 后，**冷启动**
+// （进程被杀重开）必须在读取任何 src/ 文件之前把搜索路径还原，否则引擎照旧从包内加载旧代码 ——
+// 而且它不报错，是安静地跑旧版本。（game.restart() 同进程热重启不受影响：apply() 已在内存里
+// setSearchPaths 过了。）见 packages/core/docs/modules/hotupdate-service.md、ADR-0006。
+//
+// 为什么放这里而不是改构建产物：data/main.js 每次构建都由本模板重新渲染，改产物必被覆盖。
+// build-templates/native/ 是 Creator 3.8 官方支持的原生模板覆盖点，android/ios/windows 共用这一份。
+// 升级 Creator 后与内置模板 diff 一次（内置模板在
+// <Creator>/resources/resources/3d/engine/templates/native/index.ejs）。
+
+// ==== 热更搜索路径还原（必须先于任何 require）====
+// 此刻可用：jsb.fileUtils / localStorage / XMLHttpRequest（jsb-adapter/web-adapter.js 已在
+// C++ BaseGame::init 里先于 main.js 跑完）；不可用：cc、SystemJS。
+// 主体照抄官方 hot-update 教程那段（还原搜索路径 + 修复"下载完成、移动到一半被杀"的 `_temp/` 残留），
+// 只多包一层 try/catch：存档坏了退回包内版本启动，别把玩家卡在黑屏。
+// 注：官方 `srcPath[srcPath.length]` 恒为 undefined（下标越界一位），那个建目录分支实际走不到 ——
+// 保持与官方一致，没自作主张改。
+(function () {
+    try {
+        if (typeof window.jsb === 'object') {
+            var hotUpdateSearchPaths = localStorage.getItem('HotUpdateSearchPaths'); // 须与 backend 的 searchPathsKey 一致
+            if (hotUpdateSearchPaths) {
+                var paths = JSON.parse(hotUpdateSearchPaths);
+                jsb.fileUtils.setSearchPaths(paths);
+
+                var fileList = [];
+                var storagePath = paths[0] || '';
+                var tempPath = storagePath + '_temp/';
+                var baseOffset = tempPath.length;
+
+                if (jsb.fileUtils.isDirectoryExist(tempPath) && !jsb.fileUtils.isFileExist(tempPath + 'project.manifest.temp')) {
+                    jsb.fileUtils.listFilesRecursively(tempPath, fileList);
+                    fileList.forEach(srcPath => {
+                        var relativePath = srcPath.substr(baseOffset);
+                        var dstPath = storagePath + relativePath;
+
+                        if (srcPath[srcPath.length] == '/') {
+                            jsb.fileUtils.createDirectory(dstPath)
+                        }
+                        else {
+                            if (jsb.fileUtils.isFileExist(dstPath)) {
+                                jsb.fileUtils.removeFile(dstPath)
+                            }
+                            jsb.fileUtils.renameFile(srcPath, dstPath);
+                        }
+                    })
+                    jsb.fileUtils.removeDirectory(tempPath);
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[cck] 还原热更搜索路径失败，回退内置版本: ' + e);
+    }
+})();
+
+<% if(polyfillsBundleFile) { %>
+// Polyfills bundle.
+require("<%= polyfillsBundleFile %>");
+<% } %>
+
+// SystemJS support.
+window.self = window;
+require("<%= systemJsBundleFile %>");
+
+const importMapJson = jsb.fileUtils.getStringFromFile("<%= importMapFile%>");
+const importMap = JSON.parse(importMapJson);
+System.warmup({
+    importMap,
+    importMapUrl: '<%= importMapFile%>',
+    defaultHandler: (urlNoSchema) => {
+        require(urlNoSchema.startsWith('/') ? urlNoSchema.substr(1) : urlNoSchema);
+    },
+});
+
+System.import('<%= applicationJs %>')
+.then(({ Application }) => {
+    return new Application();
+}).then((application) => {
+    return System.import('cc').then((cc) => {
+        require('jsb-adapter/engine-adapter.js');
+        return application.init(cc);
+    }).then(() => {
+        return application.start();
+    });
+}).catch((err) => {
+    console.error(err.toString() + ', stack: ' + err.stack);
+});

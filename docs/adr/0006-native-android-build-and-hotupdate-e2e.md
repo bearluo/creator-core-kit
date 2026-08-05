@@ -38,3 +38,29 @@ HotUpdateService（core 半）+ `ccHotUpdateModule`（engine 半 `native.AssetsM
   - 构建产物 `build/`、`native/` 走 `.gitignore`（生成物，不入库）；可复现靠本 ADR 的步骤，不靠留存二进制。
   - 首次构建工具链（JDK17 + NDK r23c + build-tools 34 + cmake 3.22.1）为一次性机器准备，非仓库资产。
 - **落地锚点**：包名 `com.cck.demo` / 主 Activity `com.cocos.game.AppActivity` / APK `apps/demo/build/android/proj/build/demo/outputs/apk/debug/demo-debug.apk` / 验证信号 = logcat `[CCK-DEMO]` 前缀（Cocos native 转发 JS console 到 logcat）/ 热更锚点 `BUILD_TAG = vN`。
+
+## 修正（2026-08-05）：决策 5 的持久化路径
+
+决策 5 当时留的待办写「生产应放 `build-templates/android/data/main.js`」——**路径不对**，实测的正确落点是：
+
+```
+apps/<项目>/build-templates/native/index.ejs
+```
+
+平台目录是 **`native`**（原生三平台共用一份，不是按 `android`/`ios` 分），且**不带 `data/` 那层**；覆盖的是**渲染 `main.js` 的 ejs 模板**而不是渲染结果 —— Creator 内置模板在 `<Creator>/resources/resources/3d/engine/templates/native/index.ejs`，官方文档也只把 `index.ejs` 列进 native 的可覆盖模板。用 ejs 而非直接丢一份成品 `main.js` 的好处：Creator 升级时内置模板的变更会同步过来，不至于捧着一份越来越旧的 fork。
+
+实测（2026-08-05，同一套 add-task 机制）：产物 `build/android/data/main.js` 4112 字节（默认模板 840 字节），注入块在最顶、`<%= systemJsBundleFile %>` 等占位符正常渲染，`build success in 12 s`。
+
+**并补跑了 2026-07-28 那次没做的一步——杀进程冷启动**（由该模板打出的 24.9 MB debug APK，真 x86_64 模拟器）：
+
+```
+PID 6157  BUILD_TAG=v1 → check update-available 1.0.1 → 下 53898 字节 → ready → game.restart() → BUILD_TAG=v2
+PID 6321  am force-stop 后冷启动          → BUILD_TAG=v2，check()=up-to-date（读的是可写路径那份 1.0.1 manifest）
+PID 6551  再断掉远端托管冷启动            → BUILD_TAG=v2，check() 优雅 error 不崩
+```
+
+PID 变化是判据：`game.restart()` 同进程重启靠的是内存里已生效的 `setSearchPaths`，验不到还原逻辑；只有全新进程里仍是 v2，才证明 `index.ejs` 那段在引擎起来之前真的跑了。第三次断网冷启动排除「其实是又下了一遍」。全程无 FATAL / native signal。
+
+顺带修掉一个静默陷阱：`apps/demo/.gitignore` 的裸 `native` 与根 `.gitignore` 的 `**/native/` 会把 `build-templates/native/` 一并吞掉（本该只忽略 Creator 生成的原生工程目录），已分别锚成 `/native/` 和 `/apps/*/native/`。
+
+决策 5 的其余部分（还原逻辑的作用、冷启动才必需、`game.restart()` 不依赖它）不变。

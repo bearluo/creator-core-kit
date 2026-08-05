@@ -7,7 +7,8 @@ temp/
 local/
 build/
 profiles/
-native
+# 加前导 / 锚到工程根：裸 `native` 会连 build-templates/native/ 一起吞掉
+/native/
 #//////////////////////////
 # NPM
 #//////////////////////////

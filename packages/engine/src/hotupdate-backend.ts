@@ -10,9 +10,11 @@ import type { CheckResult, HotUpdateProgress, IHotUpdateBackend, KitModule, Upda
  * **仅原生平台可用**：web / 编辑器预览下 `native.AssetsManager` 为 undefined，故 `ccHotUpdateModule` 用
  * `sys.isNative` 守门——非原生不注册，core 回退空后端（恒 up-to-date）。
  *
- * ⚠️ 集成前提（本 npm 包管不到、须在原生工程侧做）：apply() 会把新资源搜索路径写入 localStorage[searchPathsKey]，
- * 但**引擎启动前的还原**必须在原生工程的 `main.js` 里手动加（读同一 key → setSearchPaths），否则重启不生效。
- * 见模块文档「native 集成步骤」。
+ * ⚠️ 集成前提（本 npm 包管不到、须在消费方工程侧做）：apply() 会把新资源搜索路径写入 localStorage[searchPathsKey]，
+ * 但**引擎启动前的还原**要放消费方的 `build-templates/native/index.ejs`（渲染成 data/main.js 顶部，先于任何
+ * require 读同一 key → setSearchPaths）。别改构建产物 main.js——每次构建重新渲染必被覆盖。
+ * 冷启动（进程被杀）才靠这段，game.restart() 同进程重启不还原也能跑，所以漏了很难当场发现。
+ * 样例 apps/demo/build-templates/native/index.ejs；见模块文档「native 集成步骤」。
  */
 export interface CcHotUpdateOptions {
   /** 本地 project.manifest 路径（如 `${getWritablePath()}project.manifest` 或随包 url）。 */
