@@ -24,6 +24,10 @@ export default tseslint.config(
       'apps/demo/profiles/**',
       'apps/demo/native/**',
       'apps/demo/node_modules/**',
+      // 契约仓的模块段产物（`pnpm proto:sync` 拷进来，别手改）。别人生成的代码不受本仓
+      // 风格契约管——但 loose spread 那条硬规则得另行确保：pbjs 产物里没有数组展开，
+      // 换生成器时要重查（`grep '\[\.\.\.'`），那个坑只在构建产物里炸、预览测不出。
+      'apps/demo/assets/**/*-proto.ts',
     ],
   },
   {

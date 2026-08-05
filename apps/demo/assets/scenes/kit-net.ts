@@ -1,15 +1,17 @@
 import {
   createNetwork,
-  createPbSchema,
+  createPbSchemaRegistry,
   createProtobufCodec,
   getRootContainer,
   getTimer,
   DISPATCH,
   NETWORK,
+  PB_SCHEMA,
   type DispatchResult,
   type INetwork,
   type LaunchStep,
-  type PbSchema,
+  type PbSchemaRegistry,
+  type SegmentBody,
 } from '@cck/core';
 import { kit } from '@kit/proto';
 import { CMD } from '@kit/proto/cmd';
@@ -37,14 +39,30 @@ interface PbMessageType {
   decode(bytes: Uint8Array): unknown;
 }
 
-/** 契约生成产物 → core 的 {@link PbSchema}。 */
-export function createKitSchema(): PbSchema {
-  const types = kit.v1 as unknown as Readonly<Record<string, PbMessageType>>;
-  return createPbSchema(CMD, {
+/**
+ * 「消息名 → pb 消息类」的命名空间对象 → 一段协议的 body 编解码。
+ * 基础段和各功能模块段共用同一套逻辑，模块 bundle 直接 import 这个函数。
+ */
+export function pbSegment(types: object): SegmentBody {
+  const t = types as Readonly<Record<string, PbMessageType>>;
+  return {
     // `?? {}`：心跳走 `send('Ping')` 不带 body，而 pb 的 encode 会读 message 的字段。
-    encodeBody: (type, body) => types[type].encode(body ?? {}).finish(),
-    decodeBody: (type, bytes) => types[type].decode(bytes),
-  });
+    encodeBody: (type, body) => t[type].encode(body ?? {}).finish(),
+    decodeBody: (type, bytes) => t[type].decode(bytes),
+  };
+}
+
+/**
+ * 建协议注册表并装上**基础段**（握手 / 心跳 / 错误 / 分配器）。
+ *
+ * 只有基础段留在这里——它随主包进 AOT 层，改了要整包更新，所以本来就不该常变。
+ * 各功能模块的协议随自己的 bundle 走（见 `assets/modules/mini-clicker/clicker-net.ts`），
+ * 加载时 `add` 进这张表、释放时注销。
+ */
+export function createKitSchema(): PbSchemaRegistry {
+  const schema = createPbSchemaRegistry();
+  schema.add(CMD, pbSegment(kit.v1));
+  return schema;
 }
 
 /**
@@ -92,14 +110,22 @@ export function netConnectStep(): LaunchStep {
     name: 'demo-net-connect',
     phase: 'dispatch',
     async run(ctx) {
-      const d = ctx.bag.get(DISPATCH) as DispatchResult | undefined;
-      if (!d?.wsUrl) return; // 没配 dispatcher（单机跑）→ 这步不存在
-
       const root = getRootContainer();
+      // 注册表先于 wsUrl 判断落 DI：单机跑（没配 dispatcher）时模块照样能注册自己那段，
+      // 模块侧不必为「有没有网络」分支。
+      let schema = root.tryResolve(PB_SCHEMA);
+      if (!schema) {
+        schema = createKitSchema();
+        root.register(PB_SCHEMA, { useValue: schema });
+      }
+
+      const d = ctx.bag.get(DISPATCH) as DispatchResult | undefined;
+      if (!d?.wsUrl) return; // 没配 dispatcher（单机跑）→ 后面这段不存在
+
       let net = root.tryResolve(NETWORK);
       if (!net) {
         net = createNetwork({
-          codec: createProtobufCodec(createKitSchema()),
+          codec: createProtobufCodec(schema),
           url: d.wsUrl,
           // 心跳用契约里的 Ping，而不是 core 默认的 '__ping'——后者不在 schema 里，
           // 编码时会直接抛「未知消息类型」。服务端回的 Pong 走 seq=0 推送，不占请求位。

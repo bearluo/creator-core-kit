@@ -205,4 +205,6 @@ ctx.scope.add(getRootContainer().resolve(PB_SCHEMA).add(CLICKER_CMD, clickerBody
 - **type 重名或 cmd 撞号在 `add` 当场抛**，且校验全过才落库——模块 cmd 段划错要在加载时炸，不能等线上错发。cmd 分段由契约仓统一分配。
 - **注销按引用比对**：模块热更重载后同一段 cmd 可能已归新注册的代码，旧注销函数不会误删新段（重复调用也安全，`dispose` 重入很常见）。
 - **模块卸载后它的在途请求会解不出来**：响应帧回来时 cmd 已注销，`decode` 抛错被 core 吞成一条 warn、该请求走超时。这是可接受的降级——真要紧的请求别跨模块卸载。
+
+模块段的生成代码必须以**项目脚本**形式进 bundle（不能走 npm import，那会被打进 AOT），且**必须是 `.ts`**——Creator 把 `assets/` 下的 `.js` 一律当 CommonJS。完整背景与号段规则见 [ADR-0012](../../../../docs/adr/0012-protocol-segments-follow-bundles.md)，接入样例见 `apps/demo/assets/modules/mini-clicker/clicker-net.ts`。
 - **验证**：四门全绿；**真机 gameView 预览已验证**（DI 接入 + 真 echo 端到端往返）：`NETWORK_SOCKET (WebSocket) registered=true` + `WebSocket 全局可用=true`（证明拾取 cc 壳而非 memory socket）。**真 echo 往返闭环**：起本地 `docker run --rm -p 9099:8080 jmalloc/echo-server`，DemoBoot 用 `createNetwork({url:'ws://localhost:9099/'})`（不传 socket → 取 DI 注册的真 WebSocket 适配器）走 `request('echo',{n:42,s:'cck'})`，日志 `body={"n":42,"s":"cck"} → OK`——`connect→onOpen→send(带 seq)→onMessage→seq 匹配→resolve` 全链路经真 WebSocket 适配器打通（echo-server 首条问候语非 JSON，codec.decode 失败被忽略，无害）。DemoBoot 的 echo 块自带 5s 超时，无 echo 服务器时优雅跳过。

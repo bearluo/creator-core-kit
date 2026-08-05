@@ -49,5 +49,9 @@ verify:
     # 这里不推回仓库，只挡「生成物与代码不同步」：本地 pnpm docs:api 后一起提交。
     - pnpm docs:api
     - test -z "$(git status --porcelain -- packages/core/docs/api)" || { git status --short -- packages/core/docs/api; git --no-pager diff -- packages/core/docs/api; echo 'API 文档过期：本地跑 pnpm docs:api 并把 packages/core/docs/api 一起提交'; exit 1; }
+    # 协议模块段是**拷进 assets 的**（走 npm import 会被 Cocos 打进 AOT 层，见 ADR-0012），
+    # 而漏拷是静默的：旧协议还在、编译照过、线上错发。同上一门的套路，重跑同步脚本比工作树。
+    - pnpm proto:sync
+    - test -z "$(git status --porcelain -- 'apps/*/assets/**/*-proto.ts')" || { git status --short -- 'apps/*/assets/**/*-proto.ts'; echo '协议模块段与 @kit/proto 不同步：本地跑 pnpm proto:sync 并一起提交'; exit 1; }
   # 从 v8 text reporter 的 "All files | xx.xx |" 抓 core 总覆盖率
   coverage: '/All files\s*\|\s*([\d.]+)/'

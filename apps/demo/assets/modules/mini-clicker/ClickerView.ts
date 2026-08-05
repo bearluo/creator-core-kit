@@ -2,6 +2,7 @@ import { _decorator, Label, Node } from 'cc';
 import { bindText, BindingScope, CCKUIView } from '@cck/engine';
 import type { ModuleContext } from '../lobby/ModuleContext';
 import { CounterVM } from './CounterVM';
+import { clickerPing, registerClickerProto } from './clicker-net';
 
 const { ccclass } = _decorator;
 
@@ -24,6 +25,12 @@ export class ClickerView extends CCKUIView {
     const ctx = args as ModuleContext;
     this.ctx = ctx;
     this.vm.restore(state); // 转屏/换皮重建 → 计数接着走。判类型归 VM，View 不做业务判断
+
+    // 本模块的协议段随 bundle 走（cmd 1000–1999 不在主包里）。注销交 scope 托管：
+    // bundle 释放时自动摘掉，界面只是重建（转屏/换皮）时不会重复注册——scope 生命
+    // 周期是 bundle 不是界面实例。
+    ctx.scope.add(registerClickerProto());
+    void clickerPing(this.vm.count.value); // 接入自检：模块段注册后立刻可用
 
     const count = this.node.getChildByName('Count')?.getComponent(Label);
     // 绑定的生命周期是**界面实例**，不是 bundle：转屏/换皮重建会销毁重建本组件，
