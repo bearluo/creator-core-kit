@@ -1,0 +1,13 @@
+{
+  "ver": "1.2.0",
+  "importer": "directory",
+  "imported": true,
+  "uuid": "d7926356-ed1f-4b44-84a3-40deb91e1bdd",
+  "files": [],
+  "subMetas": {},
+  "userData": {
+    "isBundle": true,
+    "priority": 1,
+    "bundleName": "skin-vest-lobby"
+  }
+}

@@ -184,14 +184,6 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "panel": {
-      "__uuid__": "cc259771-9532-4703-8a19-3ec80b34011d",
-      "__expectedType__": "cc.Prefab"
-    },
-    "item": {
-      "__uuid__": "1371f1c7-f7ab-4dbd-bbc3-29d0b49b1675",
-      "__expectedType__": "cc.Prefab"
-    },
     "_id": "7faZL8xPNJhpEbApvkiH1L"
   },
   {

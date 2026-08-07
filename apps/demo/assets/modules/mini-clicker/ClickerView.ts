@@ -1,6 +1,6 @@
 import { _decorator, Label, Node } from 'cc';
 import { bindText, BindingScope, CCKUIView } from '@cck/engine';
-import type { ModuleContext } from '../lobby/ModuleContext';
+import type { ModuleContext } from '../../foundation/ModuleContext';
 import { CounterVM } from './CounterVM';
 import { clickerPing, registerClickerProto } from './clicker-net';
 

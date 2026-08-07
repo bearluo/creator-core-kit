@@ -11,10 +11,13 @@
  *
  * 用法：`execute_scene_script({ code: <本文件内容>, args: <描述 JSON> | { specs: [描述, …] } })`
  *
- * ⚠️ 两条 scene 进程的硬约束（都踩过）：
+ * ⚠️ 四条硬约束（都踩过）：
  *  1. **一律 `cc.` 前缀、别解构**——`director` / `Node` / `scene` 等已是进程全局，
  *     `const { director } = cc` 直接抛 "Identifier 'director' has already been declared"。
  *  2. 顶层变量统一加 `_pg` 前缀，同理避开全局重名。
+ *  3. **跑之前先停掉编辑器预览**（Game View 在播放中时 `create-prefab` **静默失败**：
+ *     返回 null、不抛错、不落盘）。返回结果里 `created` 是 null 就是这个。
+ *  4. **同名资源已存在也是静默失败**（同样返回 null）。重新生成前先删掉旧的。
  *
  * 描述 schema（够用即可，缺什么加什么）：
  *   { url, root: Node }
@@ -23,6 +26,9 @@
  *     label?:  { string?, fontSize?, lineHeight?, color?: [r,g,b,a?], align?: 'left'|'center'|'right' },
  *     sprite?: { frame: <uuid>, type?: 'simple'|'sliced'|'filled', fill?: 'horizontal'|'vertical',
  *                fillStart?: 0..1, fillRange?: 0..1, color?: [r,g,b,a?], sizeMode?: 'custom'|'trimmed'|'raw' },
+ *     editBox?: { placeholder?, string?, password?: bool, maxLength?, fontSize?,
+ *                 color?: [r,g,b,a?], placeholderColor?: [r,g,b,a?], frame?: <uuid>, bgColor?: [r,g,b,a?] },
+ *     comp?: '<@ccclass 名>',   // 挂一个项目脚本组件（如 'LoginView'）
  *     children?: Node[],
  *   }
  */
@@ -77,6 +83,50 @@ async function _pgBuild(desc, parent) {
     }
     if (s.color) sprite.color = _pgColor(s.color);
     if (desc.size) ui.setContentSize(desc.size[0], desc.size[1]); // spriteFrame 会重设尺寸，设完再压回去
+  }
+
+  if (desc.editBox) {
+    const e = desc.editBox;
+    // addComponent 当场自建 TEXT_LABEL / PLACEHOLDER_LABEL 两个子节点 + 一个背景 Sprite，
+    // 所以这里**不要**再自己加 Sprite（一个节点两个 Sprite 会互相顶掉）。
+    const eb = node.addComponent(cc.EditBox);
+    eb.inputMode = cc.EditBox.InputMode.SINGLE_LINE;
+    eb.placeholder = e.placeholder ?? '';
+    eb.string = e.string ?? '';
+    if (e.maxLength !== undefined) eb.maxLength = e.maxLength;
+    if (e.password) eb.inputFlag = cc.EditBox.InputFlag.PASSWORD;
+    const bg = node.getComponent(cc.Sprite);
+    if (bg && e.frame) {
+      bg.spriteFrame = await _pgLoad(e.frame);
+      bg.type = cc.Sprite.Type.SLICED;
+      bg.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+      if (e.bgColor) bg.color = _pgColor(e.bgColor);
+    }
+    for (const label of [eb.textLabel, eb.placeholderLabel]) {
+      if (!label) continue;
+      if (e.fontSize !== undefined) {
+        label.fontSize = e.fontSize;
+        label.lineHeight = e.fontSize + 8;
+      }
+      // ⚠️ 锚点必须掰成左上角：EditBox 的 `_resizeChildNodes` 把标签摆在 (-w/2, h/2)，
+      // 那是**按锚点 (0,1) 算的**；而 addComponent 建出来的标签节点锚点是 (0.5,0.5)，
+      // 两边对不上 → 文字整个跑到输入框左上角外面（编辑器菜单加的 EditBox 没这问题，
+      // 它用的是配好的节点模板）。这一步不做，输入框看着就是「字在框外」。
+      label.node.getComponent(cc.UITransform).setAnchorPoint(0, 1);
+      label.horizontalAlign = cc.Label.HorizontalAlign.LEFT;
+      label.verticalAlign = cc.Label.VerticalAlign.CENTER;
+    }
+    if (eb.textLabel && e.color) eb.textLabel.color = _pgColor(e.color);
+    if (eb.placeholderLabel && e.placeholderColor) {
+      eb.placeholderLabel.color = _pgColor(e.placeholderColor);
+    }
+    if (desc.size) ui.setContentSize(desc.size[0], desc.size[1]); // 背景图会重设尺寸，设完压回去
+  }
+
+  // 项目脚本组件（界面薄壳）。名字是 @ccclass 注册名——编辑器已编译项目脚本，取不到就是名字写错了。
+  if (desc.comp) {
+    if (!cc.js.getClassByName(desc.comp)) throw new Error(`build-prefab: 找不到组件类 '${desc.comp}'`);
+    node.addComponent(desc.comp);
   }
 
   for (const child of desc.children ?? []) await _pgBuild(child, node);

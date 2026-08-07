@@ -48,8 +48,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/engine
       '@kit/proto':
-        specifier: git+https://hlgit.5518game.com/luohao/kit-proto.git#v0.3.0
-        version: git+https://hlgit.5518game.com/luohao/kit-proto.git#e392110976dbe544459ec85503c9c9f7c14742d2
+        specifier: git+https://hlgit.5518game.com/luohao/kit-proto.git#v0.4.0
+        version: git+https://hlgit.5518game.com/luohao/kit-proto.git#e392140809297ae713b81de49acab2a210378bca
 
   apps/ecs-lab:
     dependencies:
@@ -496,9 +496,9 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@kit/proto@git+https://hlgit.5518game.com/luohao/kit-proto.git#e392110976dbe544459ec85503c9c9f7c14742d2':
-    resolution: {commit: e392110976dbe544459ec85503c9c9f7c14742d2, repo: https://hlgit.5518game.com/luohao/kit-proto.git, type: git}
-    version: 0.3.0
+  '@kit/proto@git+https://hlgit.5518game.com/luohao/kit-proto.git#e392140809297ae713b81de49acab2a210378bca':
+    resolution: {commit: e392140809297ae713b81de49acab2a210378bca, repo: https://hlgit.5518game.com/luohao/kit-proto.git, type: git}
+    version: 0.4.0
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -2147,7 +2147,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@kit/proto@git+https://hlgit.5518game.com/luohao/kit-proto.git#e392110976dbe544459ec85503c9c9f7c14742d2':
+  '@kit/proto@git+https://hlgit.5518game.com/luohao/kit-proto.git#e392140809297ae713b81de49acab2a210378bca':
     dependencies:
       protobufjs: 7.6.5
 

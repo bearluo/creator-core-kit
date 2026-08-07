@@ -11,10 +11,12 @@ import { createTimer } from '../timer';
  * dispatcher 的信封形状这些「两边约定」，只有真服务器能证。
  *
  * **服务器没起就整体跳过**（不看环境变量，免得还要记一条 pnpm 脚本）：
- * 本机 `docker compose up -d`（server-core-kit 仓）后再跑 `pnpm test` 即自动生效，CI 上恒跳过。
+ * 局域网测试机 dev139 上 `docker compose up -d`（server-core-kit 仓）后再跑 `pnpm test` 即自动生效，
+ * CI 上（够不着这个内网地址）恒跳过。
  */
 
-const DISPATCHER = 'http://127.0.0.1:9100';
+/** dev139（172.25.50.139）—— 2026-08-05 服务从开发本机迁到这台局域网测试机。 */
+const DISPATCHER = 'http://172.25.50.139:9100';
 /** dispatcher 的版本表里 1.3.0 起才放行，低于它会拿到 ACTION_UPDATE。 */
 const APP_VERSION = '1.3.0';
 /** 契约版本由项目提供 —— core 不含协议常量（ADR-0011）。 */

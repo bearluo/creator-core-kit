@@ -1,13 +1,14 @@
-import { _decorator, Component, Prefab, sys } from 'cc';
+import { _decorator, Component, Prefab, js } from 'cc';
 import { EDITOR } from 'cc/env';
 import {
   defaultLaunchSteps,
   getApp,
+  getBundleManager,
   getI18n,
   getRootContainer,
+  setUIVariant,
   DISPATCH,
   KIT,
-  type AppConfig,
   type DispatchResult,
   type LaunchStep,
 } from '@cck/core';
@@ -23,49 +24,17 @@ import {
   ccStorageModule,
   ccUIModule,
   loadLocaleTable,
-  loadScene,
   resolutionModule,
 } from '@cck/engine';
-import { netConnectStep } from './kit-net';
+import { APP_CONFIG, VEST } from './app-config';
+import { FOUNDATION_BUNDLE, FOUNDATION_CLASS, type FoundationApi } from './foundation-api';
 import { createLaunchOverlay } from './LaunchOverlay';
 
 const { ccclass, property } = _decorator;
 const TAG = '[CCK-BOOT]';
 
 /**
- * 应用配置 —— 版本 / 渠道 / 环境 / 包分层集中在这一处。
- *
- * 包分层（判据是「启动期加载且被跨模块持有引用」，不是「哪个包」）：
- * - **重启层**：引擎 + AOT chunks（@cck/core、@cck/engine 全部框架代码）、main 包（本文件 + Boot.scene）
- * - **启动期换**：`shared`、`lobby` —— 启动序列 load 时用的就是新版本，更新天然生效
- * - **运行期换**：按需业务 bundle（shop / mini-clicker / mini-dodge）
- */
-const APP_CONFIG: AppConfig = {
-  appId: 'cck-demo',
-  // 1.3.0 起才被本机 dispatcher 放行（低于它会拿到 ACTION_UPDATE —— 想看版本闸生效就把这里调到 1.2.0）
-  version: '1.3.0',
-  channel: 'dev',
-  env: 'dev',
-  shared: ['shared'],
-  lobby: {
-    bundle: 'lobby',
-    // core 不持场景接缝（切场景是 engine 直接行为）→ 进大厅这一下由这里给。
-    enter: () => loadScene('Lobby', { bundle: 'lobby' }),
-  },
-  dispatcher: {
-    // 本机 docker（server-core-kit 仓 `docker compose up -d`）。
-    // ⚠️ 写局域网 IP 而不是 127.0.0.1：真机 / 模拟器打开时 localhost 指的是它自己。
-    url: 'http://172.25.50.135:9100/api/Handshake',
-    // 契约版本来自 kit-proto，**由项目提供** —— kit 里不出现任何协议常量（ADR-0011）。
-    protoVersion: 1,
-    platform: sys.isNative ? String(sys.os).toLowerCase() : 'web',
-  },
-  // versionUrl 不配：demo 的热更走 native AssetsManager 那条已 e2e 验证的路径（ADR-0006）。
-  // web 版本表要真 CDN 才有意义，接入方按 env 拼自己的地址（dispatcher 下发的 cdnUrl 就是它的基址）。
-};
-
-/**
- * 启动序列 = kit 默认四步 + 项目自己的一步。
+ * 启动序列 = kit 默认四步 + 项目自己的三步。
  * 这正是 `LaunchStep` 可插拔的用途：登录、SDK 初始化、公告、隐私协议都插在这里，kit 不预设。
  */
 function launchSteps(): readonly LaunchStep[] {
@@ -81,9 +50,9 @@ function launchSteps(): readonly LaunchStep[] {
       console.log(`${TAG} 全局 i18n 就绪（来自 shared bundle）`);
     },
   };
-  // 服务端接入的落点：wsUrl（按本客户端版本路由到的那个部署单元）、cdnUrl（热更内容基址）、
-  // serverTimeMs（权威时间，本地时钟玩家可改）都在这里拿。demo 只打日志；真实项目在这一步
-  // 用 wsUrl 连长连接、用 cdnUrl 拼版本表地址。
+  // dispatcher 的判定落点：wsUrl（按本客户端版本路由到的那个部署单元）、cdnUrl（热更内容
+  // 基址）、serverTimeMs（权威时间，本地时钟玩家可改）。**只打日志不建连接** —— 连接归地基层，
+  // 它要等 hotupdate 跑完才加载。这一步留在这里是因为 cdnUrl 是热更自己要用的，跑不掉。
   const netInfo: LaunchStep = {
     name: 'demo-net-info',
     phase: 'dispatch',
@@ -93,11 +62,41 @@ function launchSteps(): readonly LaunchStep[] {
       return Promise.resolve();
     },
   };
+  /**
+   * 地基层 —— 本文件里唯一一处「主包 → 地基」的接触点，**也是唯一允许的一处**。
+   *
+   * 排在 `hotupdate` **之后**（phase 'shared'）：地基是热更内容，先更新再加载，
+   * 拿到的才是新版本。协议 / 登录 / 认证跟着后移到这里，就是这个排序的直接后果。
+   *
+   * 取类而不是 `import`：主包 import 地基的任何值，都会让那段代码被判给主包（优先级
+   * 最高者赢）→ 地基进 AOT → 热更失效。`@ccclass` 在 bundle 加载执行脚本时已把类注册
+   * 进 cc 类表，`js.getClassByName` 是引擎原生的跨 bundle 通道。类型走 `import type`，
+   * 编译期擦除，产物里不留痕迹。
+   */
+  const foundation: LaunchStep = {
+    name: 'demo-foundation',
+    phase: 'shared',
+    async run(ctx) {
+      await getBundleManager().load(FOUNDATION_BUNDLE);
+      const C = js.getClassByName(FOUNDATION_CLASS) as (new () => FoundationApi) | undefined;
+      if (!C) {
+        // 地基 bundle 加载了但类没注册 → 十有八九是热更包与本 AOT 不兼容（构建裁掉了它
+        // 引用的符号，ADR-0001），或者 `@ccclass` 名字改了没同步。这条错误值得响亮。
+        throw new Error(`地基入口 '${FOUNDATION_CLASS}' 未注册 —— bundle '${FOUNDATION_BUNDLE}' 是否与当前 AOT 兼容？`);
+      }
+      await new C().boot(ctx);
+    },
+  };
   // 按名字定位而不是写死下标——kit 以后往默认序列里加步骤时这里不会错位
-  steps.splice(steps.findIndex((s) => s.name === 'hotupdate'), 0, netInfo, netConnectStep());
+  steps.splice(
+    steps.findIndex((s) => s.name === 'hotupdate'),
+    0,
+    netInfo,
+  );
   steps.splice(
     steps.findIndex((s) => s.name === 'lobby'),
     0,
+    foundation,
     globalI18n,
   );
   return steps;
@@ -162,6 +161,11 @@ export class Bootstrap extends Component {
       ],
     });
     console.log(`${TAG} kit 就绪[${kit.modules.join(', ')}] → app.launch()`);
+
+    // 马甲皮 —— 必须在 `launch()` **之前**定好：第一个界面（登录闸门）就要按它解析包。
+    // 之后不再改（换皮是换包，不是运行时切换），转屏那一维由 resolutionModule 自己灌。
+    await setUIVariant({ skin: VEST });
+    console.log(`${TAG} 马甲皮 → skin='${VEST}'（登记了换皮的界面从 skin-${VEST}-<跟随者> 包取 prefab）`);
 
     // 进度 / 失败订阅必须在 launch 之前挂上，否则漏掉前几个阶段。
     // 界面在 LaunchOverlay.prefab（kit 只出事件，样式归项目）：一条进度条 + 按失败分类给出路

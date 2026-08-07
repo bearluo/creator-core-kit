@@ -1,0 +1,13 @@
+{
+  "ver": "1.2.0",
+  "importer": "directory",
+  "imported": true,
+  "uuid": "be9d1ad6-1d0c-46bb-b3eb-33adcd7cb771",
+  "files": [],
+  "subMetas": {},
+  "userData": {
+    "isBundle": true,
+    "priority": 1,
+    "bundleName": "skin-base-mail"
+  }
+}

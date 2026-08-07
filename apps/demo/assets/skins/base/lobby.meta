@@ -1,0 +1,13 @@
+{
+  "ver": "1.2.0",
+  "importer": "directory",
+  "imported": true,
+  "uuid": "4cd3de28-192e-4f36-ae23-4de18d30f26b",
+  "files": [],
+  "subMetas": {},
+  "userData": {
+    "isBundle": true,
+    "priority": 1,
+    "bundleName": "skin-base-lobby"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "ver": "1.2.0",
+  "importer": "directory",
+  "imported": true,
+  "uuid": "62a2886c-8575-4c12-ba61-5ad7140f1e84",
+  "files": [],
+  "subMetas": {},
+  "userData": {
+    "isBundle": true,
+    "priority": 2,
+    "bundleName": "skin-base-foundation"
+  }
+}

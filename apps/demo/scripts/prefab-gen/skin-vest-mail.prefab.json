@@ -1,0 +1,152 @@
+{
+  "url": "db://assets/skins/vest/mail/Mail.prefab",
+  "root": {
+    "name": "Mail",
+    "comp": "MailView",
+    "size": [720, 900],
+    "children": [
+      {
+        "name": "Bg",
+        "size": [720, 900],
+        "sprite": {
+          "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+          "type": "sliced",
+          "color": [26, 10, 12, 245]
+        }
+      },
+      {
+        "name": "Title",
+        "pos": [0, 396],
+        "size": [660, 52],
+        "label": { "string": "信 箱", "fontSize": 40, "color": [255, 206, 120] }
+      },
+      {
+        "name": "Toast",
+        "pos": [0, 348],
+        "size": [660, 34],
+        "label": { "string": "", "fontSize": 22, "color": [255, 180, 120] }
+      },
+      { "name": "Items", "pos": [0, 296], "size": [660, 620] },
+      {
+        "name": "ItemTemplate",
+        "active": false,
+        "size": [660, 88],
+        "anchor": [0.5, 1],
+        "children": [
+          {
+            "name": "Bg",
+            "pos": [0, -44],
+            "size": [660, 84],
+            "sprite": {
+              "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+              "type": "sliced",
+              "color": [120, 44, 40]
+            }
+          },
+          {
+            "name": "Title",
+            "pos": [-100, -26],
+            "size": [420, 34],
+            "label": { "string": "标题", "fontSize": 26, "color": [255, 236, 214], "align": "left" }
+          },
+          {
+            "name": "Body",
+            "pos": [-100, -60],
+            "size": [420, 30],
+            "label": { "string": "正文", "fontSize": 20, "color": [200, 160, 150], "align": "left" }
+          },
+          {
+            "name": "State",
+            "pos": [200, -44],
+            "size": [120, 32],
+            "label": { "string": "未读", "fontSize": 22, "color": [190, 150, 140] }
+          },
+          {
+            "name": "ClaimBtn",
+            "pos": [268, -44],
+            "size": [104, 52],
+            "children": [
+              {
+                "name": "Bg",
+                "size": [104, 52],
+                "sprite": {
+                  "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+                  "type": "sliced",
+                  "color": [188, 138, 60]
+                }
+              },
+              {
+                "name": "Label",
+                "size": [96, 40],
+                "label": { "string": "领取", "fontSize": 24, "color": [40, 20, 10] }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "RefreshBtn",
+        "pos": [-230, -390],
+        "size": [180, 64],
+        "children": [
+          {
+            "name": "Bg",
+            "size": [180, 64],
+            "sprite": {
+              "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+              "type": "sliced",
+              "color": [150, 60, 52]
+            }
+          },
+          {
+            "name": "Label",
+            "size": [170, 44],
+            "label": { "string": "刷新", "fontSize": 28, "color": [255, 236, 214] }
+          }
+        ]
+      },
+      {
+        "name": "MoreBtn",
+        "pos": [0, -390],
+        "size": [180, 64],
+        "children": [
+          {
+            "name": "Bg",
+            "size": [180, 64],
+            "sprite": {
+              "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+              "type": "sliced",
+              "color": [150, 60, 52]
+            }
+          },
+          {
+            "name": "Label",
+            "size": [170, 44],
+            "label": { "string": "再翻几封", "fontSize": 26, "color": [255, 236, 214] }
+          }
+        ]
+      },
+      {
+        "name": "CloseBtn",
+        "pos": [230, -390],
+        "size": [180, 64],
+        "children": [
+          {
+            "name": "Bg",
+            "size": [180, 64],
+            "sprite": {
+              "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+              "type": "sliced",
+              "color": [80, 34, 32]
+            }
+          },
+          {
+            "name": "Label",
+            "size": [170, 44],
+            "label": { "string": "收起", "fontSize": 28, "color": [255, 206, 120] }
+          }
+        ]
+      }
+    ]
+  }
+}

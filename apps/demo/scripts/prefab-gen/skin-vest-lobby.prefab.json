@@ -1,0 +1,58 @@
+{
+  "specs": [
+    {
+      "url": "db://assets/skins/vest/lobby/LobbyPanel.prefab",
+      "root": {
+        "name": "LobbyPanel",
+        "size": [1080, 1920],
+        "children": [
+          {
+            "name": "Bg",
+            "size": [1080, 1920],
+            "sprite": {
+              "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+              "type": "sliced",
+              "color": [26, 10, 12, 255]
+            }
+          },
+          {
+            "name": "Title",
+            "pos": [0, 720],
+            "size": [900, 76],
+            "label": { "string": "玩 什 么", "fontSize": 58, "color": [255, 206, 120] }
+          },
+          {
+            "name": "Subtitle",
+            "pos": [0, 650],
+            "size": [900, 40],
+            "label": { "string": "挑一个开始", "fontSize": 28, "color": [190, 150, 140] }
+          },
+          { "name": "Items", "pos": [0, 520], "size": [900, 900] }
+        ]
+      }
+    },
+    {
+      "url": "db://assets/skins/vest/lobby/LobbyItem.prefab",
+      "root": {
+        "name": "LobbyItem",
+        "size": [720, 96],
+        "children": [
+          {
+            "name": "Bg",
+            "size": [720, 96],
+            "sprite": {
+              "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+              "type": "sliced",
+              "color": [120, 44, 40]
+            }
+          },
+          {
+            "name": "Label",
+            "size": [700, 52],
+            "label": { "string": "入口", "fontSize": 34, "color": [255, 236, 214] }
+          }
+        ]
+      }
+    }
+  ]
+}

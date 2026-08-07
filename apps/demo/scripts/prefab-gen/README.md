@@ -5,7 +5,11 @@
 
 ## 三步
 
-1. **出描述** —— 手写，或把下面的提示词丢给 ChatGPT / 别的模型让它出（见「让模型出界面」）。存成 `<名字>.prefab.json`。
+1. **出描述** —— 手写，或把下面的提示词丢给 ChatGPT / 别的模型让它出（见「让模型出界面」）。
+   存成 `<名字>.prefab.json`；皮包的脸按包命名（`skin-<马甲>-<跟随者>.prefab.json`），
+   一个皮包一个文件，多份 prefab 用 `specs: [...]`。
+   ⚠️ **界面 prefab 别漏 `comp`**（挂 `@ccclass` 脚本的那个字段）：漏了照样生成、照样显示，
+   但没有任何行为且**不报错**——按钮不响应、`onShow` 不跑。
 2. **生成** —— funplay MCP：
    ```
    execute_scene_script({ code: <build-prefab.js 全文>, args: <描述 JSON> })
@@ -77,7 +81,7 @@ Node = {
 | `Action/Label` | 有 `label`。文案运行时按失败类型改成「重试」/「前往应用商店」/「重启应用」 |
 
 除以上五个，其余节点随便加、随便命名，但**只能是静态装饰**——代码不会碰它们。
-根节点固定叫 `LaunchOverlay`，`url` 固定 `"db://assets/scenes/LaunchOverlay.prefab"`。
+根节点固定叫 `LaunchOverlay`，`url` 固定 `"db://assets/boot/LaunchOverlay.prefab"`。
 
 ## 本次需求
 这是一个手游的**启动 / 热更界面**，全屏常驻，用户在这儿等着下载更新和加载资源。要有：

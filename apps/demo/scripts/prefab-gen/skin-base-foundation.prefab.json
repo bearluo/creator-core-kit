@@ -1,0 +1,127 @@
+{
+  "url": "db://assets/skins/base/foundation/login/Login.prefab",
+  "root": {
+    "name": "Login",
+    "size": [1080, 1920],
+    "comp": "LoginView",
+    "children": [
+      {
+        "name": "Mask",
+        "size": [1080, 1920],
+        "sprite": {
+          "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+          "type": "sliced",
+          "color": [8, 10, 16, 240]
+        }
+      },
+      {
+        "name": "Card",
+        "size": [760, 820],
+        "sprite": {
+          "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+          "type": "sliced",
+          "color": [34, 38, 50, 250]
+        }
+      },
+      {
+        "name": "Title",
+        "pos": [0, 320],
+        "size": [660, 60],
+        "label": { "string": "登录", "fontSize": 48, "color": [120, 200, 255] }
+      },
+      {
+        "name": "Tip",
+        "pos": [0, 250],
+        "size": [680, 34],
+        "label": {
+          "string": "首次登录自动创建账号 · 密码至少 6 位",
+          "fontSize": 24,
+          "color": [150, 160, 180]
+        }
+      },
+      {
+        "name": "Name",
+        "pos": [0, 150],
+        "size": [600, 84],
+        "editBox": {
+          "placeholder": "账号",
+          "maxLength": 24,
+          "fontSize": 30,
+          "color": [235, 240, 250],
+          "placeholderColor": [120, 130, 150],
+          "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+          "bgColor": [56, 62, 80]
+        }
+      },
+      {
+        "name": "Password",
+        "pos": [0, 40],
+        "size": [600, 84],
+        "editBox": {
+          "placeholder": "密码",
+          "password": true,
+          "maxLength": 32,
+          "fontSize": 30,
+          "color": [235, 240, 250],
+          "placeholderColor": [120, 130, 150],
+          "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+          "bgColor": [56, 62, 80]
+        }
+      },
+      {
+        "name": "LoginBtn",
+        "pos": [0, -80],
+        "size": [600, 92],
+        "children": [
+          {
+            "name": "Bg",
+            "size": [600, 92],
+            "sprite": {
+              "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+              "type": "sliced",
+              "color": [70, 110, 180]
+            }
+          },
+          {
+            "name": "Label",
+            "size": [580, 48],
+            "label": { "string": "登录", "fontSize": 34, "color": [235, 242, 255] }
+          }
+        ]
+      },
+      {
+        "name": "GuestBtn",
+        "pos": [0, -190],
+        "size": [600, 84],
+        "children": [
+          {
+            "name": "Bg",
+            "size": [600, 84],
+            "sprite": {
+              "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+              "type": "sliced",
+              "color": [60, 68, 88]
+            }
+          },
+          {
+            "name": "Label",
+            "size": [580, 44],
+            "label": { "string": "游客登录（本机设备号）", "fontSize": 28, "color": [200, 212, 235] }
+          }
+        ]
+      },
+      {
+        "name": "Error",
+        "pos": [0, -280],
+        "size": [680, 36],
+        "label": { "string": "", "fontSize": 26, "color": [255, 120, 110] }
+      },
+      {
+        "name": "Status",
+        "pos": [0, -330],
+        "size": [680, 34],
+        "label": { "string": "", "fontSize": 24, "color": [150, 210, 160] }
+      }
+    ]
+  }
+}

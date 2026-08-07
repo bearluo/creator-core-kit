@@ -1,7 +1,7 @@
 {
   "specs": [
     {
-      "url": "db://assets/modules/lobby/LobbyPanel.prefab",
+      "url": "db://assets/skins/base/lobby/LobbyPanel.prefab",
       "root": {
         "name": "LobbyPanel",
         "size": [600, 520],
@@ -27,7 +27,7 @@
       }
     },
     {
-      "url": "db://assets/modules/lobby/LobbyItem.prefab",
+      "url": "db://assets/skins/base/lobby/LobbyItem.prefab",
       "root": {
         "name": "LobbyItem",
         "size": [360, 66],

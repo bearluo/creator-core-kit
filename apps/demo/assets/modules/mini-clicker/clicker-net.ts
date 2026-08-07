@@ -1,5 +1,5 @@
 import { getRootContainer, NETWORK, PB_SCHEMA } from '@cck/core';
-import { pbSegment } from '../../scenes/kit-net';
+import { pbSegment } from '../../foundation/net/schema';
 import { CMD, game, kit } from './clicker-proto';
 
 /**

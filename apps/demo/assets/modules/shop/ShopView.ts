@@ -1,7 +1,7 @@
 import { _decorator, Label, Node } from 'cc';
 import { getI18n } from '@cck/core';
 import { CCKUIView } from '@cck/engine';
-import type { ModuleContext } from '../lobby/ModuleContext';
+import type { ModuleContext } from '../../foundation/ModuleContext';
 
 const { ccclass } = _decorator;
 

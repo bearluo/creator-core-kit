@@ -1,0 +1,13 @@
+{
+  "ver": "1.2.0",
+  "importer": "directory",
+  "imported": true,
+  "uuid": "c4985d67-fb44-4d5c-a5c9-7feefc7723a6",
+  "files": [],
+  "subMetas": {},
+  "userData": {
+    "isBundle": true,
+    "priority": 2,
+    "bundleName": "skin-vest-foundation"
+  }
+}

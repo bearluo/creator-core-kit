@@ -674,6 +674,7 @@ const $ns_kit = $root.kit = (() => {
          * @property {number} CMD_ERROR=13 CMD_ERROR value
          * @property {number} CMD_AUTH_REQUEST=14 CMD_AUTH_REQUEST value
          * @property {number} CMD_AUTH_RESPONSE=15 CMD_AUTH_RESPONSE value
+         * @property {number} CMD_GATEWAY_RETIRING=16 CMD_GATEWAY_RETIRING value
          * @property {number} CMD_LOGIN_REQUEST=20 CMD_LOGIN_REQUEST value
          * @property {number} CMD_LOGIN_RESPONSE=21 CMD_LOGIN_RESPONSE value
          * @property {number} CMD_BIND_REQUEST=22 CMD_BIND_REQUEST value
@@ -697,6 +698,7 @@ const $ns_kit = $root.kit = (() => {
             values[valuesById[13] = "CMD_ERROR"] = 13;
             values[valuesById[14] = "CMD_AUTH_REQUEST"] = 14;
             values[valuesById[15] = "CMD_AUTH_RESPONSE"] = 15;
+            values[valuesById[16] = "CMD_GATEWAY_RETIRING"] = 16;
             values[valuesById[20] = "CMD_LOGIN_REQUEST"] = 20;
             values[valuesById[21] = "CMD_LOGIN_RESPONSE"] = 21;
             values[valuesById[22] = "CMD_BIND_REQUEST"] = 22;
@@ -1644,6 +1646,7 @@ declare namespace $types {
               CMD_ERROR = 13,
               CMD_AUTH_REQUEST = 14,
               CMD_AUTH_RESPONSE = 15,
+              CMD_GATEWAY_RETIRING = 16,
               CMD_LOGIN_REQUEST = 20,
               CMD_LOGIN_RESPONSE = 21,
               CMD_BIND_REQUEST = 22,

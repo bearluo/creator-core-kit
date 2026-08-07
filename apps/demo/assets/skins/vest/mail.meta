@@ -1,0 +1,13 @@
+{
+  "ver": "1.2.0",
+  "importer": "directory",
+  "imported": true,
+  "uuid": "181d6baa-0d5d-468a-9c99-22b2b0bd56f1",
+  "files": [],
+  "subMetas": {},
+  "userData": {
+    "isBundle": true,
+    "priority": 1,
+    "bundleName": "skin-vest-mail"
+  }
+}

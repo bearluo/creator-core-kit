@@ -1,5 +1,5 @@
 {
-  "url": "db://assets/scenes/LaunchOverlay.prefab",
+  "url": "db://assets/boot/LaunchOverlay.prefab",
   "root": {
     "name": "LaunchOverlay",
     "size": [560, 420],

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createProtobufCodec } from '@cck/core';
 import { kit } from '@kit/proto';
 import { CMD } from '@kit/proto/cmd';
-import { createKitSchema } from '../../assets/scenes/kit-net';
+import { codeName, createKitSchema, isOk } from '../../../assets/foundation/net/schema';
 
 /**
  * 协议接入的**契约守卫**：证明 `@kit/proto` 的生成产物插进 core 的 `PbSchema` 接缝后
@@ -54,5 +54,22 @@ describe('kit-proto 接入', () => {
     expect(() => codec.encode({ type: 'Ping' })).not.toThrow();
     // seq 省略 → 落 0 → 解码端认作服务器推送，不占请求位
     expect(codec.decode(codec.encode({ type: 'Ping' })).seq).toBeUndefined();
+  });
+});
+
+describe('业务错误码判定', () => {
+  it('只有 OK 算成功 —— pb 默认值 0 是 UNSPECIFIED，不能当成功', () => {
+    expect(isOk(kit.v1.ErrorCode.ERROR_CODE_OK)).toBe(true);
+    // 服务端漏填 code → pb 解出来是 0。判成成功就会把失败的领取当成功，本地状态直接错。
+    expect(isOk(0)).toBe(false);
+    expect(isOk(undefined)).toBe(false);
+    expect(isOk(kit.v1.ErrorCode.ERROR_CODE_ALREADY_DONE)).toBe(false);
+  });
+
+  it('错误码翻得出名字（日志 / 提示用）', () => {
+    expect(codeName(kit.v1.ErrorCode.ERROR_CODE_NOT_FOUND)).toBe('ERROR_CODE_NOT_FOUND');
+    expect(codeName(kit.v1.ErrorCode.ERROR_CODE_ALREADY_DONE)).toBe('ERROR_CODE_ALREADY_DONE');
+    // 认不出来的码不能崩，原样吐出去比抛错有用
+    expect(codeName(999999)).toBe('999999');
   });
 });

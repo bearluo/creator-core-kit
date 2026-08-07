@@ -30,6 +30,43 @@ docs/design       设计文档
 
 分层依赖单向向下：**View（prefab+薄 Component）→ Engine（cc 薄壳）→ Core（纯 TS）**；Core 反向只经接口被满足。
 
+### 接入方工程的目录（`apps/demo/assets/`）：**纵向分层 × 横向马甲，两个维度不许混层**
+
+纵向 = 「改它要付什么代价」：
+
+```
+boot/        ① AOT：Boot.scene / Bootstrap / app-config(VEST) / 启动界面 / foundation-api → 发新包、重启
+foundation/  ② 地基 bundle：协议 / 连接 / 登录与认证 / 网关搬家 / 模块清单 / 模块契约    → 热更，不重启
+             一个功能一个目录（net/ login/ …），**只有逻辑、没有脸**
+modules/*/   ③ 功能 bundle：lobby / mail / shop / mini-clicker / mini-dodge            → 按需 load/release
+shared/      跨模块共享资源（所有马甲都一样的那些）
+```
+
+横向 = 「哪个马甲」，**收在 `skins/<马甲>/` 里**（`skins/` 与 `skins/<马甲>/` 都**不是** bundle，
+只做归类——bundle 不能嵌套）。**皮的分包边界 = 它跟随者的分包边界，一个跟随者一个皮包**：
+
+```
+skins/base/foundation/ → bundle `skin-base-foundation`  login/Login.prefab   随 shared 装，常驻
+skins/base/lobby/      → bundle `skin-base-lobby`       LobbyPanel · LobbyItem   进大厅时装
+skins/base/mail/       → bundle `skin-base-mail`        Mail.prefab          开邮件时装、关时卸
+skins/vest/…           → `skin-vest-*`（示例马甲）      同名同路径，各画各的
+```
+
+**不许一个马甲一个大皮包**：那样启动就得把玩家永远不点的模块的脸一起下下来，改一张脸还要重下整包。
+包名靠目录 meta 的 `bundleName` 覆盖（目录不重复 `skin-` 前缀）；跨模块共用的图集 / 字体放
+地基皮包（priority 2 高于模块皮包 1），否则各模块皮包各复制一份。
+
+**换皮的界面不许用 `@property(Prefab)`**——那是编辑器期绑定、绑死在自己 bundle 里；经 UIManager
+的在 `MODULE_CATALOG` 里写 `skinned: true`（大厅负责把皮包跟模块包一起装卸），不经的（大厅骨架）
+用 `currentSkinBundle('lobby')` 自己加载。⚠️ 换皮界面的实例是被**皮包**那条回收链销毁的：
+`BundleScope.dispose` 的 `closeByBundle` 按**解析后**的 bundle 比对，对 skinned 模块传模块包名是 no-op。
+完整判据与开放项见 [`docs/design/2026-08-07-demo-assets-layout-v2-proposal.md`](docs/design/2026-08-07-demo-assets-layout-v2-proposal.md)。
+
+- 地基**必须在 `hotupdate` 之后加载**（`shared` 阶段），否则更新下来的要等下次启动才生效。长连接与认证跟着后移。
+- **主包不得 `import` 地基的任何值**——那段代码会被判给主包 → 地基进 AOT → 热更失效。唯一接缝是 `boot/foundation-api.ts`（`import type` + `js.getClassByName`）。
+- 模块**可以**正常 `import` 地基的函数：`foundation` 的 bundle 优先级（6）高于所有业务包，被多包引用的资源归属优先级最高者，同级才各复制一份。**改优先级前先读 [`ADR-0014`](docs/adr/0014-foundation-bundle-and-priority-sharing.md)**。
+- **马甲换皮走 UI 变体，不进代码分支**：登记了换皮的界面，prefab **一律**从 `skin-<马甲>-<跟随者>` 包取（`foundation/catalog.ts` 的 `skinBundle(owner)`），**原层里不留脸**——脸留在地基意味着别的马甲白下、改它还要热更整个地基包；脚本仍归原层（地基 6 / 模块 1），一套逻辑配任意一张脸。马甲标识 `VEST` 是打包期常量（`boot/app-config.ts`），demo 自己的地基皮是 `skin-base-foundation`。**给哪几种登录方式也由 prefab 决定**——节点在就接线、不在就没有这条路。存储 key 一律带 `appId` 前缀（Web / 小游戏同域名共用 localStorage，不隔离两个马甲会共用同一个游客号）。
+
 ---
 
 ## 开发约定

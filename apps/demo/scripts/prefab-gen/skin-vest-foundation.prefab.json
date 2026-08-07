@@ -1,0 +1,73 @@
+{
+  "url": "db://assets/skins/vest/foundation/login/Login.prefab",
+  "root": {
+    "name": "Login",
+    "size": [1080, 1920],
+    "comp": "LoginView",
+    "children": [
+      {
+        "name": "Mask",
+        "size": [1080, 1920],
+        "sprite": {
+          "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+          "type": "sliced",
+          "color": [26, 10, 12, 245]
+        }
+      },
+      {
+        "name": "Card",
+        "size": [760, 560],
+        "sprite": {
+          "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+          "type": "sliced",
+          "color": [58, 26, 30, 250]
+        }
+      },
+      {
+        "name": "Title",
+        "pos": [0, 180],
+        "size": [660, 66],
+        "label": { "string": "开 始 游 戏", "fontSize": 52, "color": [255, 206, 120] }
+      },
+      {
+        "name": "Tip",
+        "pos": [0, 100],
+        "size": [680, 34],
+        "label": { "string": "点下面就能玩，不用注册", "fontSize": 26, "color": [190, 150, 140] }
+      },
+      {
+        "name": "GuestBtn",
+        "pos": [0, -20],
+        "size": [600, 108],
+        "children": [
+          {
+            "name": "Bg",
+            "size": [600, 108],
+            "sprite": {
+              "frame": "20835ba4-6145-4fbc-a58a-051ce700aa3e@f9941",
+              "type": "sliced",
+              "color": [190, 70, 60]
+            }
+          },
+          {
+            "name": "Label",
+            "size": [580, 56],
+            "label": { "string": "一键开始", "fontSize": 40, "color": [255, 240, 225] }
+          }
+        ]
+      },
+      {
+        "name": "Error",
+        "pos": [0, -120],
+        "size": [680, 36],
+        "label": { "string": "", "fontSize": 26, "color": [255, 150, 140] }
+      },
+      {
+        "name": "Status",
+        "pos": [0, -170],
+        "size": [680, 34],
+        "label": { "string": "", "fontSize": 24, "color": [220, 190, 140] }
+      }
+    ]
+  }
+}

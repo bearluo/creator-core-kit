@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createProtobufCodec, getRootContainer, PB_SCHEMA, type PbSchemaRegistry } from '@cck/core';
 import { CMD as BASE_CMD } from '@kit/proto/cmd';
-import { createKitSchema } from '../../../assets/scenes/kit-net';
+import { createKitSchema } from '../../../assets/foundation/net/schema';
 import { CMD, game } from '../../../assets/modules/mini-clicker/clicker-proto';
 import { registerClickerProto } from '../../../assets/modules/mini-clicker/clicker-net';
 
