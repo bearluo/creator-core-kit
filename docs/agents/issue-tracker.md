@@ -2,7 +2,7 @@
 
 Issues and PRDs for this repo live as GitLab issues on the company self-hosted GitLab **hlgit** (`https://hlgit.5518game.com/`). Use the [`glab`](https://gitlab.com/gitlab-org/cli) CLI for all operations.
 
-> **本仓当前无 remote**：这些约定生效前需先在 hlgit 建仓并 `git remote add` + push（否则 `glab` 无法从 clone 推断项目）。`glab` 已登录 hlgit（身份 `luohao`），且 User 级环境变量 `GITLAB_HOST=hlgit.5518game.com` 已设，故默认实例即 hlgit，一般无需 `--hostname`。别用 `--stdin` 传 token（PowerShell 的 `\r\n` 会致 401），用 `--token` 或交互式。新建仓库后按全局约定设 fast-forward 合并（线性历史，见根 `CLAUDE.md` / 全局 skill `/rebase-merge`）。
+> **本仓 remote**：`origin` = `https://hlgit.5518game.com/luohao/creator-core-kit.git`，`glab` 在仓内即可推断项目，不必带 `-R`。`glab` 已登录 hlgit（身份 `luohao`），且 User 级环境变量 `GITLAB_HOST=hlgit.5518game.com` 已设，故默认实例即 hlgit，一般无需 `--hostname`。别用 `--stdin` 传 token（PowerShell 的 `\r\n` 会致 401），用 `--token` 或交互式。新建仓库后按全局约定设 fast-forward 合并（线性历史，见根 `CLAUDE.md` / 全局 skill `/rebase-merge`）。
 
 ## Conventions
 
@@ -14,7 +14,7 @@ Issues and PRDs for this repo live as GitLab issues on the company self-hosted G
 - **Close**: `glab issue close <number>`. `glab issue close` does not accept a closing comment, so post the explanation first with `glab issue note <number> --message "..."`, then close.
 - **Merge requests**: GitLab calls PRs "merge requests". Use `glab mr create`, `glab mr view`, `glab mr note`, etc. — the same shape as `gh pr ...` with `mr` in place of `pr` and `note`/`--message` in place of `comment`/`--body`. 本仓要求 rebase-before-merge + ff 合并、禁 merge commit。
 
-Infer the repo from `git remote -v` — `glab` does this automatically when run inside a clone (需先给本仓加 hlgit remote)。
+Infer the repo from `git remote -v` — `glab` does this automatically when run inside a clone。
 
 ## Merge requests as a triage surface
 

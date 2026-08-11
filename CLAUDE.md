@@ -165,7 +165,7 @@ packages/core/docs/api/                      **typedoc 生成物，勿手改**�
 
 ### Issue tracker
 
-Issues/PRD 走公司自建 GitLab **hlgit**（`glab` CLI）；本仓当前无 remote，需先建仓/push 才生效。详见 `docs/agents/issue-tracker.md`。
+Issues/PRD 走公司自建 GitLab **hlgit**（`glab` CLI）；本仓 remote 为 `luohao/creator-core-kit`，`glab` 在仓内直接可用。详见 `docs/agents/issue-tracker.md`。
 
 ### Domain docs
 
