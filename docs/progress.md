@@ -92,12 +92,30 @@
 
 **至此整条链路只剩 `dispatcherUrl` 一个烘死的地址**（链条起点，结构性救不了）。
 
-遗留两项，都不在本仓：
+当日两项遗留**已全部消解**（2026-08-18 复验）：
 
-1. dispatcher 下发的值仍是错形态的 `http://172.25.50.135:8081/cdn/`（filebrowser 的 SPA 路由，
-   任何路径都回 200 + HTML）。已提 [server-core-kit#1](https://hlgit.5518game.com/luohao/server-core-kit/-/issues/1)，
-   正确值 `http://172.25.50.135:8081/api/public/dl/shCo8WNE/`。本轮 e2e 用本机假 dispatcher 顶替。
-2. 模拟器到 `ws://172.25.50.20:9101/ws` 的长连接 10s 未就绪（与本次改动无关，base/vest 都复现）。
+1. ✅ dispatcher 曾配成 `http://172.25.50.135:8081/cdn/`（filebrowser 的 SPA 路由，任何路径都回
+   200 + HTML）。[server-core-kit#1](https://hlgit.5518game.com/luohao/server-core-kit/-/issues/1)
+   服务端已修，现下发固定分享 `…/api/public/dl/shCo8WNE/`，`Content-Type: application/octet-stream`
+   判据通过。真机复验：base 与三个分包全部 `基址取服务端下发`，版本一致走 `ALREADY_UP_TO_DATE`
+   —— 验的是注入路在真链路上通，**真下载那一程仍是假 dispatcher 那轮的证据**。
+2. ✅ 长连接 10s 未就绪查明是两个独立的坑，与热更无关：引擎功能裁剪关掉了 native-only 的
+   `websocket` 模块（`typeof WebSocket === 'undefined'`，连 SYN 都发不出去，网关侧零日志），
+   以及心跳间隔吃 core 默认值 15s 恰好撞上网关 15s 空闲超时（连上 → 15s 被回收 → 重连，死循环）。
+
+### 2026-08-18 · 长连接修复 + 出包流程固化 + demo 装配文档
+
+- **长连接跑通**：勾上 `websocket` 引擎模块（⚠️ 它改 `cfg.cmake` 的 `USE_SOCKET` 编译宏，
+  Creator 的「构建」只生成工程不编 native，**必须再跑 gradle 全量重编 `libcocos.so`**，否则装上去
+  还是旧 so、勾了也不生效）+ 心跳间隔 15s → 5s。模拟器实测：干净安装后连接建立，此后 2 分钟
+  网关零条「连接关闭」（改前应有 8 次）。
+- **出包流程固化**：`apps/demo/build-configs/`（构建意图进 git · 本机路径 gitignore）+
+  `scripts/build.mjs`（Creator → manifest → gradle 一条龙）+ skill `/demo-build`。踩出三个坑：
+  命令行构建不读 Creator 偏好设置、**失败时退出码仍是 0**、`startScene` 只认 uuid 填 url 会静默
+  回退到项目默认场景。
+- **demo 装配文档**：文档归属从两层扩到三层，新增 `apps/demo/docs/`（README 地图 + bundle-layout
+  + vest-and-skin + hotupdate-pipeline，七张 mermaid 图）—— 此前「加个模块 / 加个马甲 / 发个版
+  怎么做」没有一处以现状形态回答。
 
 另：ADR-0006 决策 6（`python -m http.server` + `10.0.2.2` 托管）已标作废并补写「修正」节 —— 它被
 ADR-0007 取代却一直以「已接受决策」形态躺着，被当可用配方翻出来过不止一次。

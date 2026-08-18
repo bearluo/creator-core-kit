@@ -282,9 +282,10 @@ force-stop 冷启动 → 只发 4 个 *.version.manifest 探测，**一个资源
 
 ⚠️ **配 CDN 基址时 `200` 不等于拿到文件，要看 `Content-Type`。** 本机 filebrowser 只在
 `/api/public/dl/<hash>/` 下发文件，其它路径一律回 SPA 首页 + `200 text/html` → 客户端「下载成功」
-拿到一坨 HTML，直到解析才炸。dispatcher 当前配的 `http://172.25.50.135:8081/cdn/` 正是这个形态
-（[server-core-kit#1](https://hlgit.5518game.com/luohao/server-core-kit/-/issues/1)，改那个文件属别的仓）；
-正确值是固定分享 `http://172.25.50.135:8081/api/public/dl/shCo8WNE/`。
+拿到一坨 HTML，直到解析才炸。**判据是 `Content-Type: application/octet-stream`，不是 200。**
+本机 dispatcher 下发的是固定分享 `http://172.25.50.135:8081/api/public/dl/shCo8WNE/`（曾配错成
+`…:8081/cdn/` 这个形态，[server-core-kit#1](https://hlgit.5518game.com/luohao/server-core-kit/-/issues/1)，
+服务端已修）。
 
 **实证 PASS**（2026-08-18，真 x86_64 模拟器，干净安装）。判据做成二值的：**APK 与 CDN 上所有 manifest 的
 `packageUrl` 全烘成死地址 `http://127.0.0.1:9/dead/`**，全局唯一的活地址是握手下发的 `cdn_url` ——
@@ -300,14 +301,20 @@ dispatcher 放行：cdn=http://172.25.50.135:8081/api/public/dl/shCo8WNE/
 ```
 
 对照组同样明确：**同一份死地址内容 + 改动前的 engine** → `热更检查失败:
-java.net.ConnectException: Failed to connect to /127.0.0.1:9`。该轮 `cdn_url` 由本机假 dispatcher 下发
-（真的那台配的仍是上面那个错形态的值）。
+java.net.ConnectException: Failed to connect to /127.0.0.1:9`。该轮 `cdn_url` 由本机假 dispatcher 下发——当时真的那台还配着错形态的值。
 
-> ⚠️ 这一程**没跑到大厅**：`demo-foundation` 步的长连接 `10s 未就绪（停在 reconnecting）：
-> ws://172.25.50.20:9101/ws`。同一失败在 `skin='base'` 下同样复现（与皮包、与本次改动无关），
-> 网关从宿主机 `/healthz` 200、WS 升级 101 都正常，模拟器到 9101 的 TCP 也通 —— 是模拟器侧
-> WS 握手/重连的独立问题，另查。顺带把 `Bootstrap` 的失败日志摊平成一行：Cocos native 转发
-> JS console 到 logcat 时对象参数一律打成 `[object Object]`，真机上唯一的失败信息不能是这个。
+**2026-08-18 服务端改好后已用真 dispatcher 复验**：握手下发 `cdn_url=…/shCo8WNE/`，base 与
+`shared` / `skin-base-foundation` / `foundation` 三个分包全部 `基址取服务端下发：…/shCo8WNE/`。
+包内与 CDN 同为 1.0.0 故走 `ALREADY_UP_TO_DATE` —— 这一程验的是**注入路在真链路上通**，
+不是又下了一遍。
+
+> 那一程卡在 `demo-foundation` 步的长连接（`10s 未就绪`），后查明与热更无关、是两个独立的坑：
+> 引擎功能裁剪把 native-only 的 `websocket` 模块关了（`typeof WebSocket === 'undefined'`，连 SYN
+> 都发不出去），以及心跳间隔吃 core 默认值 15s 恰好撞上网关 15s 空闲超时。均已修，2026-08-18 起
+> 启动链路能一路跑到长连接就绪。
+>
+> `Bootstrap` 的失败日志摊平成一行是这次查出来的副产品：Cocos native 转发 JS console 到 logcat 时
+> 对象参数一律打成 `[object Object]`，真机上唯一的失败信息不能是这个。
 
 ### coreApiHash 版本闸激活（戳的运行时读入，2026-07-29 · 真机 e2e PASS）
 
