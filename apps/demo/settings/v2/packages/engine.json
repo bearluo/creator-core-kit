@@ -131,7 +131,7 @@
             "_value": true
           },
           "websocket": {
-            "_value": false
+            "_value": true
           },
           "websocket-server": {
             "_value": false
@@ -190,6 +190,9 @@
             "_value": false
           }
         },
+        "flags": {
+          "LOAD_SPINE_MANUALLY": false
+        },
         "includeModules": [
           "2d",
           "affine-transform",
@@ -212,13 +215,13 @@
           "tween",
           "ui",
           "video",
+          "websocket",
           "webview"
         ],
         "noDeprecatedFeatures": {
           "value": false,
           "version": ""
-        },
-        "flags": {}
+        }
       }
     },
     "globalConfigKey": "defaultConfig"

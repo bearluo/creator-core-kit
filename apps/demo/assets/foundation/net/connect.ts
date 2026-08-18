@@ -80,7 +80,11 @@ export async function connectNetwork(ctx: LaunchContext): Promise<void> {
       url: d.wsUrl,
       // 心跳用契约里的 Ping，而不是 core 默认的 '__ping'——后者不在 schema 里，
       // 编码时会直接抛「未知消息类型」。服务端回的 Pong 走 seq=0 推送，不占请求位。
-      heartbeat: { type: 'Ping' },
+      //
+      // 间隔必须**明显小于**网关的空闲超时（实测 15s），不能吃 core 的默认值——那个也是 15s，
+      // 两边同频时第一次 Ping 的定时器正好卡在超时边界上，网关先判空闲：连上 → 15s 被回收 →
+      // 重连 → 再被回收，稳定死循环，且每次都连得上、看着像网络抖动。取 1/3 留足余量。
+      heartbeat: { type: 'Ping', intervalSec: 5 },
     });
     root.register(NETWORK, { useValue: net });
   }
