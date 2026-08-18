@@ -11,6 +11,7 @@
 | **做新业务功能 / 写测试** | **`docs/design/testing-strategy-overview.md`（分层测试边界 + 单例禁令 + 动作清单）** |
 | 了解架构全貌与关键决策 | `docs/design/2026-07-24-architecture-overview.md` |
 | 设计 / 使用某个模块 | `packages/<pkg>/docs/modules/<module>.md`（随包，如 `packages/core/docs/modules/`） |
+| **接入方工程怎么装配**（分包 / 马甲 / 热更流水线 / 出包） | **`apps/demo/docs/README.md`**（demo 自己的文档地图） |
 | **查 `@cck/core` 某个 API 的精确签名** | `packages/core/docs/api/README.md`（typedoc 生成，一模块一页；**勿手改**，跑 `pnpm docs:api` 重生成） |
 | 看整体进度、谁在做什么 | `docs/progress.md` |
 | 了解选型依据（MCP / 框架 / 热更调研） | `docs/research/2026-07-24-cocos-ecosystem-survey.md` |
@@ -22,7 +23,7 @@
 
 - **L0 常驻** `CLAUDE.md` — 铁律 + 约定摘要 + 指针。每次会话加载，保持最精炼。
 - **L1 入口** 本地图 + `docs/progress.md` — 导航与进度，先读这层再决定深入。
-- **L2 主题** 架构总纲 / 各模块设计 / 调研 — 自包含，顶部有摘要头部。
+- **L2 主题** 架构总纲 / 各模块设计 / 调研 — 自包含，顶部有摘要头部。**接入方工程的装配文档随工程走**（`apps/<project>/docs/`），与随包的模块文档同理：讲「这个工程怎么组装」，不讲 kit 怎么实现。
 - **L3 细节** 主题文档内部的决策表 / 测试计划 / 实现记录 — 需要时才展开。
 
 ## 首次阅读顺序（新成员 / AI）

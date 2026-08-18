@@ -101,7 +101,7 @@ skins/vest/…           → `skin-vest-*`（示例马甲）      同名同路�
 
 ## 文档维护约定
 
-文档**随代码提交**（doc-as-code），与实现在同一分支/PR 更新。**归属按范围分两层**：跨包 / 跨项目的放顶层 `docs/`；**单模块设计文档随包**放 `packages/<pkg>/docs/modules/<module>.md`（文档跟包走——core 发 npm 时自带文档，对齐姊妹框架 godot-core-kit 把文档放包内的做法）。
+文档**随代码提交**（doc-as-code），与实现在同一分支/PR 更新。**归属按范围分三层**：跨包 / 跨项目的放顶层 `docs/`；**单模块设计文档随包**放 `packages/<pkg>/docs/modules/<module>.md`（文档跟包走——core 发 npm 时自带文档，对齐姊妹框架 godot-core-kit 把文档放包内的做法）；**接入方工程怎么装配随工程**放 `apps/<project>/docs/`（入口 `README.md`）。
 
 ```
 docs/                                        顶层 = 跨包 / 跨项目
@@ -117,6 +117,10 @@ docs/                                        顶层 = 跨包 / 跨项目
 packages/<pkg>/docs/modules/<module>.md      单模块**当前功能文档**（随包，单一时态）
                                              core 模块归 core、engine 专属归 engine；
                                              跨 core+engine 的按「逻辑主场」归属（多在 core），适配层作文档内小节
+
+apps/<project>/docs/                         **接入方工程的装配文档**（随工程，入口 `README.md`）
+                                             分包 / 马甲 / 热更流水线 / 出包——讲「这个工程怎么组装」，
+                                             不讲 kit 怎么实现（那在 packages/*/docs）
 
 packages/core/docs/api/                      **typedoc 生成物，勿手改**（`pnpm docs:api`）
                                              精确签名去这里查；模块文档只讲「怎么用、为什么这么设计」
