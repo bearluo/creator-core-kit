@@ -43,6 +43,8 @@ adb shell sleep 30 && adb logcat -d -v brief | grep -E "CCK-BOOT|CCK-NET|\[cck\]
 热更内容由 `--manifest` 一并出（底层是 `packages/tools` 的 CLI，基址取 filebrowser 的固定分享，
 见 skill `filebrowser-cdn`）。要造「包内一版、CDN 另一版」的增量热更场景，就分两次跑：
 先 `--manifest --apk` 出包，再改内容后 `--manifest --manifest-version 1.0.1` 只更新 CDN。
+第二次跑时 `--prev` 会自动指向同步目录（也就是刚出包那一版），**只有真改了的包涨版本号**——
+所以看到 15 个包里只有一两个变成 1.0.1 是对的，全变才是错的（见下「坑」）。
 
 ## 坑（都是实测踩出来的，别重蹈）
 
@@ -65,5 +67,11 @@ adb shell sleep 30 && adb logcat -d -v brief | grep -E "CCK-BOOT|CCK-NET|\[cck\]
   重编引擎（十几分钟、`libcocos.so` 400MB 级）。**Creator 的「构建」只生成工程，不编 native**——
   只点构建不跑 gradle 的话，装上去的还是旧 so，症状是勾了模块却依然不生效
   （踩过一次：`typeof WebSocket === 'undefined'`，长连接连 SYN 都发不出去）。
+- **内容没变的包不许涨版本号，涨了客户端 SIGSEGV。** `AssetsManagerEx` 在 worker 线程算 diff，
+  遇`diffMap.empty()`（资产表一致、只有版本号不同）就地 `updateSucceed()` → `UPDATE_FINISHED`
+  在非主线程进 JS VM → `se::AutoHandleScope` 崩。所以生成 manifest **必须**带 `--prev`（已做进
+  `build.mjs`，指向 `local.json` 的 `cdnDir`）。别手工绕开 `build.mjs` 直接敲 CLI 而漏掉它。
+  症状：日志停在「基址取服务端下发」后 ~90ms 就 `Fatal signal 11`，栈顶是
+  `AssetsManagerEx::updateSucceed()` → `dispatchUpdateEvent` → `se::AutoHandleScope`。
 - gradle 那步用 `shell: true`：Node 20 起（CVE-2024-27980）不再直接 exec `.bat`，少了它抛 EINVAL
   且 stdout 为空，看着像「gradle 没输出」。

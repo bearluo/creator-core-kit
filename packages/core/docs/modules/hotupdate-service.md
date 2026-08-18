@@ -235,6 +235,29 @@ shop                 6 个资源 → 1.0.1              ← 只有它真变了
 
 5/6 个模块包与包内 manifest **逐字节一致**，顺带证明 Creator 构建对未改内容是可复现的——`--prev` 这条路成立的前提。
 
+⚠️ **`--prev` 是必需项而非优化项：内容没变的包涨了版本号，客户端会 native 崩溃。**
+`AssetsManagerEx::prepareUpdateAsync` 把耗时的 diff 计算扔进 `AsyncTaskPool` 的 **worker 线程**，
+而任务体里有一条近路——
+
+```cpp
+// AssetsManagerEx.cpp:702  enqueue(TASK_OTHER, prepareFinished, nullptr, [this]() {
+auto diffMap = _localManifest->genDiff(_remoteManifest);
+if (diffMap.empty()) { updateSucceed(); return; }   // ← 就地调用，没走 prepareFinished
+```
+
+`prepareFinished` 那条正路会经 `performFunctionInCocosThread` 弹回主线程，这条近路不会：
+`updateSucceed()` 末尾的 `dispatchUpdateEvent(UPDATE_FINISHED)` 于是在 worker 线程上进 JS VM，
+`se::AutoHandleScope` 构造即 `SIGSEGV`（`signal 11 SEGV_MAPERR`）。触发条件是**资产表一致、
+只有版本号不同**——正是「无差别给所有包盖同一个新版本号」的产物。已做进 `apps/demo/scripts/build.mjs`
+（`--prev` 指向同步目录），单测见 `packages/tools` 的 `prevDir：内容没动的包沿用旧版本号`。
+
+因此 `sameContent` 的口径**必须与 `genDiff` 一致：只比资产表**。`packageUrl` / `searchPaths` 曾被
+算作改动（理由是「旧 URL 会留在客户端缓存 manifest 里」），那会让「只换 CDN 域名、内容一个字节没动」
+给所有包涨版本 → 资产表一致 → 踩中同一条近路；而那个理由本身也不成立：客户端查更新用的是**本地
+manifest 里烘的**地址（`AssetsManagerEx.cpp:580/623`），老地址死了涨版本救不回来，老地址活着新
+`packageUrl` 本来就随 remote manifest 生效。何况本框架的客户端一律经 dispatcher 下发的 `cdn_url`
+自取 remote manifest 并改写基址，包内烘的那个地址根本没人读。**换址只改服务端配置，不发版。**
+
 设备端（base 1.0.0 → 1.0.1 只下 2/22 个文件，`game.restart()` 后新 JS 生效）：
 
 ```
@@ -315,6 +338,28 @@ java.net.ConnectException: Failed to connect to /127.0.0.1:9`。该轮 `cdn_url`
 >
 > `Bootstrap` 的失败日志摊平成一行是这次查出来的副产品：Cocos native 转发 JS console 到 logcat 时
 > 对象参数一律打成 `[object Object]`，真机上唯一的失败信息不能是这个。
+
+### 真 dispatcher + 真下载 e2e（2026-08-18，真 Android APK · PASS）
+
+补上此前唯一的缺口：真 dispatcher 那程只走到 `ALREADY_UP_TO_DATE`（包内与 CDN 同为 1.0.0），
+真下载的证据还停在假 dispatcher 那轮。这次让**装着 1.0.0 的包**去撞 **1.0.1 的 CDN**。
+
+判据做成二值的：往 `foundation` 包里埋一句包内不存在的日志，能打出来就只可能来自热更。
+
+```
+[cck] foundation.manifest 基址取服务端下发：…/shCo8WNE/
+⏳ bundle 'foundation' 更新 0/1 → 1/1 文件            ← 15 个包里只有它涨了版本
+[CCK-NET] 长连接就绪【热更到 1.0.1】 · RTT 18ms       ← 包内 index.js 里 grep 不到这串
+force-stop 冷启动 → 无任何下载，标记仍在              ← 缓存 manifest 已是 1.0.1，增量成立
+```
+
+反证：`unzip -p demo-debug.apk assets/assets/foundation/index.js | grep -c 热更到` = **0**，
+设备上 `files/cck-bundle-asset/foundation/assets/foundation/index.js` 同 grep = **1**。
+
+**这一程是踩着一次 native 崩溃换来的**：首跑给所有包无差别盖了 1.0.1，base 的资产表其实没变 →
+`diffMap.empty()` → worker 线程 `updateSucceed()` → SIGSEGV（详见上文「逐包版本节奏」的 ⚠️）。
+病根是 `build.mjs` 生成 manifest 时漏了 `--prev`，已修；补上后 15 个包只有 `foundation` 涨到 1.0.1，
+其余 14 个沿用 1.0.0，全程零 `F/libc` / `F/DEBUG`。
 
 ### coreApiHash 版本闸激活（戳的运行时读入，2026-07-29 · 真机 e2e PASS）
 

@@ -189,12 +189,21 @@ function readPrevManifest(dir: string, file: string): Manifest | undefined {
 }
 
 /**
- * 内容是否与上一版完全一致——**比 version 之外的一切**：资产表（key + md5 + size + compressed）、
- * packageUrl、searchPaths。packageUrl 变了也得涨版本，否则客户端缓存里留着旧 URL，后续增量下载还去老地址。
+ * 内容是否与上一版完全一致——**只比资产表**（key + md5 + size + compressed），`packageUrl` /
+ * `searchPaths` 一概不看。
+ *
+ * **口径必须与引擎的 `Manifest::genDiff` 一致，这是硬约束不是取舍**：引擎判断"要不要下载"时也只比
+ * 资产表。凡是我们判"改了"而引擎判"没改"的字段，产出的都是「版本号涨了、引擎却算出空 diff」——
+ * 而 `AssetsManagerEx` 在那个状态下会崩：`prepareUpdateAsync` 的 worker 线程任务体里遇
+ * `diffMap.empty()` 就地 `updateSucceed()`，绕开本该把回调弹回主线程的 `prepareFinished`，
+ * `UPDATE_FINISHED` 于是在非主线程进 JS VM → `se::AutoHandleScope` SIGSEGV。
+ *
+ * 换 CDN 地址因此**不该**、也**不需要**涨版本：客户端查更新用的是本地 manifest 里烘的地址
+ * （`AssetsManagerEx.cpp:580/623`），老地址死了涨版本也救不回来；而本框架的客户端一律经 dispatcher
+ * 下发的 `cdn_url` 自取 remote manifest 并改写基址（engine 的 `startCheck`），包内烘的那个地址
+ * 根本没人读。换址只改服务端配置。
  */
 function sameContent(a: Manifest, b: Manifest): boolean {
-  if (a.packageUrl !== b.packageUrl) return false;
-  if (JSON.stringify(a.searchPaths ?? []) !== JSON.stringify(b.searchPaths ?? [])) return false;
   const ka = Object.keys(a.assets).sort();
   const kb = Object.keys(b.assets).sort();
   if (ka.length !== kb.length) return false;

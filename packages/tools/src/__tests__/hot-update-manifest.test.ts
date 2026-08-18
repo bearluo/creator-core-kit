@@ -196,14 +196,33 @@ describe('buildSplitManifests（分包：base + 每个模块 bundle 一份）', 
       }
     });
 
-    it('packageUrl 变了也算改动——旧 URL 会留在客户端缓存 manifest 里', () => {
+    // 口径与引擎的 `Manifest::genDiff` 对齐：它只比资产表。判"改了"而引擎判"没改"，产出的就是
+    // 「版本号涨了、引擎却算出空 diff」——AssetsManagerEx 在那个状态下会在 worker 线程上
+    // updateSucceed() → UPDATE_FINISHED 进 JS VM → SIGSEGV。换址走 dispatcher 下发，不靠涨版本。
+    it('packageUrl 变了不算改动——引擎 genDiff 不看它，涨版本只会造出空 diff 崩溃态', () => {
       const { bundles } = buildSplitManifests({
         ...sopts(),
         packageUrl: 'http://other/cdn',
         version: '1.0.1',
         prevDir: prev,
       });
-      expect(bundles.shop.version).toBe('1.0.1');
+      expect(bundles.shop.version).toBe('1.0.0');
+    });
+
+    it('资产真变了 → 照涨，不受 packageUrl 影响', () => {
+      const file = join(sroot, 'assets', 'shop', 'index.js');
+      writeFileSync(file, '// shop v3');
+      try {
+        const { bundles } = buildSplitManifests({
+          ...sopts(),
+          packageUrl: 'http://other/cdn',
+          version: '1.0.1',
+          prevDir: prev,
+        });
+        expect(bundles.shop.version).toBe('1.0.1');
+      } finally {
+        writeFileSync(file, '// shop');
+      }
     });
 
     it('不给 prevDir → 一律用新版本号（老行为）', () => {

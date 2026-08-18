@@ -158,14 +158,21 @@ node packages/tools/dist/cli.cjs \
 ```
 
 - `--split` 切成 base + 每个 bundle 一份 manifest；
-- `--prev` 让**内容没变的包沿用旧版本号**，客户端那边直接 `ALREADY_UP_TO_DATE`，
-  不再空跑一轮「下载 0 个文件」；
+- `--prev` 让**内容没变的包沿用旧版本号**。`build.mjs` 自动把它指向 `cdnDir`（当前线上那一版，
+  此刻还没被同步覆盖），**不要手工绕开**——见下面那条 ⚠️；
 - CDN base 取 filebrowser 的固定分享（`/api/public/dl/<hash>/`，hash 永久不变），见 skill
   `filebrowser-cdn`。
 
 **⚠️ `--manifest` 必须夹在 Creator 构建与 gradle 之间**：Creator 每次清空 `data/`，gradle 又把
 `data/` 整个塞进 APK。顺序错了 APK 里一个 manifest 都没有，且要装到机器上才报错。
 已做进 `scripts/build.mjs`，别手工拆开跑。
+
+**⚠️ 内容没变的包不许涨版本号——涨了客户端会 SIGSEGV。** 不是洁癖，是崩溃：
+`AssetsManagerEx::prepareUpdateAsync` 把耗时的 diff 计算扔进 `AsyncTaskPool` 的 **worker 线程**，
+任务体里遇 `diffMap.empty()`（资产表一致、只有版本号不同）就**就地** `updateSucceed()` 并
+`dispatchUpdateEvent(UPDATE_FINISHED)`，绕开了本该把回调弹回主线程的 `prepareFinished`
+（`performFunctionInCocosThread`）。于是 JS 回调在非主线程进 VM，`se::AutoHandleScope` 构造即
+`SIGSEGV`。所以 `--prev` 是**必需项**，不是优化项。
 
 **⚠️ 配 CDN 基址时 `200` 不等于拿到文件。** filebrowser 只在 `/api/public/dl/<hash>/` 下发文件，
 其它任意路径都回 SPA 首页、状态码照样 200 → 客户端「下载成功」写下一坨 HTML，直到解析才炸

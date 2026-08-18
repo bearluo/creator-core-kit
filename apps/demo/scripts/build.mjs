@@ -114,7 +114,13 @@ if (flag('manifest')) {
   const version = opt('manifest-version') ?? '1.0.0';
   console.log(`▶ 生成 manifest（version=${version} base=${cdnUrl}）`);
   const cli = join(DEMO, '..', '..', 'packages', 'tools', 'dist', 'cli.cjs');
-  spawnSync(process.execPath, [cli, '--root', DATA, '--url', cdnUrl, '--version', version, '--split', '--out', DATA], {
+  // `--prev` 指向**当前线上那一版**（同步目录，此刻还没被下面的 cpSync 覆盖）：内容没变的包沿用
+  // 旧版本号。这不只是整洁——**内容没变却涨版本号会让客户端崩**：AssetsManagerEx 在
+  // `prepareUpdateAsync` 的 worker 线程任务体里遇 `diffMap.empty()` 直接调 `updateSucceed()`，
+  // 绕开了本该把回调弹回主线程的 `prepareFinished`，UPDATE_FINISHED 于是在非主线程进 JS VM
+  // → `se::AutoHandleScope` SIGSEGV。见 hotupdate-service.md「坑」。
+  const prev = cdnDir && existsSync(cdnDir) ? ['--prev', cdnDir] : [];
+  spawnSync(process.execPath, [cli, '--root', DATA, '--url', cdnUrl, '--version', version, '--split', ...prev, '--out', DATA], {
     stdio: ['ignore', 'ignore', 'inherit'],
   });
   const got = read(join(DATA, 'project.manifest')).packageUrl;

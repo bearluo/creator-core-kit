@@ -97,8 +97,7 @@
 1. ✅ dispatcher 曾配成 `http://172.25.50.135:8081/cdn/`（filebrowser 的 SPA 路由，任何路径都回
    200 + HTML）。[server-core-kit#1](https://hlgit.5518game.com/luohao/server-core-kit/-/issues/1)
    服务端已修，现下发固定分享 `…/api/public/dl/shCo8WNE/`，`Content-Type: application/octet-stream`
-   判据通过。真机复验：base 与三个分包全部 `基址取服务端下发`，版本一致走 `ALREADY_UP_TO_DATE`
-   —— 验的是注入路在真链路上通，**真下载那一程仍是假 dispatcher 那轮的证据**。
+   判据通过。**真下载也已在真链路上补验**（见下「真 dispatcher + 真下载」）。
 2. ✅ 长连接 10s 未就绪查明是两个独立的坑，与热更无关：引擎功能裁剪关掉了 native-only 的
    `websocket` 模块（`typeof WebSocket === 'undefined'`，连 SYN 都发不出去，网关侧零日志），
    以及心跳间隔吃 core 默认值 15s 恰好撞上网关 15s 空闲超时（连上 → 15s 被回收 → 重连，死循环）。
@@ -116,6 +115,24 @@
 - **demo 装配文档**：文档归属从两层扩到三层，新增 `apps/demo/docs/`（README 地图 + bundle-layout
   + vest-and-skin + hotupdate-pipeline，七张 mermaid 图）—— 此前「加个模块 / 加个马甲 / 发个版
   怎么做」没有一处以现状形态回答。
+
+- **真 dispatcher + 真下载 e2e（补上最后一个缺口）**：让装着 1.0.0 的包去撞 1.0.1 的 CDN。
+  判据二值化——往 `foundation` 埋一句包内不存在的日志：`⏳ bundle 'foundation' 更新 0/1 → 1/1`
+  → `[CCK-NET] 长连接就绪【热更到 1.0.1】`；反证 `unzip -p …apk assets/assets/foundation/index.js`
+  grep 该串 = 0 处，设备上下载落地那份 = 1 处；`force-stop` 冷启动零重下、标记仍在。
+- **⚠️ 换来这一程的是一次 native 崩溃，值得记住**：首跑给 15 个包**无差别**盖了 1.0.1，而 base 的
+  资产表其实没变 → `AssetsManagerEx` 在 `AsyncTaskPool` 的 worker 线程算 diff，遇
+  `diffMap.empty()` 就地 `updateSucceed()` → `dispatchUpdateEvent(UPDATE_FINISHED)` 绕开了本该把
+  回调弹回主线程的 `prepareFinished` → JS 回调在非主线程进 VM，`se::AutoHandleScope` 构造即
+  `SIGSEGV`（启动后 ~90ms，栈顶 `updateSucceed()`）。**结论：`--prev`（内容没变的包沿用旧版本号）
+  是防崩必需项，不是整洁优化**——`packages/tools` 早就实现且有单测，是 `build.mjs` 生成 manifest
+  时漏传。补上后 15 个包只有 `foundation` 涨到 1.0.1，其余 14 个沿用 1.0.0，全程零 `F/libc`。
+  **同一颗雷的另一个引信一并拆了**：`sameContent` 原本把 `packageUrl` / `searchPaths` 也算改动，
+  于是「只换 CDN 域名、内容没动」照样让所有包涨版本而资产表不变 → 同一条近路。已改成**只比资产表，
+  口径与引擎 `genDiff` 对齐**——凡是我们判"改了"而引擎判"没改"的字段都是崩溃态的原料。原先那条理由
+  （旧 URL 会留在客户端缓存里）也不成立：客户端查更新用的是本地 manifest 里烘的地址
+  （`AssetsManagerEx.cpp:580/623`），且本框架的客户端一律经 dispatcher 下发的 `cdn_url` 自取并改写
+  基址，那个烘进去的地址没人读。换址只改服务端配置。
 
 另：ADR-0006 决策 6（`python -m http.server` + `10.0.2.2` 托管）已标作废并补写「修正」节 —— 它被
 ADR-0007 取代却一直以「已接受决策」形态躺着，被当可用配方翻出来过不止一次。
