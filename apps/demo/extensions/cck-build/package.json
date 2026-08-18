@@ -1,0 +1,11 @@
+{
+  "name": "cck-build",
+  "title": "CCK 出包参数",
+  "package_version": 2,
+  "version": "1.0.0",
+  "author": "creator-core-kit",
+  "description": "把马甲 / 版本 / 环境 / dispatcher 地址注入 settings.json，出包不用改源码",
+  "contributions": {
+    "builder": "./builder.js"
+  }
+}

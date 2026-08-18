@@ -16,7 +16,9 @@ const BUSINESS = ['apps/demo/assets/**/*.ts', 'apps/demo/test/**/*.ts'];
 export default tseslint.config(
   {
     ignores: [
-      'apps/demo/extensions/**', // 第三方编辑器扩展（funplay-cocos-mcp，Node/CJS）
+      // 编辑器扩展：跑在 Creator 的 Node 进程里（CJS），不是游戏运行时代码，也走不到
+      // 本仓的 TS 编译链。含第三方的 funplay-cocos-mcp 与自家的 cck-build（出包参数注入）。
+      'apps/demo/extensions/**',
       'apps/demo/scripts/**', // 编辑器里一次性跑的生成脚本，不是游戏运行时代码
       'apps/demo/library/**',
       'apps/demo/temp/**',

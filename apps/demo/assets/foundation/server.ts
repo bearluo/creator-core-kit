@@ -19,4 +19,4 @@
  * ② 跟 `wsUrl` / `cdnUrl` 一样由 dispatcher 握手下发（要动 kit-proto 契约与服务端，一处真相）。
  * 只换皮不换服的马甲不受影响 —— 皮在 `skin-<马甲>` 包里，跟本文件无关。
  */
-export const ACCOUNT_LOGIN_URL = 'http://172.25.50.139:9103/api/Login';
+export const ACCOUNT_LOGIN_URL = 'http://172.25.50.20:9103/api/Login';

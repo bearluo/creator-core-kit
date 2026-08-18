@@ -1,6 +1,7 @@
 import { sys } from 'cc';
 import type { AppConfig } from '@cck/core';
 import { loadScene } from '@cck/engine';
+import { buildValue } from './build-config';
 
 /**
  * 应用配置 —— 版本 / 渠道 / 环境 / 包分层集中在这一处。**留在 AOT 层的东西全在这个文件里**。
@@ -16,28 +17,47 @@ import { loadScene } from '@cck/engine';
  * 为什么 dispatcher 地址躲不掉 ①：客户端要先握手才知道 `cdnUrl`（热更内容基址），
  * 而热更内容里才有地基。鸡生蛋，只能钉死在包里。其余服务端地址都在
  * `foundation/server.ts`，换环境热更即可。
+ *
+ * ## 下面的值哪来的
+ *
+ * 每个 `buildValue(...)` 都是「**出包时可以被构建面板覆盖**，没覆盖就用这个默认值」。
+ * 覆盖链路与为什么不用宏见 `build-config.ts`；面板上那几个输入框在
+ * `extensions/cck-build`。写在这里的字面量是**开发期默认值** —— 编辑器预览不走构建流程，
+ * 跑的一直是它们。
  */
+
 /**
- * 马甲标识 —— 「这个包是哪一张脸」。**打包期常量**：一个马甲一个包，换它要发新包，所以它在 ①。
+ * 马甲标识 —— 「这个包是哪一张脸」。**打包期常量**：一个马甲一个包。
  *
  * 登记了换皮的界面从 `skin-<VEST>-<跟随者>` 包取 prefab（接缝见 `foundation/catalog.ts` 的
  * `skinBundle()`）——**一个跟随者一个皮包**，跟着它装卸。**没有「原皮」这一档**：demo 自己
  * 也是一个马甲，它的地基皮就是 `skin-base-foundation`；加一个马甲 = 照着复制一套皮包 +
- * 改这一行，地基与模块一个字不动。
+ * 出包时在构建面板选它，地基与模块一个字不动。
  *
- * 马甲还有两处**不在这里**但同样跟着包走：`appId`（存储隔离的依据，见 `net/auth.ts`）
- * 与 `dispatcher.url`（各马甲可以连各自的服）。
+ * ⚠️ 它必须在 `app.launch()` **之前**定死（第一个界面就要按它解析皮包），所以只能是打包期
+ * 的东西 —— 运行时切马甲需要把已装的皮包全卸了重装，不是这套设计要解决的问题。
  */
-export const VEST = 'base';
+export const VEST = buildValue('vest', 'base');
+
+/** `AppConfig.env` 的合法值。构建面板用下拉框限制，这里再兜一道 —— settings.json 是可以手改的。 */
+const ENVS = ['dev', 'staging', 'prod'] as const;
+type Env = (typeof ENVS)[number];
+
+function envValue(): Env {
+  const v = buildValue('env', 'dev');
+  if ((ENVS as readonly string[]).includes(v)) return v as Env;
+  console.error(`[CCK-BOOT] env='${v}' 不是合法值（${ENVS.join(' / ')}）→ 按 'dev' 跑`);
+  return 'dev';
+}
 
 export const APP_CONFIG: AppConfig = {
   // 也是本机存储的隔离前缀：马甲装在同一台机器上，Web / 小游戏同域名共用一份 localStorage，
   // 不隔离两个马甲会拿到同一个游客账号。Android 各马甲独立包名，沙箱本来就隔离。
-  appId: 'cck-demo',
+  appId: buildValue('appId', 'cck-demo'),
   // 1.3.0 起才被本机 dispatcher 放行（低于它会拿到 ACTION_UPDATE —— 想看版本闸生效就把这里调到 1.2.0）
-  version: '1.3.0',
-  channel: 'dev',
-  env: 'dev',
+  version: buildValue('version', '1.3.0'),
+  channel: buildValue('channel', 'dev'),
+  env: envValue(),
   // 共享**资源** bundle（i18n / 图集 / 音效）。地基不列在这里 —— 它要在 hotupdate 之后
   // 按自己的节奏加载并跑 boot，见 Bootstrap 的 `demo-foundation` 步。
   //
@@ -56,7 +76,9 @@ export const APP_CONFIG: AppConfig = {
   dispatcher: {
     // 局域网测试机 dev139（server-core-kit 仓 `docker compose up -d`；2026-08-05 从开发本机迁来）。
     // ⚠️ 写局域网 IP 而不是 127.0.0.1：真机 / 模拟器打开时 localhost 指的是它自己。
-    url: 'http://172.25.50.139:9100/api/Handshake',
+    // ⚠️ 那台机的 IP 从 .139 改到了 **.20**（别名仍叫 dev139）—— 2026-08-17 实测 .139 已不可达。
+    // 这类会过期的地址正是构建插件存在的理由：换服现在不必改源码，出包时填一下即可。
+    url: buildValue('dispatcherUrl', 'http://172.25.50.20:9100/api/Handshake'),
     // 契约版本来自 kit-proto，**由项目提供** —— kit 里不出现任何协议常量（ADR-0011）。
     protoVersion: 1,
     platform: sys.isNative ? String(sys.os).toLowerCase() : 'web',
