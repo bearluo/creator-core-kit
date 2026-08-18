@@ -77,9 +77,37 @@ export class Game extends EventTarget {
 // cc.d.ts:28424 —— export const game: Game
 export const game: Game = new Game();
 
-/** 测试复位：清 log 记录、帧 dt、director 监听。afterEach 调。 */
+/**
+ * cc.d.ts —— export class Settings；`querySettings(category, name)` / `overrideSettings(...)`。
+ *
+ * 放进本文件是合规的：真 `Settings` 就是一个**纯数据容器**（引擎里它只有两个 Record 和查表逻辑），
+ * 不需要任何真实引擎行为。测试铺数据用的 `overrideSettings` 也**不是为测试新造的后门** ——
+ * 那是引擎自己的公开 API，真机上同样可以调。
+ *
+ * 真 `querySettings` 的查找顺序是 override 优先、再落 settings.json；这里只有 override 一层，
+ * 因为 node 侧没有 settings.json 可读。差异不影响被测代码：它只调 `querySettings`。
+ */
+export class Settings {
+  private readonly _override = new Map<string, unknown>();
+  querySettings<T = unknown>(category: string, name: string): T | null {
+    const v = this._override.get(`${category}.${name}`);
+    return v === undefined ? null : (v as T);
+  }
+  overrideSettings<T = unknown>(category: string, name: string, value: T): void {
+    this._override.set(`${category}.${name}`, value);
+  }
+  /** 测试辅助：清空注入（非 cc API）。 */
+  __clear(): void {
+    this._override.clear();
+  }
+}
+// cc.d.ts —— export const settings: Settings
+export const settings: Settings = new Settings();
+
+/** 测试复位：清 log 记录、帧 dt、director 监听、settings 注入。afterEach 调。 */
 export function resetCcMock(): void {
   ccCalls.length = 0;
   game.deltaTime = 0;
   director.__clear();
+  settings.__clear();
 }

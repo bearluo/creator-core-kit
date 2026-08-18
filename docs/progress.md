@@ -68,8 +68,39 @@
 - [x] 第 2 批 · 核心设施（ObjectPool ✅ SceneFlow ✅ SaveManager+IStorage ✅ i18n ✅ ConfigTable ✅ BundleManager ✅ AssetManager ✅ UIManager ✅ AudioService ✅）：**core 半 + engine 半均已落地**（除纯 core 的 ObjectPool 外，各模块 engine 半见其文档「engine 半适配」小节，四门全绿 + 真机预览验证）
 - [x] 第 3 批 · 进阶（HotUpdateService ✅ Network ✅(core 半 + engine 半均已落地) · ECS 扩展 ✅(bitECS v0.3.40 接入范例：独立包 `@cck/ecs-bitecs` 不进 core，re-export 全套 + 薄 kit 胶水，6 测试；**demo cc 渲染场景留后续**) · spatial 高性能 system 组 ✅(寻路/碰撞/群体避让,10 测试,全仓 379,独立 Creator 工程渲染验证留后续) · MVVM 数据绑定增强 ✅(core 响应式原语 + engine 绑定 helper；engine 半真机 gameView 预览验证 PASS) · tools 包：hot-update-manifest ✅ config-excel ✅ compat-stamp ✅）
 - [x] demo 出包参数注入（`extensions/cck-build` 构建插件）— 六个「一个包一个值」的常量（`VEST`/`appId`/`version`/`channel`/`env`/`dispatcherUrl`）从源码解出来：构建面板填或命令行 `packages={...}` 传 → `onBeforeCompressSettings` 写进 `settings.json` 的 `cck` 段 → 运行时 `buildValue()` 读，**面板留空 = 跟随源码默认值**（默认值只有一处真相，面板不抄第二遍）；5 测试 + 四门全绿（全仓 641），**真实产物端到端 PASS**：命令行传 `vest`/`cli-test:9100`/`staging` 构建 web-mobile → 产物 `settings.json` 带 `cck` 段 → 浏览器起真产物，日志 `马甲皮 → skin='vest'` + 握手打到 `http://cli-test:9100`（源码默认是 `base` 与 dev139，证明注入生效），失败被正确分类成可重试的 `network`；**构建面板 UI 未验**（Creator 未开，只走了命令行路径）；用法见 `apps/demo/docs/build-plugin.md`，五条通道横评见 `docs/research/2026-08-17-creator-build-custom-options.md`
+- [x] demo 正式启动路径接上热更 + 「配置能否热更」真机实证 — `Bootstrap.ts` 补 `ccHotUpdateModule`（此前只有 `probes/DemoBoot.ts` 装了，`Boot.scene` 那条路的 `hotupdate` 步一直走空后端）；**Android 真机 e2e PASS**：全新装 v1（`settings.json` 无 `cck` 段）→ `skin='base'` → 握手 → 下载 CDN 上的 v2（15 个包只有 `project.manifest` 涨 1.0.0→1.0.1）→ 自动 restart → `skin='vest'` → 强杀冷启动仍是 `'vest'`。结论：**`settings.json` 在 base manifest 里，配置能热更但会重启**；`dispatcherUrl` 例外（`dispatch` 在 `hotupdate` 之前，握手失败就走不到热更 = 死循环），`appId` 例外（换它等于换玩家）。⚠️ 装了热更后端后 **native 上「热更服务器不可达」= 启动失败**（可重试），离线要能进游戏得改 core 启动序列的语义
 - [x] 修 dev139 过期 IP — 那台测试机的 IP 从 `.139` 改到了 `.20`，`app-config.ts`(dispatcher) / `foundation/server.ts`(登录) / `e2e-server.test.ts` 三处全是旧地址。**`e2e-server.test.ts` 因此静默跳过了很久**（`/healthz` 连不上与「服务器没起」是同一个表现）；改完它真跑起来，握手用例 PASS、**连网关用例 FAIL —— 服务端下发的 `ws_url` 仍是 `ws://172.25.50.139:9101/ws`**，那是 server-core-kit 仓的配置，本仓改不了（跨仓库禁令）。**服务端已于当天重部署 v0.7.0 修好**（`dispatcher.json` 的 `wsUrl` → `ws://172.25.50.20:9101/ws`），复验：握手 `ACTION_PLAY`、网关 `/ws` 升级 101、账号服 `/api/Login` 两种 provider 都拿到 token，**全仓 641 全绿、无跳过**。⚠️ 复验时踩到一处：手敲 curl 用 `version` 字段会被判成 `app=""` → 恒 `ACTION_UPDATE`，握手请求体里的字段名是 **`appVersion`**（客户端一直是对的，别照着服务端日志误判成版本闸坏了）
 
+- [x] **热更翻马甲后新皮包自愈：种子 manifest + 正式路径补注册 `BUNDLE_UPDATER`**（2026-08-17 · 真机 e2e PASS · [ADR-0013 补充](adr/0013-native-per-bundle-hotupdate-layout.md)）— 上一条实证「配置能热更」之后暴露出来的场景：base 热更把 `settings.cck.vest` 翻成另一个马甲、重启回来，而**新马甲的皮包玩家本地根本没有**（它是发版之后才加的）。`skin-<马甲>-foundation` 在 `APP_CONFIG.shared` 里、`shared` 步没有 try/catch → 直接启动失败，且**重试与重装都好不了**（base 已 apply 并落盘，重装还会再更新成同一个坏状态），只有回滚 CDN 能救。查下来是**两个独立的洞**：① **正式启动路径从来没注册过 `BUNDLE_UPDATER`** —— 它只在 `probes/DemoBoot.ts` 里注册过，于是 `Bootstrap.ts` 那条路上**加载前更新整条链是关的**，任何 bundle 都不会更新（和上一条修的 `ccHotUpdateModule` 是同一类漏装）；现在挂在 `dispatch` 阶段的项目步骤里——那里 `APP_INFO`（版本闸要的 app 戳）已由 `platform` 步备好，且早于最早的 `load()`。② 补上注册也还差一口气：**`<bundle>.manifest` 躺在构建产物 `data/` 根，而 manifest 只遍历 `src|assets|jsb-adapter`** → **它自己不进任何 asset 表、永远不会被热更下发**，一个从没随包发过的 bundle 包内没有它的 manifest、base 热更也带不来，`AssetsManagerEx` 连去哪查更新都不知道（`ERROR_NO_LOCAL_MANIFEST`）。补法是**内存造种子 local manifest**（不落盘：`new native.Manifest(content, root)` 与 `am.loadLocalManifest(obj, storagePath)` 两个重载 SWIG 都绑了；配套 `create('', storagePath)` 跳过文件加载让状态停在 `UNINITED`，正好过对象重载那道门），`packageUrl` **取 dispatcher 握手下发的 `cdn_url`**（2026-08-18 定：内容托管在哪是**运营期决定**，换 CDN / 灰度 / 挪域名只该改服务端配置；包里烘的 `packageUrl` 是出包那刻的快照，内容挪了就得发新包，正是热更要消灭的事——`cdn_url` 本就是握手协议为此留的字段，此前一直只打日志没人消费），**服务端没下发才回落 base local manifest 的 `packageUrl`**（分包与 base 同根，地址对得上；兜底而非「配错也能跑」）。**`version` 恒 `0.0.0` 是硬约束不是随手取的**：`loadLocalManifest` 拿 local 与缓存 manifest 比版本，local 更新时会 `removeDirectory(storagePath)` 整个清掉 → 种子恒最旧，缓存那份才能接管、第二次起自动变增量。**随包发过的 bundle 仍用包内那份**（增量基准），别为省几 KB 把 manifest 排除出包。**真机 e2e**（真 x86_64 模拟器，干净安装，**APK 里不含 `skin-vest-*`**，CDN 上 base 1.0.1 只改了 `settings.json`）：`skin='base'` → 热更 25→100% → restart → `skin='vest'` → `shared` 步 `load('skin-vest-foundation')` → 包内无 manifest → 种子 → **3/3 文件下载完成**；`force-stop` 冷启动**只发 4 个 `*.version.manifest` 探测、一个资源文件都没重下**（正是 `0.0.0` 那条约束的判据）。顺带两处：启动界面的下载进度条从「只认 `hotupdate` 阶段」改成**任何带 ratio 的阶段都在本段内插值**（分包下载不再表现为静止的「加载公共资源…」）；`Bootstrap` 的失败日志摊平成一行字符串——Cocos native 转发 JS console 到 logcat 时对象参数一律打成 `[object Object]`，真机上唯一的失败信息不能是这个（正是靠它才定位到下面那条）。**⚠️ 这一程没跑到大厅**：`demo-foundation` 步长连接 `10s 未就绪（停在 reconnecting）：ws://172.25.50.20:9101/ws`；同一失败在 `skin='base'` 下同样复现（与皮包、与本次改动无关），网关从宿主机 `/healthz` 200、WS 升级 101 都正常，模拟器到 9101 的 TCP 也通 —— **模拟器侧 WS 握手/重连的独立问题，另查**。全仓 **645 全绿**（新增 4 例），五门齐过。**⚠️ 遗留：`cdn_url` 链路已接通、服务端配置未就位**——客户端实测日志 `种子 manifest 基址：http://172.25.50.135:8081/cdn/（服务端下发）`，消费侧没问题；但 dispatcher 配的那个值**不是可下载的基址**：filebrowser 只在 `/api/public/dl/<hash>/` 下发文件，`/cdn/` 是它自己的 SPA 路由、**任何路径都回 200 + `text/html`** → 「下载成功」拿到一坨 HTML → 炸在 `readFile failed!`。**配 CDN 基址时 200 不等于拿到文件，要看 `Content-Type`**。热更内容已按 skill `filebrowser-cdn` 的规矩传到固定分享 `http://172.25.50.135:8081/api/public/dl/shCo8WNE/`（`/creator-core-kit/cdn`，104 个文件 2.7 MB；base 热更用同一基址已在模拟器上跑通），**待 server-core-kit 把 `dispatcher.json` 的 `cdnUrl` 改成这个值后复验**——改那个文件属别的仓，本仓不动
+
+### 2026-08-18 · 热更内容基址一律听服务端（base 与分包统一）
+
+上一轮只让「没随包发过的 bundle」用服务端下发的 `cdn_url`，并断言 base 做不到 —— 那个断言错了，
+起因是只查了 `loadLocalManifest` 一条注入路。参考实现（bl-framework 的 `FWHotUpdate`）提示了
+`loadRemoteManifest`，核实后补齐：
+
+- **机制**：`check()` 自取 remote manifest → 改掉三个地址字段（`rebaseManifest`，纯函数、有单测）
+  → `loadRemoteManifest()` 灌回引擎。下载基址只认 remote（`AssetsManagerEx.cpp:738` 全文件唯一一处
+  `getPackageUrl`），local 那份只提供 diff 用的 asset 表、一字节不动。改 local 走不通（与缓存比版本，
+  比输了被顶掉、比赢了清库且再不更新，版本号既要高又要低）。
+- **base 与所有分包统一**；选项 `bundleCdnUrl` 改名 `cdnUrl`。任一步不成都退回 `checkUpdate()` 老路并打 warn。
+- **e2e PASS**（真 x86_64 模拟器）：判据做成二值 —— APK 与 CDN 上所有 manifest 的 `packageUrl` 全烘死地址
+  `http://127.0.0.1:9/dead/`，唯一活地址是握手下发的。结果：base 37%→100% → restart → `skin='vest'`
+  → shared 阶段四个包全走注入路 → force-stop 冷启动零重下。对照组（改动前 engine，同一份死地址内容）
+  失败在 `Failed to connect to /127.0.0.1:9`。
+- 门：lint / typecheck / test（46 文件 649 用例）/ check:vm-tests 全绿。
+
+**至此整条链路只剩 `dispatcherUrl` 一个烘死的地址**（链条起点，结构性救不了）。
+
+遗留两项，都不在本仓：
+
+1. dispatcher 下发的值仍是错形态的 `http://172.25.50.135:8081/cdn/`（filebrowser 的 SPA 路由，
+   任何路径都回 200 + HTML）。已提 [server-core-kit#1](https://hlgit.5518game.com/luohao/server-core-kit/-/issues/1)，
+   正确值 `http://172.25.50.135:8081/api/public/dl/shCo8WNE/`。本轮 e2e 用本机假 dispatcher 顶替。
+2. 模拟器到 `ws://172.25.50.20:9101/ws` 的长连接 10s 未就绪（与本次改动无关，base/vest 都复现）。
+
+另：ADR-0006 决策 6（`python -m http.server` + `10.0.2.2` 托管）已标作废并补写「修正」节 —— 它被
+ADR-0007 取代却一直以「已接受决策」形态躺着，被当可用配方翻出来过不止一次。
 
 ## 模块状态
 

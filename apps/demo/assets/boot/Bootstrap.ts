@@ -1,15 +1,20 @@
 import { _decorator, Component, Prefab, js } from 'cc';
 import { EDITOR } from 'cc/env';
 import {
+  createBundleUpdater,
   defaultLaunchSteps,
   getApp,
   getBundleManager,
   getI18n,
   getRootContainer,
   setUIVariant,
+  APP_INFO,
+  BUNDLE_UPDATER,
   DISPATCH,
   KIT,
+  type AppInfo,
   type DispatchResult,
+  type LaunchFailure,
   type LaunchStep,
 } from '@cck/core';
 import {
@@ -19,6 +24,7 @@ import {
   ccAssetModule,
   ccAudioModule,
   ccBundleModule,
+  ccHotUpdateModule,
   ccHttpModule,
   ccNetworkModule,
   ccStorageModule,
@@ -36,8 +42,11 @@ const TAG = '[CCK-BOOT]';
 /**
  * 启动序列 = kit 默认四步 + 项目自己的三步。
  * 这正是 `LaunchStep` 可插拔的用途：登录、SDK 初始化、公告、隐私协议都插在这里，kit 不预设。
+ *
+ * `onCdnUrl` 把握手下发的内容基址回传给调用方（喂 `ccHotUpdateModule.cdnUrl`）——
+ * 热更后端在 kit 装配期就安装了，那时握手还没跑，只能这样惰性接上。
  */
-function launchSteps(): readonly LaunchStep[] {
+function launchSteps(onCdnUrl: (url: string) => void): readonly LaunchStep[] {
   const steps = Array.from(defaultLaunchSteps()); // 别用 [...x]：Cocos 构建会降级成 [].concat(x)
   const globalI18n: LaunchStep = {
     name: 'demo-i18n',
@@ -50,15 +59,46 @@ function launchSteps(): readonly LaunchStep[] {
       console.log(`${TAG} 全局 i18n 就绪（来自 shared bundle）`);
     },
   };
-  // dispatcher 的判定落点：wsUrl（按本客户端版本路由到的那个部署单元）、cdnUrl（热更内容
-  // 基址）、serverTimeMs（权威时间，本地时钟玩家可改）。**只打日志不建连接** —— 连接归地基层，
-  // 它要等 hotupdate 跑完才加载。这一步留在这里是因为 cdnUrl 是热更自己要用的，跑不掉。
+  /**
+   * dispatcher 的判定落点：wsUrl（按本客户端版本路由到的那个部署单元）、cdnUrl（热更内容基址）、
+   * serverTimeMs（权威时间，本地时钟玩家可改）。**不建连接** —— 连接归地基层，它要等 hotupdate
+   * 跑完才加载。这一步留在这里是因为 cdnUrl 是热更自己要用的，跑不掉。
+   *
+   * 顺带把**分包热更**接上（注册 `BUNDLE_UPDATER`，`BundleManager.load` 会在真加载前用它把包更到
+   * 最新）。排在这里是因为它要的两样东西恰好都在手上：`APP_INFO`（platform 步读出的 app 戳，
+   * 喂版本闸）与 `cdnUrl`（内容托管在哪由服务端说了算，换 CDN 只改服务端配置、不发新包）。
+   * **必须早于任何 `load()`** —— 最早的是 shared 步。
+   *
+   * ⚠️ 少了这段注册，加载前更新整条链是**关的**：base 热更把 `cck.vest` 翻成新马甲、重启回来，
+   * 新马甲的皮包永远不会被下下来 —— 而 `skin-<马甲>-foundation` 在 `APP_CONFIG.shared` 里，
+   * shared 步没有 try/catch，直接就是启动失败，且重试与重装都好不了。
+   */
   const netInfo: LaunchStep = {
     name: 'demo-net-info',
     phase: 'dispatch',
     run(ctx) {
       const d = ctx.bag.get(DISPATCH) as DispatchResult | undefined;
       console.log(`${TAG} dispatcher 放行：ws=${d?.wsUrl} cdn=${d?.cdnUrl} t=${d?.serverTimeMs}`);
+      if (d?.cdnUrl) onCdnUrl(d.cdnUrl);
+      getRootContainer().register(
+        BUNDLE_UPDATER,
+        {
+          useValue: createBundleUpdater({
+            app: ctx.bag.get(APP_INFO) as AppInfo | undefined,
+            // 报进度用当前阶段：分包更新多半发生在 shared（地基与皮）与 lobby（大厅包）步里，
+            // 启动界面据此把进度条在本段内插值，别让整包下载看起来像卡死。
+            onProgress: (b, p) => {
+              console.log(`${TAG} ⏳ bundle '${b}' 更新 ${p.filesDone}/${p.filesTotal} 文件`);
+              ctx.report({
+                phase: getApp().phase,
+                ratio: p.bytesTotal > 0 ? p.bytesDone / p.bytesTotal : undefined,
+                messageKey: 'cck.launch.downloading',
+              });
+            },
+          }),
+        },
+        { allowOverride: true }, // Game View 停止再播放不重载 JS，根容器里可能还留着上一轮的
+      );
       return Promise.resolve();
     },
   };
@@ -102,6 +142,21 @@ function launchSteps(): readonly LaunchStep[] {
   return steps;
 }
 
+/** 失败原因摊成一行可读文本（各分类携带的字段不同，见 `LaunchFailure`）。 */
+function failureDetail(f: LaunchFailure): string {
+  switch (f.kind) {
+    case 'network':
+    case 'fatal': {
+      const e = f.error as Error | undefined;
+      return e?.stack ?? e?.message ?? String(f.error);
+    }
+    case 'needFullUpdate':
+      return f.reason;
+    case 'maintenance':
+      return f.notice;
+  }
+}
+
 /**
  * Boot.scene 唯一的脚本 —— **只做启动**：装配 kit（含常驻相机组 + 横竖屏适配）→ 交给 App 跑启动序列。
  *
@@ -137,6 +192,10 @@ export class Bootstrap extends Component {
         await stale.shutdown();
       }
     }
+    // 内容基址 —— dispatcher 握手才下发（内容托管在哪由服务端说了算），而热更后端在下面
+    // 这一行就装好了，只能惰性接。**base 与分包共用**：两边 check 时都自取 remote manifest
+    // 再把基址改到这里；拉不到就退回包内烘的地址。
+    let cdnUrl = '';
     const kit = await bootCoreKit({
       modules: [
         // 顺序有意义：先定好设计分辨率，相机组建出来时首次 syncCameras 才拿到正确的 view 状态。
@@ -153,11 +212,26 @@ export class Bootstrap extends Component {
         ccBundleModule(),
         ccHttpModule(), // IHttp（XHR）—— dispatch 启动步要它打握手请求
         ccNetworkModule(), // ISocket（WebSocket）—— 缺了它 createNetwork 会静默回退到空 socket
-
+        // 热更后端。**只在 native 生效**（模块内 `sys.isNative` 守门，web / 预览下不注册 →
+        // 启动序列的 `hotupdate` 步走空后端、恒 up-to-date）。
+        // - `manifestUrl` 用**裸文件名**：`project.manifest` 放在构建产物 `data/` 根 = APK 内
+        //   `assets/` 根 = fileUtils 默认搜索路径，`AssetsManager.create` 直接解析得到（ADR-0006 决策 4）。
+        // - 管的是 **base 包**（`src/` + `assets/{main,internal,resources}`，含 `settings.json`）——
+        //   换了要重启，`hotupdate` 步 apply 完直接 `restart()` 并 halt 掉本轮启动。
+        //   模块 bundle 是另一套（一包一 manifest、加载前更新、免重启），由 BundleManager 那条路走。
+        // ⚠️ **热更服务器不可达 = 启动失败**（`ERROR_DOWNLOAD_MANIFEST` → reject → 这一步 throw
+        //   → LaunchFailure，可重试）。离线要能进游戏的话得把「检查失败」降级成「无更新」，
+        //   那是 core 启动序列的语义改动，没需求前不动。
+        ccHotUpdateModule({
+          manifestUrl: 'project.manifest',
+          compatFilename: 'cck-update-compat.json',
+          cdnUrl: () => cdnUrl,
+        }),
         ccStorageModule(),
         ccAudioModule(),
         ccUIModule(),
-        appModule(APP_CONFIG, { steps: launchSteps() }), // 只造不跑，launch 在下面显式发起
+        // 只造不跑，launch 在下面显式发起
+        appModule(APP_CONFIG, { steps: launchSteps((u) => (cdnUrl = u)) }),
       ],
     });
     console.log(`${TAG} kit 就绪[${kit.modules.join(', ')}] → app.launch()`);
@@ -179,7 +253,9 @@ export class Bootstrap extends Component {
       overlay.onProgress(p);
     });
     app.onFailure((f) => {
-      console.error(`${TAG} 启动失败：${f.kind}`, f);
+      // 摊平成一行字符串：Cocos native 把 JS console 转发到 logcat 时，对象参数一律打成
+      // `[object Object]` —— 真机上唯一能看到的失败信息，不能是这个。
+      console.error(`${TAG} 启动失败：${f.kind} —— ${failureDetail(f)}`);
       overlay.onFailure(f);
     });
     await app.launch();

@@ -11,8 +11,11 @@ import type {
 import {
   bundleManifestName,
   bundleStoragePath,
+  bundleVersionName,
   normalizeSearchPaths,
+  rebaseManifest,
   retiredBundleDirs,
+  seedBundleManifest,
 } from './hotupdate-paths';
 
 /**
@@ -52,50 +55,124 @@ export interface CcHotUpdateOptions {
    * （否则远端无这俩字段，闸单边缺失恒放行）。默认不拉。见 [[compat-stamp]] / hotupdate-service.md。
    */
   compatFilename?: string;
+  /**
+   * 内容 CDN 基址，**服务端下发**（dispatcher 握手的 `cdn_url`），**base 与分包共用**。
+   * **惰性取**：握手之后才有值，而本模块在 kit 装配期就安装了；`check()` 跑在启动序列的
+   * `hotupdate` 步（`dispatch` 之后），那时必然已经到手。
+   *
+   * 给了它，**内容托管在哪就完全由服务端说了算**：换 CDN、灰度分流、把内容挪去另一个域名，
+   * 都只改服务端配置，不必发新包。做法是自取 remote manifest 再改基址灌回引擎，见 {@link startCheck}。
+   *
+   * 返回空 / 不给 / 拉不到 → 退回包内 manifest 里烘的地址（出包时 `cck-manifest --url` 写的那个）。
+   * 退回只是兜底，**不是**「服务端配错了也能跑」——配错时日志里能看见走的是哪条路。
+   */
+  cdnUrl?: () => string | undefined;
 }
 
-/**
- * 拉更新戳 sidecar（XMLHttpRequest，native jsb / web 皆有）。非 2xx / 解析失败 / 无 XHR → reject，
- * 由调用方降级为「无兼容字段」（闸放行，不因 sidecar 缺失阻断正常热更）。
- */
-function fetchCompat(url: string): Promise<{ minAppVersion?: string; coreApiHash?: string }> {
+/** GET 一段文本（XMLHttpRequest，native jsb / web 皆有）。非 2xx / 无 XHR / 网络错 / 超时 → reject。 */
+function fetchText(url: string, what: string): Promise<string> {
   return new Promise((resolve, reject) => {
     if (typeof XMLHttpRequest === 'undefined') {
-      reject(new Error('XMLHttpRequest 不可用'));
+      reject(new Error(`${what}: XMLHttpRequest 不可用`));
       return;
     }
     const xhr = new XMLHttpRequest();
     xhr.open('GET', url, true);
     xhr.timeout = 5000;
     xhr.onload = (): void => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          resolve(JSON.parse(xhr.responseText));
-        } catch (e) {
-          reject(e as Error);
-        }
-      } else {
-        reject(new Error(`compat sidecar HTTP ${xhr.status}`));
-      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.responseText);
+      else reject(new Error(`${what} HTTP ${xhr.status}`));
     };
-    xhr.onerror = (): void => reject(new Error('compat sidecar 网络错误'));
-    xhr.ontimeout = (): void => reject(new Error('compat sidecar 超时'));
+    xhr.onerror = (): void => reject(new Error(`${what} 网络错误`));
+    xhr.ontimeout = (): void => reject(new Error(`${what} 超时`));
     xhr.send();
   });
 }
 
 /**
- * 造一个更新目标的后端。`persistKey` 为 undefined 时 apply 不写 localStorage——
+ * 拉更新戳 sidecar。非 2xx / 解析失败 / 无 XHR → reject，由调用方降级为「无兼容字段」
+ * （闸放行，不因 sidecar 缺失阻断正常热更）。
+ */
+function fetchCompat(url: string): Promise<{ minAppVersion?: string; coreApiHash?: string }> {
+  return fetchText(url, 'compat sidecar').then(
+    (t) => JSON.parse(t) as { minAppVersion?: string; coreApiHash?: string },
+  );
+}
+
+/** 自取 remote manifest 所需的三件套；不给就走引擎自己那套（用 local manifest 里烘的地址查更新）。 */
+interface RemoteSource {
+  /** 内容基址，**服务端下发**（惰性取——握手比装配晚）。返回空 → 退回引擎默认路径。 */
+  cdnUrl: () => string | undefined;
+  manifestName: string;
+  versionName: string;
+}
+
+/**
+ * 发起一次检查。有服务端下发的基址就**自己把 remote manifest 拉下来、改掉基址、灌回引擎**；
+ * 否则退回 `checkUpdate()`（引擎按 local manifest 里烘的地址自己去查）。
+ *
+ * 灌 remote 而非 local，是因为下载基址只认 remote（`AssetsManagerEx.cpp:738`，全文件唯一一处
+ * `getPackageUrl`）；local 那份只负责提供 diff 用的 asset 表，一个字节都不用动。见
+ * {@link rebaseManifest}。`loadRemoteManifest` 成功后会自行派发
+ * `NEW_VERSION_FOUND` / `ALREADY_UP_TO_DATE`，与 `checkUpdate()` 的产物等价 —— 所以事件处理那段
+ * 两条路共用，`update()` 也一步不用改（`NEED_UPDATE` 且 remote 已 loaded → 直接 `startUpdate`）。
+ *
+ * **任何一步不成都退回老路**：拉不到（CDN 挂了）、拉回来不是 JSON（**路由错时会回 200 + 一坨
+ * SPA HTML**，见 ADR-0006 修正）、引擎不收（状态不对）。退回意味着用包内烘的地址试一次，
+ * 比直接判失败强；日志留一行，否则「为什么走的是老地址」无从查起。
+ */
+function startCheck(
+  am: native.AssetsManager,
+  remote: RemoteSource | undefined,
+  storagePath: string,
+): void {
+  const cdn = remote?.cdnUrl();
+  if (!remote || !cdn) {
+    am.checkUpdate();
+    return;
+  }
+  const url = cdn + remote.manifestName;
+  fetchText(url, `remote manifest ${url}`)
+    .then((text) => {
+      const content = rebaseManifest(text, cdn, remote.manifestName, remote.versionName);
+      if (!am.loadRemoteManifest(new native.Manifest(content, storagePath))) {
+        throw new Error('loadRemoteManifest 拒收（状态已越过 UNCHECKED？）');
+      }
+      console.log(`[cck] ${remote.manifestName} 基址取服务端下发：${cdn}`);
+    })
+    .catch((e: unknown) => {
+      console.warn(`[cck] 自取 ${url} 失败，退回包内烘的基址：${(e as Error).message}`);
+      am.checkUpdate();
+    });
+}
+
+/** 一个更新目标（base 或某个 bundle）的全部装配参数。 */
+interface BackendSpec {
+  /** 本地 manifest 路径；`seed` 给了则忽略。 */
+  manifestUrl: string;
+  storagePath: string;
+  /** 给了才在 apply 后写 localStorage 供冷启动还原（仅 base）。 */
+  persistKey?: string;
+  compatFilename?: string;
+  /** 内存 local manifest；见 {@link seedBundleManifest}。 */
+  seed?: string;
+  /** 自取 remote manifest 的来源；不给则由引擎按 local manifest 里的地址自己查。 */
+  remote?: RemoteSource;
+}
+
+/**
+ * 造一个更新目标的后端。`persistKey` 不给时 apply 不写 localStorage——
  * 模块 bundle 不需要冷启动还原（`AssetsManagerEx` 在 `create()` 时就会 `prependSearchPaths`，
  * 而模块此刻尚未加载），没必要让每次冷启动都还原一堆玩家从没打开过的模块路径。
+ *
+ * `seed` 给了就走**内存 local manifest**（`manifestUrl` 忽略）：`AssetsManagerEx::init` 只在
+ * manifestUrl 非空时才去加载文件，传空串跳过它、状态停在 `UNINITED`，正好过 `loadLocalManifest`
+ * 对象重载那道 `_updateState > UNINITED` 的门。见 {@link seedBundleManifest}。
  */
-function createBackend(
-  manifestUrl: string,
-  storagePath: string,
-  persistKey: string | undefined,
-  compatFilename: string | undefined,
-): IHotUpdateBackend {
-  const am = native.AssetsManager.create(manifestUrl, storagePath);
+function createBackend(spec: BackendSpec): IHotUpdateBackend {
+  const { manifestUrl, storagePath, persistKey, compatFilename, seed, remote } = spec;
+  const am = native.AssetsManager.create(seed === undefined ? manifestUrl : '', storagePath);
+  if (seed !== undefined) am.loadLocalManifest(new native.Manifest(seed, storagePath), storagePath);
 
   // AssetsManager 只有单个事件回调；check 与 download 各自把当前分派器挂到 handler，用完即卸。
   let handler: ((ev: native.EventAssetsManager) => void) | undefined;
@@ -143,7 +220,7 @@ function createBackend(
             // 其余事件（进度等）check 阶段无意义，忽略
           }
         };
-        am.checkUpdate();
+        startCheck(am, remote, storagePath);
       });
     },
 
@@ -198,12 +275,18 @@ function createBackend(
 
 /** base（AOT 层）后端：整包 `project.manifest`，apply 持久化搜索路径供冷启动还原。 */
 export function createCcHotUpdateBackend(opts: CcHotUpdateOptions): IHotUpdateBackend {
-  return createBackend(
-    opts.manifestUrl,
-    opts.storagePath ?? `${native.fileUtils.getWritablePath()}cck-remote-asset/`,
-    opts.searchPathsKey ?? 'HotUpdateSearchPaths',
-    opts.compatFilename,
-  );
+  return createBackend({
+    manifestUrl: opts.manifestUrl,
+    storagePath: opts.storagePath ?? `${native.fileUtils.getWritablePath()}cck-remote-asset/`,
+    persistKey: opts.searchPathsKey ?? 'HotUpdateSearchPaths',
+    compatFilename: opts.compatFilename,
+    remote: opts.cdnUrl && {
+      cdnUrl: opts.cdnUrl,
+      // base 那对固定名（`cck-manifest --split` 的默认产物名，与分包的 `<name>.manifest` 并列同根）
+      manifestName: 'project.manifest',
+      versionName: 'version.manifest',
+    },
+  });
 }
 
 /** 模块 bundle 存储根：显式给了用给的，否则默认与 base 的 storagePath 并列。 */
@@ -212,13 +295,62 @@ function bundleRoot(opts: Pick<CcHotUpdateOptions, 'bundleStorageRoot'>): string
 }
 
 /**
+ * base manifest 的 `packageUrl` —— 服务端没下发 `cdn_url` 时的兜底基址。
+ *
+ * `cck-manifest --split` 一次出 base + 所有分包、一个 outDir 一个 packageUrl，分包 manifest 本来就
+ * 与 `project.manifest` 躺在同一个根下，所以这个地址对得上。base 更新过之后，裸文件名会沿搜索路径
+ * 命中 `<baseStorage>/project.manifest`（`AssetsManagerEx` 落的缓存），拿到的是**最新**基址。
+ *
+ * 但它是**出包时烘进去的**：内容真挪了地方，只有服务端下发能救，靠它就得发新包。所以是兜底不是首选。
+ */
+function basePackageUrl(manifestUrl: string): string {
+  const m = new native.Manifest(manifestUrl);
+  return m.isLoaded() ? m.getPackageUrl() : '';
+}
+
+/**
  * 分包后端工厂：按 bundle 名解析 `<bundle>.manifest`（tools `cck-manifest --split` 的产物）
  * 与独立 storagePath。模块 bundle 加载前更新，**免重启也免启动还原**。
+ *
+ * 两条引导路，差别只在 local manifest 从哪来：
+ *
+ * - **包内有** `<bundle>.manifest`（随包发过的 bundle）→ 用包内那份。它的 asset 表就是 diff 基准，
+ *   更新只下真变了的文件。**这是常态，别为省那几 KB 把 manifest 排除出包**。
+ * - **包内没有**（热更新增的马甲皮 / 新模块，从没随包发过）→ 现造种子（空 asset 表 → 首次全量下），
+ *   基址**优先用服务端下发的 `cdnUrl`**，没下发才回落 base 的 `packageUrl`。两者都拿不到
+ *   就抛，由 `BundleUpdater` 记日志降级成「不更新」。
  */
 export function createCcBundleBackendFactory(opts: CcHotUpdateOptions): HotUpdateBackendFactory {
   const root = bundleRoot(opts);
-  return (bundle) =>
-    createBackend(bundleManifestName(bundle), bundleStoragePath(root, bundle), undefined, opts.compatFilename);
+  let seedBase: string | undefined; // 惰性 + 记忆：只有走种子那条路才需要读 base manifest
+  return (bundle) => {
+    const name = bundleManifestName(bundle);
+    const storagePath = bundleStoragePath(root, bundle);
+    const remote = opts.cdnUrl && {
+      cdnUrl: opts.cdnUrl,
+      manifestName: name,
+      versionName: bundleVersionName(bundle),
+    };
+    // 裸文件名走 fileUtils 搜索路径 → 命中的是包内那份（`<bundle>.manifest` 躺在构建产物 data/ 根、
+    // 不在 src|assets|jsb-adapter 里，所以它不进任何 manifest 的 asset 表，热更也带不来它）。
+    if (native.fileUtils.isFileExist(name)) {
+      return createBackend({ manifestUrl: name, storagePath, compatFilename: opts.compatFilename, remote });
+    }
+    if (seedBase === undefined) {
+      const sent = opts.cdnUrl?.();
+      seedBase = sent || basePackageUrl(opts.manifestUrl);
+      // 配错时下载会 404，这行是唯一能看出「用的是哪个基址」的地方 —— 别去掉。
+      console.log(`[cck] 种子 manifest 基址：${seedBase || '(空)'}（${sent ? '服务端下发' : '回落 base packageUrl'}）`);
+    }
+    if (!seedBase) throw new Error(`bundle '${bundle}' 包内无 ${name}，且取不到基址造种子 manifest`);
+    return createBackend({
+      manifestUrl: name,
+      storagePath,
+      compatFilename: opts.compatFilename,
+      seed: seedBundleManifest(seedBase, bundle),
+      remote,
+    });
+  };
 }
 
 /**

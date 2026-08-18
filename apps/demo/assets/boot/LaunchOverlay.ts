@@ -31,7 +31,8 @@ const N_ACTION = 'Action';
 const N_ACTION_LABEL = 'Action/Label';
 
 /**
- * 阶段 → 文案 + 粗粒度进度。热更真实下载比例细分在 `hotupdate`..`shared` 之间（0.30→0.60），
+ * 阶段 → 文案 + 粗粒度进度。带 `ratio` 的阶段（下载中）把真实比例细分在**本段之内**
+ * （`hotupdate` 0.30→0.60 是 base 整包，`shared` 0.60→0.85 是分包），
  * 这样进度条全程单调前进，不会「下载完 100% 又跳回 60%」。
  *
  * demo 直接写中文：i18n 表本身在 `shared` bundle 里、启动早期还没加载。真实项目要么把启动文案
@@ -47,6 +48,23 @@ const PHASE: Readonly<Record<LaunchPhase, { readonly text: string; readonly rati
   running: { text: '', ratio: 1 },
   failed: { text: '', ratio: 0 },
 };
+
+/** 阶段推进顺序（`failed` 不在其中——它不带 ratio，也不参与插值）。 */
+const ORDER: readonly LaunchPhase[] = [
+  'idle',
+  'platform',
+  'dispatch',
+  'hotupdate',
+  'shared',
+  'lobby',
+  'running',
+];
+
+/** 本阶段进度段的终点 = 下一阶段的起点。用于把下载比例插值进本段。 */
+function segmentEnd(phase: LaunchPhase): number {
+  const next = ORDER[ORDER.indexOf(phase) + 1];
+  return next === undefined ? 1 : PHASE[next].ratio;
+}
 
 /**
  * 唯一留在代码里的两个样式值——**状态色由状态驱动**，放 prefab 上表达不了「失败时变红」。
@@ -122,11 +140,14 @@ export function createLaunchOverlay(app: App, prefab: Prefab | null): LaunchOver
       }
       if (status) status.color = C_TEXT;
       hideAction();
-      if (p.phase === 'hotupdate' && p.ratio !== undefined) {
-        // 下载完成到 restart 之间还有 apply 的一小段，别停在「99%」让人以为卡死
-        setText(status, p.ratio >= 1 ? '更新完成，即将重启…' : `下载更新 ${Math.round(p.ratio * 100)}%`);
+      // 带 ratio = 正在下东西。两种来源都走这里：`hotupdate` 是 base 整包，`shared`/`lobby`
+      // 是 BundleUpdater 在 load 之前更新分包（热更新增的马甲皮就是这条路，整包全量下）。
+      if (p.ratio !== undefined) {
+        // 下载完成之后还有 apply / 解包 / 加载的一小段，别停在「99%」让人以为卡死
+        const done = p.phase === 'hotupdate' ? '更新完成，即将重启…' : '下载完成，加载中…';
+        setText(status, p.ratio >= 1 ? done : `下载更新 ${Math.round(p.ratio * 100)}%`);
         setText(hint, '更新期间请保持网络畅通');
-        setRatio(PHASE.hotupdate.ratio + (PHASE.shared.ratio - PHASE.hotupdate.ratio) * p.ratio);
+        setRatio(PHASE[p.phase].ratio + (segmentEnd(p.phase) - PHASE[p.phase].ratio) * p.ratio);
         return;
       }
       setText(status, PHASE[p.phase].text);

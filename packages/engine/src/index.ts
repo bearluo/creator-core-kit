@@ -44,6 +44,9 @@ export {
   normalizeSearchPaths,
   bundleStoragePath,
   bundleManifestName,
+  bundleVersionName,
+  rebaseManifest,
+  seedBundleManifest,
   retiredBundleDirs,
 } from './hotupdate-paths';
 

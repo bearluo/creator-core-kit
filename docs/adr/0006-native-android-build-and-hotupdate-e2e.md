@@ -19,7 +19,7 @@ HotUpdateService（core 半）+ `ccHotUpdateModule`（engine 半 `native.AssetsM
 3. **ABI = x86_64**：目标模拟器 `fortune_test` 是 x86_64（Windows 主机上 x86_64 镜像原生跑最快）。Cocos 3.8 模板 `gradle.properties` 明列 `x86_64` 为可用 ABI，故 `appABIs: ['x86_64']` 直接原生编译，**不靠 ARM 转译**。（真机 arm64 需另打 `arm64-v8a`。）
 4. **热更 `manifestUrl` 用裸文件名 `'project.manifest'`**：把 `project.manifest`/`version.manifest` 放构建产物 `data/` 根（= APK 内 `assets/` 根 = fileUtils 默认搜索路径），`native.AssetsManager.create('project.manifest', …)` 直接解析到。**不走官方「导入 `.manifest` 资产取 `nativeUrl`」**——data 根本就是搜索路径，裸名更省一层。
 5. **main.js 启动还原手动注入**：原生 `data/main.js` 顶部（引擎/资源加载前）加读 `localStorage['HotUpdateSearchPaths']` → `jsb.fileUtils.setSearchPaths(...)`。**冷启动（进程被杀重开）必需**；`game.restart()` 同进程热重启因 apply() 已在内存 setSearchPaths，即便不还原也能加载新版本。demo 为验证便宜**直接改生成物**；**生产应放 `build-templates/android/data/main.js`** 使其存活于每次 Creator 构建。
-6. **远端资源托管走宿主 http server + 模拟器 `10.0.2.2`**：模拟器 user-net 网关 `10.0.2.2` 映射宿主 loopback，起个 `python -m http.server` 绑 `0.0.0.0:<port>` 即被模拟器直连，**免 CDN / 免鉴权**（比 filebrowser 更轻，验证够用）。Cocos 3.8 android 模板 `AndroidManifest.xml` 默认 `android:usesCleartextTraffic="true"`，HTTP 明文开箱可用，无需改网络安全配置。
+6. ⚠️ **~~远端资源托管走宿主 http server + 模拟器 `10.0.2.2`~~ —— 已作废，见文末「修正（2026-08-18）」，托管一律走 filebrowser（ADR-0007）**：~~模拟器 user-net 网关 `10.0.2.2` 映射宿主 loopback，起个 `python -m http.server` 绑 `0.0.0.0:<port>` 即被模拟器直连，**免 CDN / 免鉴权**（比 filebrowser 更轻，验证够用）。~~Cocos 3.8 android 模板 `AndroidManifest.xml` 默认 `android:usesCleartextTraffic="true"`，HTTP 明文开箱可用，无需改网络安全配置（**这半句仍有效**）。
 
 ## 理由
 
@@ -81,3 +81,31 @@ PID 变化是判据：`game.restart()` 同进程重启靠的是内存里已生�
 顺带修掉一个静默陷阱：`apps/demo/.gitignore` 的裸 `native` 与根 `.gitignore` 的 `**/native/` 会把 `build-templates/native/` 一并吞掉（本该只忽略 Creator 生成的原生工程目录），已分别锚成 `/native/` 和 `/apps/*/native/`。
 
 决策 5 的其余部分（还原逻辑的作用、冷启动才必需、`game.restart()` 不依赖它）不变。
+
+## 修正（2026-08-18）：决策 6 作废——托管一律走 filebrowser，别再起 `10.0.2.2` 那套
+
+决策 6 当时图轻，用「宿主 `python -m http.server` + 模拟器 `10.0.2.2`」托管热更内容。**这条路已被 [ADR-0007](0007-compat-stamp-runtime-readin-and-filebrowser-hosting.md) 取代**，那次只在自己的正文里写了切换，没回头把这里标掉——结果它继续以「已接受的决策」形态躺着，被当成可用配方翻出来过不止一次。这一节把它钉死。
+
+**为什么不能再用**（不是「有更好的」，是这四条各自都会让验证结果失真）：
+
+| 症状 | 后果 |
+|---|---|
+| `python -m http.server` 默认绑 `127.0.0.1` | **只有模拟器够得着**（靠 `10.0.2.2` 网关映射）；真机、Tailscale 一律拉不到，验的不是真实链路 |
+| 临时进程、端口随手挑 | 每次验证重起、URL 每次都变；而 `packageUrl` 是**烘进 APK** 的，URL 一变整个包作废 |
+| `10.0.2.2` 只在模拟器 user-net 里有意义 | 烘进 APK 的地址换到真机就是死地址，且**没有任何报错**，表现为「热更静默不生效」 |
+| 本机 `python` 是 Windows Store 存根 | 直接 exit 49、零输出，排查成本远超它省下的那点事 |
+
+**正确做法**：本机常驻 filebrowser（`172.25.50.135:8081`，见 skill `filebrowser-cdn`），对内容目录建**固定分享**，base URL 形如：
+
+```
+http://172.25.50.135:8081/api/public/dl/<hash>/
+```
+
+hash 永久不变 → 可以放心烘进 APK；绑 `0.0.0.0` → 模拟器 / 真机 / Tailscale 全通；服务随 Docker Desktop 自启 → 不用起进程。本仓的分享是 `/creator-core-kit/cdn`，hash `shCo8WNE`。
+
+⚠️ **URL 形态错了会 `200` + HTML，不是 404。** filebrowser 只在 `/api/public/dl/<hash>/` 下发文件，其它任意路径（`/cdn/`、`/share/<hash>`…）都回 SPA 首页，**状态码照样 200**。客户端「下载成功」，写下一个 HTML，直到解析才炸 `readFile failed!` —— 探活只看 status code 会一路绿灯。**判据是 `Content-Type: application/octet-stream`，不是 200。** 2026-08-18 服务端下发的 `cdn_url` 正是踩这个（[server-core-kit#1](https://hlgit.5518game.com/luohao/server-core-kit/-/issues/1)）。
+
+**另：`10.0.2.2` 的其它出现处也多半是同期遗留。** 比如 `http://10.0.2.2:9200/` —— `9200` 是 server-core-kit **gateway 的 admin 面**，跟热更托管无关；而且 gateway 早已迁到 dev139、admin 面**设计上只在容器内监听**，所以那个地址两头皆空。要调 admin 面走
+`ssh dev139 "docker exec server-core-kit-gateway-1 wget -qO- --post-data='{}' http://127.0.0.1:9200/admin/retire"`（镜像无 curl）。
+
+决策 6 里唯一仍然有效的是最后半句：Cocos 3.8 android 模板默认 `usesCleartextTraffic="true"`，HTTP 明文开箱可用，不必改网络安全配置。

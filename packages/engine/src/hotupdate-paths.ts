@@ -41,6 +41,75 @@ export function bundleManifestName(bundle: string): string {
   return `${bundle}.manifest`;
 }
 
+/** 模块 bundle 的精简版本清单文件名（同上，`--split` 每个包出一对）。 */
+export function bundleVersionName(bundle: string): string {
+  return `${bundle}.version.manifest`;
+}
+
+/**
+ * 造一份**内存里的种子 local manifest**（JSON 字符串），给「包内查不到 `<bundle>.manifest`」的 bundle 用。
+ *
+ * ## 为什么需要它
+ *
+ * `AssetsManagerEx` 手上有两份 manifest：**remote**（从 CDN 下的那份）与 **local**（引导用的那份）。
+ * local 提供 `remoteManifestUrl`（去哪查更新）与本地资源表（拿什么做 diff）——**没有 local 连去哪查
+ * 都不知道**（`ERROR_NO_LOCAL_MANIFEST`）。而 `<bundle>.manifest` 躺在构建产物 `data/` 根，不在
+ * `src|assets|jsb-adapter` 这三个被遍历的目录里 → **它自己不进任何 manifest 的 asset 表、永远不会
+ * 被热更下发**。于是一个从没随包发过的 bundle（热更新增的马甲皮 / 新模块），包内没有它的 manifest，
+ * base 热更也带不来 —— 没有种子就永远下不到。
+ *
+ * 种子把这一步接上：`packageUrl` 用 dispatcher 握手下发的 `cdnUrl`，`assets` 留空 → diff 出全量 →
+ * 整包下下来。代价是**首次全量**，所以随包发过的 bundle 仍旧用包内那份（增量，见调用方）。
+ *
+ * ⚠️ `version` 必须留 `0.0.0`：`loadLocalManifest` 会把种子与 `<storagePath>/project.manifest`
+ * （上次下载落的**真** manifest）比版本，local 更新时 `removeDirectory(storagePath)` 整个清掉重下。
+ * 种子恒最旧，缓存那份才能接管 → 第二次起自动变增量。
+ */
+export function seedBundleManifest(cdnUrl: string, bundle: string): string {
+  const base = withSlash(cdnUrl);
+  return JSON.stringify({
+    packageUrl: base,
+    remoteManifestUrl: base + bundleManifestName(bundle),
+    remoteVersionUrl: base + bundleVersionName(bundle),
+    version: '0.0.0',
+    assets: {},
+    searchPaths: [],
+  });
+}
+
+/**
+ * 把一份**远端** manifest 的三个地址字段改写到 `cdnUrl`，其余字段（`version` / `assets` /
+ * `searchPaths`）原样保留。传进来的 `content` 必须是合法 manifest JSON，否则抛。
+ *
+ * ## 为什么改的是「远端」那份
+ *
+ * `AssetsManagerEx` 下载资源时的基址**只取 remote manifest**（`AssetsManagerEx.cpp:738`
+ * `_remoteManifest->getPackageUrl()` —— 全文件唯一一处），local 那份的 `packageUrl` 仅用于
+ * 决定去哪拉 remote manifest 本身。所以只要我们自己把 remote manifest 拉下来、改掉基址、经
+ * `loadRemoteManifest()` 灌回去，**内容托管在哪就完全由服务端说了算**，与出包时烘进去的地址无关。
+ *
+ * 反过来改 local 那份走不通：`loadLocalManifest(Manifest*, storagePath)` 会拿它跟
+ * `<storagePath>/project.manifest`（缓存）比版本，比输了当场被缓存整个顶掉、改动作废；比赢了又会
+ * `removeDirectory(storagePath)` 清库，且 `checkUpdate` 立刻判定「已是最新」再不更新。两头都是死的。
+ *
+ * ⚠️ **`assets` 一个字节都不能动** —— 它是 `genDiff` 的一半输入，动了就是把增量下载变成全量。
+ */
+export function rebaseManifest(
+  content: string,
+  cdnUrl: string,
+  manifestName: string,
+  versionName: string,
+): string {
+  const m = JSON.parse(content) as Record<string, unknown>;
+  const base = withSlash(cdnUrl);
+  return JSON.stringify({
+    ...m,
+    packageUrl: base,
+    remoteManifestUrl: base + manifestName,
+    remoteVersionUrl: base + versionName,
+  });
+}
+
 /**
  * 从 `FileUtils::listFiles(bundleStorageRoot)` 的原始输出里，挑出**已下线 bundle** 的目录（返回完整路径）。
  *

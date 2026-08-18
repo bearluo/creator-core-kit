@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   bundleManifestName,
   bundleStoragePath,
+  bundleVersionName,
   normalizeSearchPaths,
+  rebaseManifest,
   retiredBundleDirs,
+  seedBundleManifest,
 } from '../hotupdate-paths';
 
 describe('normalizeSearchPaths', () => {
@@ -59,6 +62,84 @@ describe('bundleStoragePath', () => {
 describe('bundleManifestName', () => {
   it('对齐 cck-manifest --split 的产物名', () => {
     expect(bundleManifestName('shop')).toBe('shop.manifest');
+    expect(bundleVersionName('shop')).toBe('shop.version.manifest');
+  });
+});
+
+describe('seedBundleManifest', () => {
+  const parse = (cdn: string, b: string): Record<string, unknown> =>
+    JSON.parse(seedBundleManifest(cdn, b)) as Record<string, unknown>;
+
+  it('远端地址指向 --split 出的那一对，基址尾斜杠可有可无', () => {
+    for (const cdn of ['https://cdn.example.com/v1/', 'https://cdn.example.com/v1']) {
+      expect(parse(cdn, 'skin-vest-mail')).toMatchObject({
+        packageUrl: 'https://cdn.example.com/v1/',
+        remoteManifestUrl: 'https://cdn.example.com/v1/skin-vest-mail.manifest',
+        remoteVersionUrl: 'https://cdn.example.com/v1/skin-vest-mail.version.manifest',
+      });
+    }
+  });
+
+  it('asset 表为空 → diff 出全量（种子的用途就是把从没随包发过的包整个下下来）', () => {
+    expect(parse('http://cdn/', 'shop')['assets']).toEqual({});
+  });
+
+  it('版本恒为 0.0.0 —— 比它新的缓存 manifest 才能接管，否则每次启动都被 removeDirectory 抹了重下', () => {
+    expect(parse('http://cdn/', 'shop')['version']).toBe('0.0.0');
+  });
+
+  it('是合法 JSON 且字段齐全（少一个 Manifest::loadManifest 就取不到远端地址）', () => {
+    const m = parse('http://cdn/', 'shop');
+    for (const k of ['packageUrl', 'remoteManifestUrl', 'remoteVersionUrl', 'version', 'assets', 'searchPaths']) {
+      expect(m).toHaveProperty(k);
+    }
+  });
+});
+
+describe('rebaseManifest', () => {
+  /** 一份最小但字段齐全的远端 manifest，基址是「出包时烘进去的老地址」。 */
+  const REMOTE = JSON.stringify({
+    packageUrl: 'http://old-cdn/baked/',
+    remoteManifestUrl: 'http://old-cdn/baked/project.manifest',
+    remoteVersionUrl: 'http://old-cdn/baked/version.manifest',
+    version: '1.0.7',
+    assets: { 'src/index.js': { size: 12, md5: 'abc' } },
+    searchPaths: ['x'],
+  });
+  const parse = (cdn: string): Record<string, unknown> =>
+    JSON.parse(rebaseManifest(REMOTE, cdn, 'project.manifest', 'version.manifest')) as Record<
+      string,
+      unknown
+    >;
+
+  it('三个地址全部改写到下发的基址，尾斜杠可有可无', () => {
+    for (const cdn of ['http://new-cdn/live/', 'http://new-cdn/live']) {
+      expect(parse(cdn)).toMatchObject({
+        packageUrl: 'http://new-cdn/live/',
+        remoteManifestUrl: 'http://new-cdn/live/project.manifest',
+        remoteVersionUrl: 'http://new-cdn/live/version.manifest',
+      });
+    }
+  });
+
+  it('version / assets / searchPaths 原样保留 —— 动了 assets 就是拿全量当增量下', () => {
+    expect(parse('http://new-cdn/live/')).toMatchObject({
+      version: '1.0.7',
+      assets: { 'src/index.js': { size: 12, md5: 'abc' } },
+      searchPaths: ['x'],
+    });
+  });
+
+  it('分包的那对文件名同样能改（base 与 bundle 走同一条注入路）', () => {
+    const m = JSON.parse(
+      rebaseManifest(REMOTE, 'http://new-cdn/live', 'shop.manifest', 'shop.version.manifest'),
+    ) as Record<string, unknown>;
+    expect(m['remoteManifestUrl']).toBe('http://new-cdn/live/shop.manifest');
+    expect(m['remoteVersionUrl']).toBe('http://new-cdn/live/shop.version.manifest');
+  });
+
+  it('非 JSON 直接抛 —— CDN 路由错了会回一坨 200 的 HTML，别把它当 manifest 灌进引擎', () => {
+    expect(() => rebaseManifest('<!doctype html><html>', 'http://cdn/', 'a.manifest', 'a.v')).toThrow();
   });
 });
 

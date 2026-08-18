@@ -88,6 +88,9 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
 | 5 | 失败重试 | 内建退避调度 / **update 可再调、时机交上层** | **可再调** | AssetsManager 自带续传；退避调度 YAGNI |
 | 6 | 应用生效 | 自动 restart / **apply 与 restart 分离** | **分离** | 让 UI 先提示「更新完成，重启生效」再由用户/上层触发 restart |
 | 7 | DI 便捷 | 仅工厂 / **BACKEND + SERVICE token + get** | **都给** | 对齐姊妹模块 token+fallback 范式 |
+| 8 | 包内无 `<bundle>.manifest` 时 | 放弃更新 / 落一份种子到盘 / **内存造种子 manifest** | **内存种子**（2026-08-17） | 从没随包发过的 bundle（新马甲皮 / 新模块）本来引导不起来；`<bundle>.manifest` 不在任何 asset 表里、热更带不来它。内存造不落盘、失败下次启动自动重来。`version` 恒 `0.0.0` 让缓存 manifest 接管 → 第二次起增量。见 [[adr-0013]] 补充 |
+| 9 | 种子的基址从哪来 | 出包配置 / 包内 `packageUrl` / **服务端下发 `cdn_url`** | **服务端下发**（用户定 2026-08-18） | 内容托管在哪是运营期决定——换 CDN / 灰度 / 挪域名只该改服务端配置。包里烘的是出包那刻的快照，内容挪了就得发新包，正是热更要消灭的事。没下发才回落包内 `packageUrl`（兜底，不是「配错也能跑」） |
+| 10 | 基址怎么落到引擎 | 改 local manifest / 改构造参数 / **自取 remote manifest 再 `loadRemoteManifest`** | **灌 remote**（2026-08-18） | 下载基址只认 remote（`AssetsManagerEx.cpp:738` 是全文件唯一一处 `getPackageUrl`），local 那份只提供 diff 用的 asset 表、一个字节都不用动。改 local 走不通：与缓存比版本，比输了被顶掉、比赢了清库且再不更新。**base 与所有分包统一走这条**，选项从 `bundleCdnUrl` 改名 `cdnUrl` |
 
 ## Platform considerations（全平台 / 小游戏兼容）
 
@@ -242,6 +245,69 @@ SHOP_TAG = v2                              ← shop/ 与 shop_temp/ 未被误删
 ```
 
 `shop_temp/` 在 up-to-date 后消失，是 `AssetsManagerEx::loadRemoteManifest` 自己 `removeDirectory(_tempStoragePath)` 清的，不是回收删的。全程无 FATAL / native signal。
+
+### 热更新增 bundle 的自愈：种子 manifest（2026-08-17，真 Android APK · PASS）
+
+分包热更此前有个只在「**热更改了配置、指向一个从没随包发过的 bundle**」时才暴露的缺口。demo 的真实
+触发路径：base 热更把 `settings.cck.vest` 翻成另一个马甲 → 重启 → 启动预载列表变成
+`['shared', 'skin-vest-foundation']`，而这个皮包是发版之后才加的。
+
+病根不在配置，在**引导**：`<bundle>.manifest` 躺在构建产物 `data/` 根，而 manifest 只遍历
+`src|assets|jsb-adapter` → **它自己不进任何 asset 表、永远不会被热更下发**。包内没有 + 热更带不来
+= `AssetsManagerEx` 连去哪查更新都不知道。补法见 [[adr-0013]] 补充（内存种子，`version` 恒 `0.0.0`）。
+
+同时补上的还有**注册**：`BUNDLE_UPDATER` 此前只在 `probes/DemoBoot.ts` 里注册过，正式启动路径
+（`boot/Bootstrap.ts`）从未注册 → **加载前更新整条链在正式路径上是关的**，任何 bundle 都不会更新。
+现在挂在 `dispatch` 阶段的项目步骤里（那里 `APP_INFO` 与握手结果都已就位，且早于最早的 `load()`）。
+
+**实证**（真 x86_64 模拟器，干净安装，APK 里不含 `skin-vest-*`）：
+
+```
+skin='base'  → hotupdate 25→100% → restart
+skin='vest'  → shared 步 load('skin-vest-foundation')
+             ⏳ 更新 0/3 → 1/3 → 2/3 → 3/3 文件      ← 包内无 manifest，走种子全量下
+             启动阶段 → shared 0% → 100%              ← 启动界面按段插值，不再是静止的「加载公共资源…」
+force-stop 冷启动 → 只发 4 个 *.version.manifest 探测，**一个资源文件都没重下**
+```
+
+最后一行是 `version: '0.0.0'` 那条约束的判据：种子恒最旧 → `loadLocalManifest` 让
+`<storagePath>/project.manifest`（上次下载落的真 manifest）接管 → 第二次起是增量而不是每次全量重下。
+
+**内容基址由服务端下发**：所有更新目标（base 与每个分包）`check()` 时都**自己把 remote manifest
+拉下来、改掉三个地址字段、经 `loadRemoteManifest()` 灌回引擎**，基址取 dispatcher 握手的 `cdn_url`
+（`CcHotUpdateOptions.cdnUrl`）。于是换 CDN / 灰度分流 / 把内容挪去另一个域名，都只改服务端配置、
+不必发新包。拉不到、拉回来不是 JSON、引擎不收（状态已越过 `UNCHECKED`）——任一情形都退回
+`checkUpdate()` 老路，用包内烘的地址试一次，并打一行 warn（两条路的产物一模一样，不打日志就无从
+判断走的是哪条）。「为什么灌 remote 不灌 local」见 [[adr-0013]] 补充。
+
+⚠️ **配 CDN 基址时 `200` 不等于拿到文件，要看 `Content-Type`。** 本机 filebrowser 只在
+`/api/public/dl/<hash>/` 下发文件，其它路径一律回 SPA 首页 + `200 text/html` → 客户端「下载成功」
+拿到一坨 HTML，直到解析才炸。dispatcher 当前配的 `http://172.25.50.135:8081/cdn/` 正是这个形态
+（[server-core-kit#1](https://hlgit.5518game.com/luohao/server-core-kit/-/issues/1)，改那个文件属别的仓）；
+正确值是固定分享 `http://172.25.50.135:8081/api/public/dl/shCo8WNE/`。
+
+**实证 PASS**（2026-08-18，真 x86_64 模拟器，干净安装）。判据做成二值的：**APK 与 CDN 上所有 manifest 的
+`packageUrl` 全烘成死地址 `http://127.0.0.1:9/dead/`**，全局唯一的活地址是握手下发的 `cdn_url` ——
+能下载成功就只可能来自运行时改写。
+
+```
+dispatcher 放行：cdn=http://172.25.50.135:8081/api/public/dl/shCo8WNE/
+[cck] project.manifest 基址取服务端下发：…/shCo8WNE/     ← base 走注入路
+启动阶段 → hotupdate 37% → 100% → restart
+马甲皮 → skin='vest'                                     ← 热更下来的 settings 接管
+[cck] shared.manifest / skin-vest-foundation.manifest / foundation.manifest 基址取服务端下发：…
+【force-stop 冷启动】skin='vest'，四个包全走注入路，零重下
+```
+
+对照组同样明确：**同一份死地址内容 + 改动前的 engine** → `热更检查失败:
+java.net.ConnectException: Failed to connect to /127.0.0.1:9`。该轮 `cdn_url` 由本机假 dispatcher 下发
+（真的那台配的仍是上面那个错形态的值）。
+
+> ⚠️ 这一程**没跑到大厅**：`demo-foundation` 步的长连接 `10s 未就绪（停在 reconnecting）：
+> ws://172.25.50.20:9101/ws`。同一失败在 `skin='base'` 下同样复现（与皮包、与本次改动无关），
+> 网关从宿主机 `/healthz` 200、WS 升级 101 都正常，模拟器到 9101 的 TCP 也通 —— 是模拟器侧
+> WS 握手/重连的独立问题，另查。顺带把 `Bootstrap` 的失败日志摊平成一行：Cocos native 转发
+> JS console 到 logcat 时对象参数一律打成 `[object Object]`，真机上唯一的失败信息不能是这个。
 
 ### coreApiHash 版本闸激活（戳的运行时读入，2026-07-29 · 真机 e2e PASS）
 
