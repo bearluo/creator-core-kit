@@ -33,3 +33,7 @@ coverage/
 # 系统 / 编辑器
 .DS_Store
 Thumbs.db
+
+# Claude Code 的本机授权/插件开关（因人而异，不入库；
+# 同目录的 .claude/skills/ 是随仓库共用的，照常提交）
+/.claude/settings.local.json

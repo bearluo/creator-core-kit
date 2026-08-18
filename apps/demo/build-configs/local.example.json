@@ -1,0 +1,12 @@
+{
+  "creatorPath": "C:/ProgramData/cocos/editors/Creator/3.8.7/CocosCreator.exe",
+  "cdnUrl": "http://172.25.50.135:8081/api/public/dl/shCo8WNE/",
+  "cdnDir": "E:/fileserve/creator-core-kit/cdn",
+  "packages": {
+    "android": {
+      "sdkPath": "E:\\android-sdk",
+      "ndkPath": "E:\\android-sdk\\ndk\\23.2.8568313",
+      "javaHome": "C:\\Program Files\\Microsoft\\jdk-17.0.19.10-hotspot"
+    }
+  }
+}
