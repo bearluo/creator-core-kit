@@ -53,7 +53,6 @@ flowchart TB
 | `skin-<马甲>-foundation` | `assets/skins/<马甲>/foundation/` | 2 | 启动 `shared` 阶段（在 `APP_CONFIG.shared` 里） | 不卸，常驻 |
 | `skin-<马甲>-lobby` | `assets/skins/<马甲>/lobby/` | 1 | 进大厅时 | 不卸 |
 | `skin-<马甲>-mail` | `assets/skins/<马甲>/mail/` | 1 | 打开邮件时，与 `mail` 并行 | 关闭时，与 `mail` 一起 |
-| `fixtures-bundle` | `assets/probes/fixtures-bundle/` | 1 | 仅探针场景 | — |
 
 包名靠目录 `.meta` 的 `bundleName` 覆盖（皮包目录本身不重复 `skin-` 前缀）。
 内置的 `main`(7) / `resources`(8) 优先级都高于 `foundation`，所以地基**不会**反过来把 AOT
@@ -87,8 +86,7 @@ flowchart TB
 
 - **地基必须在 `hotupdate` 之后加载**（`shared` 阶段），否则更新下来的要等下次启动才生效。
   长连接与认证跟着后移到这一步，是这个排序的直接后果。
-- **测试不进 `assets/`** —— Creator 会把 `.test.ts` 当游戏脚本打包并炸构建。运行时验证探针
-  另有去处（`assets/probes/`），别和单测混。
+- **测试不进 `assets/`** —— Creator 会把 `.test.ts` 当游戏脚本打包并炸构建，单测放 `apps/demo/test/`。
 - **禁模块级单例**（`export const x = new Foo()` / `static instance` / `getInstance()`）：
   bundle 卸载不卸脚本、编辑器 stop→play 保留 JS 上下文、单 bundle 出包依赖内联，三条都让它
   拿到脏的旧实例。要共享就注册进模块 DI scope。唯一豁免是 `getRootContainer()`。

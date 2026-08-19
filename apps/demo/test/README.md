@@ -3,7 +3,6 @@
 **这里是 vitest 单测**，`assets/` 之外——Creator 编译 `assets/` 下所有 `.ts` 并打进游戏包，
 `.test.ts` 放进去会被当游戏脚本，且 `import vitest` 直接炸构建。
 
-（运行时验证探针在 `assets/probes/`，那是打进包、在预览 / 真机跑的东西，不是这里。）
 
 ## 放哪
 

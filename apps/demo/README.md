@@ -9,9 +9,8 @@
 | **`assets/scenes/Boot.scene`**（main 包） | 🌱 **一次性启动场**：装配 kit → 跑启动序列（读戳 → 热更 → `shared` → `lobby`）。除 app 重启外不二次进入 | `scenes/Bootstrap.ts` |
 | **`assets/modules/lobby/Lobby.scene`**（`lobby` bundle） | 🏠 **大厅主场**，也是子游戏的返回目标（每次返回都重新加载）。大厅自己就是一个可热更的 bundle | `modules/lobby/LobbyHost.ts` |
 | `assets/modules/mini-dodge/Dodge.scene` | 🎮 子游戏自带场景，在自己的 Asset Bundle 里 | `modules/mini-dodge/DodgeGame.ts` |
-| `assets/probes/Demo.scene` | 🔬 逐模块验证探针（狂打 `[CCK-DEMO]` 日志，无可见 UI） | `probes/DemoBoot.ts` |
 
-**`Boot` / `Lobby` / `Dodge` 都不含相机、不含 Canvas** —— 相机由 kit 的常驻相机组（`cameraRigModule`）在 Boot 阶段建好并跨场景存活。原理与约束见下方设计文档。（`Demo.scene` 是只打日志的探针，本来就不需要相机；它自己起 kit、不走 Boot。）
+**`Boot` / `Lobby` / `Dodge` 都不含相机、不含 Canvas** —— 相机由 kit 的常驻相机组（`cameraRigModule`）在 Boot 阶段建好并跨场景存活。原理与约束见下方设计文档。
 
 ## 接入样例怎么读
 

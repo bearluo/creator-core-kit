@@ -7,7 +7,6 @@
 | 文件 | 起始场景 | 用途 |
 |---|---|---|
 | `android-boot.json` | `db://assets/boot/Boot.scene` | 正常启动链路：dispatch → hotupdate → shared → 登录 |
-| `android-probes.json` | `db://assets/probes/Demo.scene` | 引擎适配层验证探针（不走 App 启动编排） |
 | `web-mobile-boot.json` | `db://assets/boot/Boot.scene` | 同上，出 web 产物（**`md5Cache: true`** —— web 的热更靠 `index.<md5>.js` 换文件名，关了就没有版本可言） |
 
 怎么用见 skill `/demo-build`（两条路：Creator 面板导入，或关掉编辑器走命令行）。

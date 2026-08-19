@@ -5,7 +5,6 @@
  *   node scripts/build.mjs boot                    # Creator 构建，起始场景 Boot
  *   node scripts/build.mjs boot --manifest --apk   # 再夹一步热更 manifest + 同步 CDN
  *   node scripts/build.mjs boot --vest vest --apk  # 换马甲
- *   node scripts/build.mjs probes                  # 探针场景
  *
  * 配置来自 `build-configs/<name>.json`（构建意图，进 git）叠加 `build-configs/local.json`
  * （本机 SDK/NDK/JDK 与 Creator 路径，gitignore）。命令行模式**不读 Creator 的偏好设置**，
@@ -69,7 +68,7 @@ const dispatcher = opt('dispatcher');
 if (dispatcher) cfg.packages['cck-build'].dispatcherUrl = dispatcher;
 
 // `startScene` 只认 **uuid**。传 `db://…` 那种 url 不会报错，会**静默回退到项目当前的默认起始
-// 场景**——表现就是配置写着 probes、出来的包却从 Boot 启动。所以在这里查 `.meta` 换成 uuid。
+// 场景**——表现就是配置写着一个场景、出来的包却从另一个启动。所以在这里查 `.meta` 换成 uuid。
 const sceneUrl = cfg.startScene;
 const metaPath = join(DEMO, `${sceneUrl.replace(/^db:\/\//, '')}.meta`);
 if (!existsSync(metaPath)) throw new Error(`起始场景不存在：${sceneUrl}（找不到 ${metaPath}）`);

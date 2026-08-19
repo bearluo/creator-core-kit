@@ -101,12 +101,7 @@ Cocos Creator 编译 `assets/` 下所有 `.ts` 并打进游戏包；`.test.ts` �
 
 正确位置：**`apps/<project>/test/`**（`assets/` 之外，Creator 完全不看，与已有的 `apps/demo/scripts/` 同一套路）。
 
-> **`test` 这个名字全仓只有一处**，就是 `apps/<project>/test/`（单测）。`assets/` 下曾有个同名的 `assets/test/`，2026-08-03 已改名为 **`assets/probes/`**——里面是运行时验证探针（`Demo.scene` + `DemoBoot.ts` + `fixtures-bundle/`，狂打 `[CCK-DEMO]` 日志，Creator 打包后在预览 / 真机跑），一个测试用例都没有，叫 test 名不副实且和单测目录撞名。
->
-> | 路径 | 是什么 | 谁跑 |
-> |---|---|---|
-> | `apps/demo/assets/probes/` | 运行时验证探针 | Creator 打包，预览 / 真机 |
-> | `apps/demo/test/` | vitest 单测 | node，CI |
+> **`test` 这个名字全仓只有一处**，就是 `apps/<project>/test/`（vitest 单测，node 跑，进 CI）。`assets/` 下不许出现同名目录。
 
 ### 5.2 目录按模块镜像 `assets/`
 

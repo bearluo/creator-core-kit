@@ -1,6 +1,6 @@
 ---
 name: demo-build
-description: Use when building the demo app for Android or web — producing build/android/data, an APK, a web-mobile bundle with its hot-update version table, or switching the launch scene (Boot vs probes) or vest. Runs Cocos Creator headlessly from a checked-in config instead of clicking through the build panel.
+description: Use when building the demo app for Android or web — producing build/android/data, an APK, a web-mobile bundle with its hot-update version table, or switching the launch scene or vest. Runs Cocos Creator headlessly from a checked-in config instead of clicking through the build panel.
 ---
 
 # 出 demo 的包（Android / web）
@@ -10,11 +10,10 @@ cd apps/demo
 node scripts/build.mjs boot                     # Creator 构建，起始场景 Boot（正常启动链路）
 node scripts/build.mjs boot --manifest --apk    # 完整一条龙：构建 → 热更 manifest + 同步 CDN → APK
 node scripts/build.mjs boot --vest vest --apk   # 换马甲
-node scripts/build.mjs probes                   # 引擎适配层验证探针场景
 node scripts/build.mjs web-mobile-boot --manifest  # web：构建 → 版本表 → 叠加部署到 webDir
 ```
 
-**配置名就是参数**（`build-configs/<name>.json`）；`boot` / `probes` 另有一条兼容回退，仍找得到
+**配置名就是参数**（`build-configs/<name>.json`）；`boot` 另有一条兼容回退，仍找得到
 `android-<name>.json`。`--apk` 只对 native 平台有意义，对 web 直接报错。
 
 每次构建都会先打 **app 兼容戳**（`assets/resources/cck-app-compat.json`，版本闸的本地一端），
@@ -74,9 +73,9 @@ adb shell sleep 30 && adb logcat -d -v brief | grep -E "CCK-BOOT|CCK-NET|\[cck\]
   `data/src/settings.json` 的 mtime 有没有变——别改成 grep 日志措辞。
 - **Creator 开着也能跑**（会另起一个独立实例，只在 `temp/logs/project.log` 上报个无害的 EPERM）。
   但两个实例共用 `library/`、`temp/`，构建时别同时在编辑器里改资源。
-- **`startScene` 只认 uuid，填 url 会静默回退。** 传 `db://assets/probes/Demo.scene` 这种 url
-  既不报错也不生效，Creator 直接用**项目当前的默认起始场景**——配置写着 probes、出来的包却从 Boot
-  启动，而且日志里那行 `"startScene":"<uuid>"` 看着一切正常。配置文件里仍写 url（可读、可 review），
+- **`startScene` 只认 uuid，填 url 会静默回退。** 传 `db://assets/boot/Boot.scene` 这种 url
+  既不报错也不生效，Creator 直接用**项目当前的默认起始场景**——配置写着一个场景、出来的包却从
+  另一个启动，而且日志里那行 `"startScene":"<uuid>"` 看着一切正常。配置文件里仍写 url（可读、可 review），
   由 `scripts/build.mjs` 查 `<场景>.meta` 换成 uuid 再交给 Creator。
 - **起始场景路径以 `assets/main/cc.config.json` 的 `scenes` 为准。** Boot 在 `db://assets/boot/Boot.scene`；
   构建配置里可能还留着早期的 `db://assets/scenes/Boot.scene`，填错的表现是运行时

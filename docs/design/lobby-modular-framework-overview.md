@@ -28,7 +28,6 @@
 ## 1. 目标与定位
 
 - **做什么**：教一个新项目「大厅 + 一切功能皆可分包」怎么在 kit 上搭。既是 `apps/demo` 的接入样例，也是 kit 里「模块作用域资源」这套原语的使用现场。
-- **和验证探针的关系**：旧的逐模块验证探针（`DemoBoot` / `Demo.scene` / `fixtures-bundle`）在 `assets/probes/`，与本样例物理隔离，继续作回归用。
 - **YAGNI（本版不做）**：模块间深层导航历史；模块 A 直接依赖模块 B（模块只经 catalog + 事件解耦，不互相 import）；模块预下载优先级。
 
 ## 2. 架构：三类场景 + 常驻相机组
@@ -125,7 +124,6 @@ apps/demo/assets/
 │  ├─ shop/         ShopView.ts + Shop.prefab / Shop_land.prefab / shop-i18n.json   kind:panel
 │  ├─ mini-clicker/ ClickerView.ts + CounterVM.ts + Clicker.prefab                  kind:panel
 │  └─ mini-dodge/   DodgeGame.ts + Dodge.scene                                      kind:game
-└─ test/                       旧验证探针（Demo.scene · DemoBoot.ts · fixtures-bundle）
 ```
 
 > `lobby` 和功能模块**同住 `modules/` 但不同层**：`lobby` 是「启动期换」（启动序列里 load，更新下次启动天然生效），`shop` 等是「运行期换」。目录只表达「是不是一个可独立加载的包」，分层判据在 [[adr-0009]]——**别用目录反推层**。

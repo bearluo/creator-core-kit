@@ -1,5 +1,0 @@
-{
-  "name": "cck-demo-asset-probe",
-  "ok": true,
-  "note": "由 AssetManager engine 半（IAssetSource cc 实现）真加载验证用；见 asset-manager.md 实现记录"
-}

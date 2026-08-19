@@ -80,7 +80,7 @@ skins/vest/…           → `skin-vest-*`（示例马甲）      同名同路�
 
 1. **逻辑一律进 VM**（零 `cc`，可 node 直跑）；**View 只许做四件事**——取组件 / 建绑定 / 转发事件 / 转发生命周期钩子。写到第五件就下沉到 VM。单测覆盖到 VM 为止，View + prefab + 装配由启动 smoke 兜底。
 2. **禁模块级单例**——`export const x = new Foo()` / `static instance` / `getInstance()` 全禁。bundle 卸载不卸脚本、编辑器 stop→play 保留 JS 上下文、单 bundle 出包依赖内联，三条都让它拿到脏的旧实例。要共享就注册进模块 DI scope（`containerScoped`）。唯一豁免是 `getRootContainer()`（ADR-0001 指定机制）。
-3. **测试不进 `assets/`**——Creator 会把 `.test.ts` 当游戏脚本打包并炸构建。放 `apps/<project>/test/`，路径**镜像** `assets/`（`assets/a/B.ts` → `test/a/B.test.ts`）。运行时验证探针另有去处（`assets/probes/`），别和单测混。
+3. **测试不进 `assets/`**——Creator 会把 `.test.ts` 当游戏脚本打包并炸构建。放 `apps/<project>/test/`，路径**镜像** `assets/`（`assets/a/B.ts` → `test/a/B.test.ts`）。
 
 > 业务侧 lint 规则要写进 `apps/<project>/eslint.config.mjs`（`pnpm lint:demo`）——根 `eslint.config.js` 把 `apps/**` 整个 ignore 了，加在那里**静默失效**。
 > 五道门：`pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm check:vm-tests`（每个 `*VM.ts` 必须有镜像路径的测试）/ `pnpm docs:api`（改了 `core` 公开 API 就重新生成并一起提交，CI 会挡不同步）。
