@@ -32,6 +32,11 @@ export default defineConfig({
       include: ['packages/core/src/**'],
       exclude: ['packages/core/src/**/__tests__/**', 'packages/core/src/index.ts'],
       reportsDirectory: './coverage',
+      // **门要真的会拦**。此前只有 CI 的 `coverage:` 正则从文本报告里抓个数字给 GitLab 页面显示，
+      // 掉到 60% 流水线照样绿——「以为有门其实没有」。
+      // 取值贴着实测值下方（statements 99.36 / branches 97.30 / functions 98.36）留一点余量：
+      // 这是**棘轮**，不是及格线。真要降门槛就连同原因一起改这里，别让它无声下滑。
+      thresholds: { statements: 99, branches: 97, functions: 98, lines: 99 },
     },
   },
 });

@@ -1,35 +1,8 @@
 import { assetManager, js } from 'cc';
 import { BUNDLE_SOURCE } from '@cck/core';
 import type { IBundleSource, BundleLoadOptions, KitModule } from '@cck/core';
-
-/**
- * SystemJS 的 load 记录，只用到三个字段：`id` = 模块 id，`d` = 依赖的 load 记录，
- * namespace = 模块导出对象。
- *
- * ⚠️ namespace 挂哪个字段**跨版本会变**：Cocos 3.8.7 web 产物里的 SystemJS 是 `n`，`C` 是
- * 「top-level completion promise」；另一些版本 namespace 在 `C` 上。写死一个就会在另一边静默拿到空
- * 导出、一个类都注销不掉（表现为「类换了、界面没换」）→ 下面按形状挑，不按字段名赌。
- */
-interface SysLoad {
-  id: string;
-  n?: unknown;
-  C?: unknown;
-  d?: SysLoad[] | null;
-}
-
-/** 取 load 记录的 namespace：普通对象才算（`C` 在某些版本是 Promise，要排除掉）。 */
-function namespaceOf(load: SysLoad): Record<string, unknown> | undefined {
-  for (const v of [load.n, load.C]) {
-    if (v && typeof v === 'object' && typeof (v as { then?: unknown }).then !== 'function') {
-      return v as Record<string, unknown>;
-    }
-  }
-  return undefined;
-}
-/** SystemJS 实例：模块表挂在唯一的 symbol 键上，declare 表是普通实例属性 `registerRegistry`。 */
-type SystemLike = Record<string | symbol, unknown> & {
-  registerRegistry?: Record<string, unknown>;
-};
+import { dropBundleModules } from './system-registry';
+import type { SystemLike } from './system-registry';
 
 /** 每个 bundle 上次加载用的版本；用来判断「这次 load 是不是换了 md5」。 */
 const loadedVersions = new Map<string, string | undefined>();
@@ -50,33 +23,8 @@ const loadedVersions = new Map<string, string | undefined>();
  * native 没有这层 DOM 脚本缓存，热更覆盖同名文件后可以无条件清。
  */
 export function invalidateBundleScripts(name: string): boolean {
-  const sys = (globalThis as { System?: SystemLike }).System;
-  if (!sys) return false;
-  const symbol = Reflect.ownKeys(sys).find((k) => typeof k === 'symbol');
-  const loads = symbol ? (sys[symbol] as Record<string, SysLoad> | undefined) : undefined;
-  const declares = sys.registerRegistry;
-  if (!loads || !declares) return false;
-
-  // 出包时该 bundle 的入口 chunk，它的依赖就是这个 bundle 自己的全部脚本模块
-  const entryId = `chunks:///_virtual/${name}`;
-  const entry = loads[entryId];
-  if (!entry) return false;
-
-  const classes: unknown[] = [];
-  const drop = (id: string): void => {
-    delete loads[id];
-    delete declares[id];
-  };
-  for (const dep of entry.d ?? []) {
-    const ns = namespaceOf(dep);
-    for (const key of Object.keys(ns ?? {})) {
-      const exported = ns?.[key];
-      if (typeof exported === 'function') classes.push(exported); // 导出的函数 = 该模块注册的类
-    }
-    drop(dep.id);
-  }
-  drop(entryId);
-  drop(`virtual:///prerequisite-imports/${name}`);
+  const classes = dropBundleModules((globalThis as { System?: SystemLike }).System, name);
+  if (!classes) return false;
   if (classes.length) (js.unregisterClass as (...c: unknown[]) => void)(...classes);
   return true;
 }
