@@ -88,6 +88,11 @@ export const APP_CONFIG: AppConfig = {
     protoVersion: 1,
     platform: sys.isNative ? String(sys.os).toLowerCase() : 'web',
   },
-  // versionUrl 不配：demo 的热更走 native AssetsManager 那条已 e2e 验证的路径（ADR-0006）。
-  // web 版本表要真 CDN 才有意义，接入方按 env 拼自己的地址（dispatcher 下发的 cdnUrl 就是它的基址）。
+  // web 的热更入口：一张 bundle→md5 的表，出包时由 `cck-manifest web-versions` 从产物的
+  // settings.json 抽出来，跟产物一起部署。**写相对文件名**：它和 bundle 同源（都在页面这一侧），
+  // 按页面 base 解析，换部署地址天然跟着走，不必也不该去拼 dispatcher 下发的 cdnUrl。
+  //
+  // **native 明确不配**：那条走 AssetsManager + manifest，压根没有 bundleVers 这回事。配了
+  // 只会让每次启动多拉一个 CDN 上不存在的文件（拉不到不阻断启动，但 warn 是白响的）。
+  versionUrl: sys.isNative ? undefined : 'cck-versions.json',
 };

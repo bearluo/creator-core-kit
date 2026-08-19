@@ -134,6 +134,54 @@
   （`AssetsManagerEx.cpp:580/623`），且本框架的客户端一律经 dispatcher 下发的 `cdn_url` 自取并改写
   基址，那个烘进去的地址没人读。换址只改服务端配置。
 
+### 2026-08-19 · web 热更接通（版本表 + 旧页面换代码 · 浏览器双向 e2e PASS）
+
+core 侧那条 web 路径 2026-07-31 就写好了（拉版本表 → compat 闸 → `setVersions`），但**外围三样一直没有**，
+和 native 这几天补的三样一一对应：没有版本表生成器、没有 web 构建配置/流水线、`versionUrl` 从没接过线。
+
+**新增 `cck-manifest web-versions`**（[[web-versions]]）：从产物的 `src/settings.<md5>.json` 抽
+`assets.bundleVers`，剔掉 AOT 三件套，盖上 `version` / `coreApiHash` / `minAppVersion`，落成一张表。
+native 的 manifest 要带每个文件的 md5+size 是因为**它要自己下载**；web 什么都不用下，引擎按
+`assets/<bundle>/index.<md5>.js` 取、浏览器自己拉，所以整条流水线只剩这一张「谁是哪一版」的表。
+四道守卫都对着真实的坑：settings 文件名**自己也带 md5**（盯死 `settings.json` 会永远找不到）、
+残留多份就报错（挑第一个 = 生成一张指向旧 md5 的表，客户端加载即 404）、`bundleVers` 为空**点名
+`md5Cache`**（换文件名就是 web 的版本机制，关了热更无从谈起）、AOT 包不进表（版本由页面自己的
+settings 说了算，客户端换了只会去拉不存在的文件名）。
+
+**`build.mjs` 长出 web 平台**：新增 `build-configs/web-mobile-boot.json`（`md5Cache: true`），
+配置名不再写死 `android-` 前缀，`--manifest` 在 web 下改出版本表并把产物**叠加**到 `webDir`。
+⚠️ **叠加、绝不清空**——老页面还引用着上一版的 `index.<旧md5>.js`，删了等于打断线上会话；
+这条和 native 相反（那边只留最新一版）。
+
+**改掉一个我自己引进的错误设计**：先写成「相对文件名 → 拼 dispatcher 下发的 `cdnUrl`」，
+理由是"烘死地址会失效"。**那是 native 的病**：APK 里的地址改不了，只能运行时注入；web 上页面自己
+就是从某地址加载的，相对路径永远跟着页面走。实测直接照出来了——8082 的页面去拉 8081 的版本表，
+CORS 当场拦掉。已删掉那一档：绝对 URL 原样用，相对文件名交给引擎按页面 base 解析。
+配套两条：`versionUrl` **native 明确不配**（那条压根没有 bundleVers 这回事，配了只会每次启动白拉一个
+不存在的文件），以及**拉不到版本表不阻断启动**（退回包内 `bundleVers`，CDN 抖动把玩家挡在门外比
+少更新一次严重得多，与 `BundleUpdater` 同一取舍）。
+
+**浏览器双向 e2e**（真构建产物 + 8082 静态托管 + Playwright，单变量）：
+- **旧页面加载新 bundle 代码** —— 留一份 A 版页面（入口 `index.a05b3.js`、自带 settings 说 `shop=50149`），
+  只改 shop 一行后发 B 版（`shop=ee5da`，lobby 仍 `ef2c3` 未动）。用**旧页面**启动 → 拉到 1.0.1 版本表 →
+  游客登录 → 进大厅 → 开商城，加载的是 `assets/shop/index.ee5da.js`、打出改动后的日志。
+  全程 **0 error / 0 warning，整页未重载**。
+- **闸拒那一程** —— 版本表 `coreApiHash` 改成 `deadbeef0000`，同一个旧页面启动停在
+  `需要刷新页面 / core API 不兼容，需整包更新`，**lobby 与 shop 一个都没加载**（闸摆在"加载第一个
+  业务 bundle 之前"的意义正在此）；恢复 hash 即放行。
+
+**顺带修掉三个真问题**：① `build.mjs` 的构建成功判据盯死 `settings.json`，而 `md5Cache` 一开它就叫
+`settings.<md5>.json` → **每次 web 构建都被判成失败**（产物其实是好的），改成认前缀取最新 mtime；
+② 出包吃的是 `@cck/*` 的 **dist** 不是 src，dist 陈旧不会有任何报错、**两枚戳还照样一致**（同一份陈旧
+dist 算的，闸完全无感）——一轮白跑的构建 + 白跑的 e2e 就是这么来的，现在出包前直接挡下并给出
+`pnpm -F @cck/core build`；③ web 上 `needFullUpdate` 原样照抄 native 的"前往应用商店"，而 web 的整包
+就是那张页面，改成"刷新"（`app.restart()` 在 web 上正是 `location.reload()`）。
+
+core +3 测试、tools +7，全仓 **662 全绿**，五门齐过。
+**未做**：小游戏（微信/抖音）未验；运行中定期拉版本表（现在只在启动时拉一次）；
+dispatcher 尚未按渠道下发（web 与 android 该是两个渠道，web 拿到的仍是 native 的 `cdnUrl` ——
+不影响版本表寻址，但 `wsUrl` / 版本闸 / 公告都该分渠道，需求已提给服务端）。
+
 ### 2026-08-18 · coreApiHash 版本闸在正式路径上真正激活
 
 戳的机制 2026-07-29 就落地了，但只在 **probes** 路径上通电；正式启动路径（`boot/Bootstrap.ts`）

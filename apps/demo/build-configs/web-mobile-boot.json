@@ -1,0 +1,26 @@
+{
+  "platform": "web-mobile",
+  "outputName": "web-mobile",
+  "taskName": "web-mobile-boot",
+  "startScene": "db://assets/boot/Boot.scene",
+  "debug": true,
+  "md5Cache": true,
+  "sourceMaps": false,
+  "buildMode": "normal",
+  "mainBundleCompressionType": "merge_dep",
+  "engineModulesConfigKey": "defaultConfig",
+  "packages": {
+    "web-mobile": {
+      "orientation": "portrait",
+      "embedWebDebugger": false
+    },
+    "cck-build": {
+      "vest": "base",
+      "appId": "",
+      "version": "1.3.0",
+      "channel": "",
+      "env": "",
+      "dispatcherUrl": ""
+    }
+  }
+}

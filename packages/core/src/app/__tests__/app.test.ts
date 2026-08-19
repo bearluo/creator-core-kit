@@ -5,10 +5,13 @@ import {
   getApp,
   APP,
   APP_INFO,
+  DISPATCH,
   type AppConfig,
   type AppDeps,
   type LaunchFailure,
   type LaunchPhase,
+  type LaunchStep,
+  type DispatchResult,
 } from '../app';
 import { getRootContainer } from '../../di';
 import { LogLevel, type ILogger } from '../../logging';
@@ -317,5 +320,41 @@ describe('App · 启动编排', () => {
     const app = createApp(e.config(), { deps: e.deps });
     getRootContainer().register(APP, { useValue: app });
     expect(getApp()).toBe(app);
+  });
+});
+
+describe('App · web 版本表地址', () => {
+  /** 只跑 hotupdate 这一步：版本表地址的解析全在它内部，不必把整条启动序列拖进来。 */
+  const runHotupdate = (
+    e: ReturnType<typeof makeEnv>,
+    over: Partial<AppConfig>,
+    dispatch?: Partial<DispatchResult>,
+  ): Promise<void | 'halt'> => {
+    const step = defaultLaunchSteps(e.deps).find((s) => s.name === 'hotupdate') as LaunchStep;
+    const bag = new Map<string, unknown>();
+    if (dispatch) bag.set(DISPATCH, dispatch);
+    return Promise.resolve(step.run({ config: e.config(over), bag, report: () => {} }));
+  };
+
+  it('15. 绝对 URL 原样用（资源放独立 CDN 的形态）', async () => {
+    const e = makeEnv();
+    e.setJson('https://fixed/v.json', { json: { bundles: { shop: 'abc' } } });
+    await runHotupdate(e, { versionUrl: 'https://fixed/v.json' }, { cdnUrl: 'http://cdn/x/' });
+    expect(e.versionsSet).toEqual([{ shop: 'abc' }]);
+  });
+
+  it('16. 相对文件名 → 原样交给引擎按页面 base 解析（web 同源形态，与 cdnUrl 无关）', async () => {
+    const e = makeEnv();
+    e.setJson('cck-versions.json', { json: { bundles: { shop: 'abc' } } });
+    await runHotupdate(e, { versionUrl: 'cck-versions.json' });
+    expect(e.calls).toContain('asset.loadRemote:cck-versions.json');
+    expect(e.versionsSet).toEqual([{ shop: 'abc' }]);
+  });
+
+  it('17. 版本表拉不到 → 用包内版本继续，不阻断启动（CDN 抖动不该把玩家挡在门外）', async () => {
+    const e = makeEnv();
+    await expect(runHotupdate(e, { versionUrl: 'cck-versions.json' })).resolves.toBeUndefined();
+    expect(e.versionsSet).toEqual([]);
+    expect(e.calls).not.toContain('bundle.setVersions');
   });
 });

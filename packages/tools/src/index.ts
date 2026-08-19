@@ -3,6 +3,7 @@
  * 首个模块：热更 manifest 生成/校验（对齐 Cocos 官方 version_generator.js）。
  */
 export {
+  DEFAULT_AOT_BUNDLES,
   buildManifest,
   buildSplitManifests,
   toVersionManifest,
@@ -33,3 +34,6 @@ export {
   verifyCompat,
 } from './api-stamp';
 export type { CompatStamp, CompatResult } from './api-stamp';
+
+export { readBundleVers, buildWebVersions, writeWebVersions } from './web-versions';
+export type { WebVersions, WebVersionsOptions } from './web-versions';

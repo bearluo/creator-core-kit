@@ -1,4 +1,4 @@
-import { Color, Label, Node, Sprite, instantiate } from 'cc';
+import { Color, Label, Node, Sprite, instantiate, sys } from 'cc';
 import type { Prefab } from 'cc';
 import type { App, LaunchFailure, LaunchPhase, LaunchProgress } from '@cck/core';
 import { getCameraRig } from '@cck/engine';
@@ -166,12 +166,22 @@ export function createLaunchOverlay(app: App, prefab: Prefab | null): LaunchOver
           break;
         case 'needFullUpdate':
           // 热更换不动的东西（引擎 / AOT chunks / 主包）变了，或版本已被 dispatcher 退休
-          // —— 只能整包更新，重试没有意义
-          setText(status, '需要下载完整安装包');
-          setText(hint, f.reason);
-          showAction('前往应用商店', () =>
-            console.log(`${TAG} 引导整包更新（demo 只打日志）：${f.storeUrl ?? '未下发 storeUrl'}`),
-          );
+          // —— 只能整包更新，重试没有意义。
+          //
+          // **"整包"在两个平台上是两件事**：native 要去商店重装；web 的整包就是那张页面，
+          // 刷新一下就换到最新的 AOT 了（`app.restart()` 在 web 上正是 location.reload()）。
+          // 给 web 玩家一个"前往应用商店"的按钮，等于把唯一的出路藏起来。
+          if (sys.isNative) {
+            setText(status, '需要下载完整安装包');
+            setText(hint, f.reason);
+            showAction('前往应用商店', () =>
+              console.log(`${TAG} 引导整包更新（demo 只打日志）：${f.storeUrl ?? '未下发 storeUrl'}`),
+            );
+          } else {
+            setText(status, '需要刷新页面');
+            setText(hint, f.reason);
+            showAction('刷新', () => app.restart());
+          }
           break;
         case 'maintenance':
           // 停服维护不是网络异常：能重试，但要先把公告讲清楚，否则玩家会连点重试

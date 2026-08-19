@@ -13,7 +13,7 @@
  * 「找不到 Android NDK/SDK 路径」——而且进程退出码仍是 0，只能从日志判定。
  */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,8 +33,8 @@ if (!name || flag('help')) {
   const avail = existsSync(CONFIGS)
     ? readFileSync(join(CONFIGS, 'README.md'), 'utf8')
         .split('\n')
-        .filter((l) => l.startsWith('| `android-'))
-        .map((l) => l.split('`')[1].replace(/^android-|\.json$/g, ''))
+        .filter((l) => l.startsWith('| `') && l.includes('.json`'))
+        .map((l) => l.split('`')[1].replace(/\.json$/, ''))
     : [];
   console.log(`用法: node scripts/build.mjs <${avail.join('|') || 'name'}> [--manifest] [--apk] [--vest <马甲>] [--dispatcher <url>] [--min-app-version <v>]`);
   process.exit(name ? 0 : 1);
@@ -52,14 +52,14 @@ const merge = (a, b) => {
 };
 
 const read = (p) => JSON.parse(readFileSync(p, 'utf8'));
-const basePath = join(CONFIGS, `android-${name}.json`);
-if (!existsSync(basePath)) throw new Error(`没有这份配置：${basePath}`);
+const basePath = [join(CONFIGS, `${name}.json`), join(CONFIGS, `android-${name}.json`)].find(existsSync);
+if (!basePath) throw new Error(`没有这份配置：build-configs/${name}.json`);
 const localPath = join(CONFIGS, 'local.json');
 if (!existsSync(localPath))
   throw new Error(`缺 ${localPath} —— 复制 local.example.json 并填本机 SDK/NDK/JDK 与 Creator 路径`);
 
 const local = read(localPath);
-const { creatorPath, cdnUrl, cdnDir, ...localOpts } = local;
+const { creatorPath, cdnUrl, cdnDir, webDir, ...localOpts } = local;
 let cfg = merge(read(basePath), localOpts);
 
 // —— 命令行覆盖（马甲等正交维度不另存配置文件）——
@@ -75,6 +75,29 @@ const metaPath = join(DEMO, `${sceneUrl.replace(/^db:\/\//, '')}.meta`);
 if (!existsSync(metaPath)) throw new Error(`起始场景不存在：${sceneUrl}（找不到 ${metaPath}）`);
 cfg.startScene = read(metaPath).uuid;
 
+// —— 先挡一道：出包吃的是 @cck/* 的 **dist**，不是 src ——
+//
+// dist 陈旧不会有任何报错，只会打出一个「改的代码没生效」的包。而且**戳也照样一致**：两枚戳
+// 都从同一份陈旧 dist 算，coreApiHash 闸对此完全无感（它比的是 app 与更新包，不是 dist 与 src）。
+// 一次白跑的构建 + 一轮白跑的 e2e 就是这么来的。
+const PKGS = join(DEMO, '..', '..', 'packages');
+const newestMtime = (dir) => {
+  let m = 0;
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.name === '__tests__') continue; // 改测试不影响 dist
+    const f = join(dir, e.name);
+    m = Math.max(m, e.isDirectory() ? newestMtime(f) : statSync(f).mtimeMs);
+  }
+  return m;
+};
+for (const pkg of ['core', 'engine']) {
+  const dts = join(PKGS, pkg, 'dist', 'index.d.ts');
+  const fix = '先 pnpm -F @cck/' + pkg + ' build';
+  if (!existsSync(dts)) throw new Error(`packages/${pkg}/dist 还没构建 —— ${fix}`);
+  if (newestMtime(join(PKGS, pkg, 'src')) > statSync(dts).mtimeMs)
+    throw new Error(`packages/${pkg}/src 比 dist 新 —— ${fix}，否则出的包跑的是旧代码`);
+}
+
 // 兼容戳（版本闸的两端之一）。**必须在 Creator 构建之前**：戳是 `assets/resources/` 下的一个
 // JsonAsset，要被 Creator 导入才进得了包。内容每次重写、uuid 与 .meta 不动，所以只有 core 的公开
 // API 真变了才会产生 git 改动——那正是该被看见的信号。
@@ -85,7 +108,7 @@ const CLI = join(DEMO, '..', '..', 'packages', 'tools', 'dist', 'cli.cjs');
 const CORE_DTS = join(DEMO, '..', '..', 'packages', 'core', 'dist');
 const appVersion = cfg.packages['cck-build'].version;
 if (!appVersion)
-  throw new Error(`build-configs/android-${name}.json 的 packages['cck-build'].version 是空的 —— 打戳要它，且它必须与运行时 AppConfig.version 同源`);
+  throw new Error(`${basePath} 的 packages['cck-build'].version 是空的 —— 打戳要它，且它必须与运行时 AppConfig.version 同源`);
 
 const makeStamp = (out, version, extra = []) => {
   const r = spawnSync(process.execPath, [CLI, 'stamp', '--core', CORE_DTS, '--version', version, ...extra, '--out', out], {
@@ -100,7 +123,7 @@ const coreApiHash = makeStamp(appStampPath, appVersion);
 console.log(`▶ app 戳 assets/resources/cck-app-compat.json（version=${appVersion} coreApiHash=${coreApiHash}）`);
 
 mkdirSync(TEMP, { recursive: true });
-const cfgPath = join(TEMP, `android-${name}.merged.json`);
+const cfgPath = join(TEMP, `${name}.merged.json`);
 writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
 
 console.log(`▶ Creator 构建 '${name}'`);
@@ -108,31 +131,67 @@ console.log(`  起始场景 ${sceneUrl}`);
 console.log(`  马甲     ${cfg.packages['cck-build'].vest || '(默认 base)'}`);
 
 // 判据取产物本身：Creator 命令行构建**失败时退出码照样是 0**，日志里成功和失败
-// 也都只打一行 `Finished in (…)`，唯一可靠的信号是 settings.json 有没有被重新写出来。
-const stamp = join(DEMO, 'build', 'android', 'data', 'src', 'settings.json');
-const before = existsSync(stamp) ? statSync(stamp).mtimeMs : 0;
+// 也都只打一行 `Finished in (…)`，唯一可靠的信号是 settings 有没有被重新写出来。
+// ⚠️ 认**文件名前缀**不认全名：`md5Cache` 一开它就叫 `settings.<md5>.json`，盯死
+// `settings.json` 会让每次 web 构建都被判成失败（而产物其实是好的）。
+// 产物根：native 多一层 `data/`（gradle 把它整个塞进 APK 的 assets），web 就是输出目录本身。
+const isNative = cfg.platform === 'android' || cfg.platform === 'ios';
+const DATA = join(DEMO, 'build', cfg.outputName, ...(isNative ? ['data'] : []));
+const OUT_REL = `build/${cfg.outputName}${isNative ? '/data' : ''}`;
+const settingsMtime = () => {
+  const dir = join(DATA, 'src');
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir)
+    .filter((f) => /^settings.*.json$/.test(f))
+    .reduce((m, f) => Math.max(m, statSync(join(dir, f)).mtimeMs), 0);
+};
+const before = settingsMtime();
 
 const r = spawnSync(creatorPath, ['--project', DEMO, '--build', `configPath=${cfgPath}`], {
   encoding: 'utf8',
   maxBuffer: 64 * 1024 * 1024,
 });
 const log = `${r.stdout ?? ''}${r.stderr ?? ''}`;
-const logPath = join(TEMP, `android-${name}.log`);
+const logPath = join(TEMP, `${name}.log`);
 writeFileSync(logPath, log);
 
-if (!existsSync(stamp) || statSync(stamp).mtimeMs === before) {
+if (settingsMtime() === before) {
   // `[Assets] 构建插件 … 钩子函数执行失败` 只是外层包装，真正的原因在它后面那条。
   const why = log.match(/^Error: (?!\[Assets\]).+$/m)?.[0] ?? '(日志里没找到原因)';
   console.error(`✗ 构建失败：${why}\n  完整日志：${logPath}`);
   process.exit(1);
 }
-console.log(`✓ Creator 构建完成 → build/android/data`);
-
-const DATA = join(DEMO, 'build', 'android', 'data');
+console.log(`✓ Creator 构建完成 → ${OUT_REL}`);
 
 // 热更 manifest 必须夹在 Creator 构建与 gradle **之间**：Creator 每次都会清空 data/，
 // gradle 又把 data/ 整个塞进 APK 的 assets。顺序错了 APK 里就一个 manifest 都没有，
 // 而且是静默的——要等装到机器上，热更那步才报「loadRemoteManifest 拒收」。
+if (flag('manifest') && !isNative) {
+  // —— web：一张 bundle→md5 的表就是全部。没有要下载的文件，所以既不需要 packageUrl，
+  // 也没有逐包版本号那一套（换文件名本身就是版本）。
+  const version = opt('manifest-version') ?? '1.0.0';
+  const vpath = join(DATA, 'cck-versions.json');
+  const minApp = opt('min-app-version');
+  const r = spawnSync(process.execPath, [CLI, 'web-versions', '--root', DATA, '--version', version,
+    '--core', CORE_DTS, ...(minApp ? ['--min-app-version', minApp] : []), '--out', vpath], { encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`版本表生成失败：${r.stderr || r.stdout}`);
+  const vt = read(vpath);
+  if (vt.coreApiHash !== coreApiHash)
+    throw new Error(`版本表与 app 戳的 coreApiHash 不一致（${vt.coreApiHash} ≠ ${coreApiHash}）`);
+  console.log(`▶ 版本表 cck-versions.json（version=${version} ${Object.keys(vt.bundles).length} 个 bundle${minApp ? ` minAppVersion=${minApp}` : ''}）`);
+
+  if (webDir) {
+    // ⚠️ **只叠加，绝不清空**——这一条和 native 相反。老页面还在引用上一版的
+    // `index.<旧md5>.js`，删了它们等于把线上正在跑的会话打断；文件名带 md5，新旧天然共存，
+    // 「免重启换代码」正是靠这个（ADR-0010）。清历史版本是另一件事（按时间保留 N 版），不在出包流程里做。
+    cpSync(DATA, webDir, { recursive: true });
+    console.log(`✓ 版本表就位，产物已叠加到 ${webDir}`);
+  } else {
+    console.log('✓ 版本表就位（local.json 没配 webDir，跳过同步）');
+  }
+  process.exit(0);
+}
+
 if (flag('manifest')) {
   if (!cdnUrl) throw new Error('local.json 里缺 cdnUrl');
   const version = opt('manifest-version') ?? '1.0.0';
@@ -165,6 +224,11 @@ if (flag('manifest')) {
   } else {
     console.log('✓ manifest 就位（local.json 没配 cdnDir，跳过同步）');
   }
+}
+
+if (flag('apk') && !isNative) {
+  console.error(`✗ --apk 只对 native 平台有意义（当前 platform=${cfg.platform}）`);
+  process.exit(1);
 }
 
 if (!flag('apk')) {

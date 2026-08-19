@@ -148,7 +148,8 @@ export function writeManifests(opts: ManifestOptions & { outDir?: string }): Wri
  * 归入 base 的 `assets/<name>/`：Cocos native 产物里的主包与内置包，和 `src/` 同属「换了要重启」层，
  * 本就该跟 base 同批更新。其余 `assets/<name>/` 各自成包。
  */
-const DEFAULT_AOT_BUNDLES = ['main', 'internal', 'resources'];
+/** 归 AOT 的内建包：随主包走，不独立成热更单元（native 归 base manifest，web 不进版本表）。 */
+export const DEFAULT_AOT_BUNDLES = ['main', 'internal', 'resources'];
 
 export interface SplitManifestOptions extends ManifestOptions {
   /** 归入 base 的 assets 子目录名。默认 {@link DEFAULT_AOT_BUNDLES}。 */

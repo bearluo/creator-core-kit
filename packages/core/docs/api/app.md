@@ -10,7 +10,7 @@
 
 ### App
 
-Defined in: [packages/core/src/app/app.ts:132](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L132)
+Defined in: [packages/core/src/app/app.ts:137](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L137)
 
 #### Properties
 
@@ -18,13 +18,13 @@ Defined in: [packages/core/src/app/app.ts:132](https://hlgit.5518game.com/luohao
 
 > `readonly` **config**: [`AppConfig`](app.md#appconfig)
 
-Defined in: [packages/core/src/app/app.ts:133](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L133)
+Defined in: [packages/core/src/app/app.ts:138](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L138)
 
 ##### phase
 
 > `readonly` **phase**: [`LaunchPhase`](app.md#launchphase)
 
-Defined in: [packages/core/src/app/app.ts:134](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L134)
+Defined in: [packages/core/src/app/app.ts:139](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L139)
 
 #### Methods
 
@@ -32,7 +32,7 @@ Defined in: [packages/core/src/app/app.ts:134](https://hlgit.5518game.com/luohao
 
 > **launch**(): `Promise`\<`void`\>
 
-Defined in: [packages/core/src/app/app.ts:136](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L136)
+Defined in: [packages/core/src/app/app.ts:141](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L141)
 
 从当前游标跑到底。重复调用不会重跑已完成的步骤。
 
@@ -44,7 +44,7 @@ Defined in: [packages/core/src/app/app.ts:136](https://hlgit.5518game.com/luohao
 
 > **onFailure**(`cb`): [`Disposer`](eventbus.md#disposer)
 
-Defined in: [packages/core/src/app/app.ts:141](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L141)
+Defined in: [packages/core/src/app/app.ts:146](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L146)
 
 ###### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [packages/core/src/app/app.ts:141](https://hlgit.5518game.com/luohao
 
 > **onProgress**(`cb`): [`Disposer`](eventbus.md#disposer)
 
-Defined in: [packages/core/src/app/app.ts:140](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L140)
+Defined in: [packages/core/src/app/app.ts:145](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L145)
 
 ###### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [packages/core/src/app/app.ts:140](https://hlgit.5518game.com/luohao
 
 > **restart**(): `void`
 
-Defined in: [packages/core/src/app/app.ts:139](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L139)
+Defined in: [packages/core/src/app/app.ts:144](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L144)
 
 ###### Returns
 
@@ -86,7 +86,7 @@ Defined in: [packages/core/src/app/app.ts:139](https://hlgit.5518game.com/luohao
 
 > **retry**(): `Promise`\<`void`\>
 
-Defined in: [packages/core/src/app/app.ts:138](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L138)
+Defined in: [packages/core/src/app/app.ts:143](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L143)
 
 从**失败那一步**继续，前面的不重跑。
 
@@ -120,7 +120,7 @@ Defined in: [packages/core/src/app/app.ts:39](https://hlgit.5518game.com/luohao/
 
 > `readonly` `optional` **dispatcher**: [`DispatcherConfig`](app.md#dispatcherconfig)
 
-Defined in: [packages/core/src/app/app.ts:59](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L59)
+Defined in: [packages/core/src/app/app.ts:64](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L64)
 
 启动握手。不配则跳过该步（单机 / 尚未接服务端）。
 
@@ -164,7 +164,7 @@ Defined in: [packages/core/src/app/app.ts:43](https://hlgit.5518game.com/luohao/
 
 > `readonly` `optional` **stampBundle**: `string`
 
-Defined in: [packages/core/src/app/app.ts:55](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L55)
+Defined in: [packages/core/src/app/app.ts:60](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L60)
 
 app 戳所在 bundle，默认 `'main'`（Cocos 主包）。
 
@@ -172,7 +172,7 @@ app 戳所在 bundle，默认 `'main'`（Cocos 主包）。
 
 > `readonly` `optional` **stampPath**: `string`
 
-Defined in: [packages/core/src/app/app.ts:57](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L57)
+Defined in: [packages/core/src/app/app.ts:62](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L62)
 
 app 戳资源路径，默认 `'cck-app-compat'`（tools 的 `cck-manifest stamp` 出包期生成）。
 
@@ -188,16 +188,21 @@ Defined in: [packages/core/src/app/app.ts:37](https://hlgit.5518game.com/luohao/
 
 > `readonly` `optional` **versionUrl**: `string`
 
-Defined in: [packages/core/src/app/app.ts:53](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L53)
+Defined in: [packages/core/src/app/app.ts:58](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L58)
 
 web：bundle 版本表 JSON 地址（形状见 [RemoteVersions](app.md#remoteversions)）。
 不配则跳过该步——native 靠 searchPaths 读新文件，不需要版本表。
+
+**推荐写相对文件名**（如 `cck-versions.json`）：按页面 base 解析，跟 bundle 同源，
+换部署地址天然生效。资源真放独立 CDN 时才写绝对 URL。
+
+拉不到版本表**不阻断启动**——用包内那份 bundleVers 继续，只是这次没更新。
 
 ***
 
 ### AppDeps
 
-Defined in: [packages/core/src/app/app.ts:145](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L145)
+Defined in: [packages/core/src/app/app.ts:150](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L150)
 
 依赖注入口（仅为可测；生产不传，各服务从全局取）。
 
@@ -207,43 +212,43 @@ Defined in: [packages/core/src/app/app.ts:145](https://hlgit.5518game.com/luohao
 
 > `optional` **assets**: `Pick`\<[`IAssetLoader`](asset.md#iassetloader), `"release"` \| `"load"` \| `"loadRemote"`\>
 
-Defined in: [packages/core/src/app/app.ts:147](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L147)
+Defined in: [packages/core/src/app/app.ts:152](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L152)
 
 ##### bundles?
 
 > `optional` **bundles**: `Pick`\<[`BundleManager`](bundle.md#bundlemanager), `"load"` \| `"setVersions"`\>
 
-Defined in: [packages/core/src/app/app.ts:146](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L146)
+Defined in: [packages/core/src/app/app.ts:151](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L151)
 
 ##### gate?
 
 > `optional` **gate**: [`VersionGate`](hotupdate.md#versiongate)
 
-Defined in: [packages/core/src/app/app.ts:149](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L149)
+Defined in: [packages/core/src/app/app.ts:154](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L154)
 
 ##### hotUpdate?
 
 > `optional` **hotUpdate**: `Pick`\<[`HotUpdateService`](hotupdate.md#hotupdateservice), `"update"` \| `"check"` \| `"restart"`\>
 
-Defined in: [packages/core/src/app/app.ts:148](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L148)
+Defined in: [packages/core/src/app/app.ts:153](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L153)
 
 ##### http?
 
 > `optional` **http**: [`IHttp`](network.md#ihttp)
 
-Defined in: [packages/core/src/app/app.ts:150](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L150)
+Defined in: [packages/core/src/app/app.ts:155](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L155)
 
 ##### logger?
 
 > `optional` **logger**: [`ILogger`](logging.md#ilogger)
 
-Defined in: [packages/core/src/app/app.ts:151](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L151)
+Defined in: [packages/core/src/app/app.ts:156](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L156)
 
 ##### restart()?
 
 > `optional` **restart**: () => `void`
 
-Defined in: [packages/core/src/app/app.ts:156](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L156)
+Defined in: [packages/core/src/app/app.ts:161](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L161)
 
 重启应用。默认走 `HotUpdateService.restart()`（native 的 `game.restart`）。
 engine 侧按平台注入——**web 必须 `location.reload()`**：只有整页重来才会重新拉 `index.<md5>.js`。
@@ -256,7 +261,7 @@ engine 侧按平台注入——**web 必须 `location.reload()`**：只有整页
 
 ### DispatcherConfig
 
-Defined in: [packages/core/src/app/app.ts:82](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L82)
+Defined in: [packages/core/src/app/app.ts:87](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L87)
 
 #### Properties
 
@@ -264,13 +269,13 @@ Defined in: [packages/core/src/app/app.ts:82](https://hlgit.5518game.com/luohao/
 
 > `readonly` `optional` **deviceId**: `string`
 
-Defined in: [packages/core/src/app/app.ts:89](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L89)
+Defined in: [packages/core/src/app/app.ts:94](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L94)
 
 ##### platform
 
 > `readonly` **platform**: `string`
 
-Defined in: [packages/core/src/app/app.ts:88](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L88)
+Defined in: [packages/core/src/app/app.ts:93](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L93)
 
 `android` / `ios` / `web` / `wechat` …（engine 侧按 `cc.sys` 填）。
 
@@ -278,7 +283,7 @@ Defined in: [packages/core/src/app/app.ts:88](https://hlgit.5518game.com/luohao/
 
 > `readonly` **protoVersion**: `number`
 
-Defined in: [packages/core/src/app/app.ts:86](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L86)
+Defined in: [packages/core/src/app/app.ts:91](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L91)
 
 协议契约版本。**由项目传入** —— core 不含任何协议常量（ADR-0011）。
 
@@ -286,13 +291,13 @@ Defined in: [packages/core/src/app/app.ts:86](https://hlgit.5518game.com/luohao/
 
 > `readonly` `optional` **timeoutSec**: `number`
 
-Defined in: [packages/core/src/app/app.ts:90](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L90)
+Defined in: [packages/core/src/app/app.ts:95](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L95)
 
 ##### url
 
 > `readonly` **url**: `string`
 
-Defined in: [packages/core/src/app/app.ts:84](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L84)
+Defined in: [packages/core/src/app/app.ts:89](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L89)
 
 完整地址，如 `https://dispatch.example.com/api/Handshake`。
 
@@ -300,7 +305,7 @@ Defined in: [packages/core/src/app/app.ts:84](https://hlgit.5518game.com/luohao/
 
 ### DispatchResult
 
-Defined in: [packages/core/src/app/app.ts:71](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L71)
+Defined in: [packages/core/src/app/app.ts:76](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L76)
 
 dispatcher 下发的内容。字段是服务端 `HandshakeResponse` 的归一形状。
 
@@ -313,25 +318,25 @@ dispatcher 下发的内容。字段是服务端 `HandshakeResponse` 的归一形
 
 > `readonly` **action**: [`DispatchAction`](app.md#dispatchaction)
 
-Defined in: [packages/core/src/app/app.ts:72](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L72)
+Defined in: [packages/core/src/app/app.ts:77](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L77)
 
 ##### cdnUrl
 
 > `readonly` **cdnUrl**: `string`
 
-Defined in: [packages/core/src/app/app.ts:75](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L75)
+Defined in: [packages/core/src/app/app.ts:80](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L80)
 
 ##### notice
 
 > `readonly` **notice**: `string`
 
-Defined in: [packages/core/src/app/app.ts:76](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L76)
+Defined in: [packages/core/src/app/app.ts:81](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L81)
 
 ##### serverTimeMs
 
 > `readonly` **serverTimeMs**: `number`
 
-Defined in: [packages/core/src/app/app.ts:79](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L79)
+Defined in: [packages/core/src/app/app.ts:84](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L84)
 
 服务器权威时间（Unix 毫秒）。本地时钟玩家可改，体力恢复 / 日常重置 / 限时活动一律以此为准。
 
@@ -339,13 +344,13 @@ Defined in: [packages/core/src/app/app.ts:79](https://hlgit.5518game.com/luohao/
 
 > `readonly` **storeUrl**: `string`
 
-Defined in: [packages/core/src/app/app.ts:77](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L77)
+Defined in: [packages/core/src/app/app.ts:82](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L82)
 
 ##### wsUrl
 
 > `readonly` **wsUrl**: `string`
 
-Defined in: [packages/core/src/app/app.ts:74](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L74)
+Defined in: [packages/core/src/app/app.ts:79](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L79)
 
 `'play'` 时有效：按客户端版本路由到的那个部署单元。
 
@@ -353,7 +358,7 @@ Defined in: [packages/core/src/app/app.ts:74](https://hlgit.5518game.com/luohao/
 
 ### LaunchContext
 
-Defined in: [packages/core/src/app/app.ts:118](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L118)
+Defined in: [packages/core/src/app/app.ts:123](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L123)
 
 #### Properties
 
@@ -361,7 +366,7 @@ Defined in: [packages/core/src/app/app.ts:118](https://hlgit.5518game.com/luohao
 
 > `readonly` **bag**: `Map`\<`string`, `unknown`\>
 
-Defined in: [packages/core/src/app/app.ts:121](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L121)
+Defined in: [packages/core/src/app/app.ts:126](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L126)
 
 步骤间传值（[APP\_INFO](app.md#app_info)、登录态、服务器下发的配置…）。
 
@@ -369,7 +374,7 @@ Defined in: [packages/core/src/app/app.ts:121](https://hlgit.5518game.com/luohao
 
 > `readonly` **config**: [`AppConfig`](app.md#appconfig)
 
-Defined in: [packages/core/src/app/app.ts:119](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L119)
+Defined in: [packages/core/src/app/app.ts:124](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L124)
 
 #### Methods
 
@@ -377,7 +382,7 @@ Defined in: [packages/core/src/app/app.ts:119](https://hlgit.5518game.com/luohao
 
 > **report**(`p`): `void`
 
-Defined in: [packages/core/src/app/app.ts:122](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L122)
+Defined in: [packages/core/src/app/app.ts:127](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L127)
 
 ###### Parameters
 
@@ -393,7 +398,7 @@ Defined in: [packages/core/src/app/app.ts:122](https://hlgit.5518game.com/luohao
 
 ### LaunchProgress
 
-Defined in: [packages/core/src/app/app.ts:103](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L103)
+Defined in: [packages/core/src/app/app.ts:108](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L108)
 
 #### Properties
 
@@ -401,7 +406,7 @@ Defined in: [packages/core/src/app/app.ts:103](https://hlgit.5518game.com/luohao
 
 > `readonly` `optional` **messageKey**: `string`
 
-Defined in: [packages/core/src/app/app.ts:108](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L108)
+Defined in: [packages/core/src/app/app.ts:113](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L113)
 
 i18n key —— kit 不出面向用户的文案，UI 自己译。
 
@@ -409,13 +414,13 @@ i18n key —— kit 不出面向用户的文案，UI 自己译。
 
 > `readonly` **phase**: [`LaunchPhase`](app.md#launchphase)
 
-Defined in: [packages/core/src/app/app.ts:104](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L104)
+Defined in: [packages/core/src/app/app.ts:109](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L109)
 
 ##### ratio?
 
 > `readonly` `optional` **ratio**: `number`
 
-Defined in: [packages/core/src/app/app.ts:106](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L106)
+Defined in: [packages/core/src/app/app.ts:111](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L111)
 
 0..1，仅下载阶段有。
 
@@ -423,7 +428,7 @@ Defined in: [packages/core/src/app/app.ts:106](https://hlgit.5518game.com/luohao
 
 ### LaunchStep
 
-Defined in: [packages/core/src/app/app.ts:125](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L125)
+Defined in: [packages/core/src/app/app.ts:130](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L130)
 
 #### Properties
 
@@ -431,13 +436,13 @@ Defined in: [packages/core/src/app/app.ts:125](https://hlgit.5518game.com/luohao
 
 > `readonly` **name**: `string`
 
-Defined in: [packages/core/src/app/app.ts:126](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L126)
+Defined in: [packages/core/src/app/app.ts:131](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L131)
 
 ##### phase
 
 > `readonly` **phase**: [`LaunchPhase`](app.md#launchphase)
 
-Defined in: [packages/core/src/app/app.ts:127](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L127)
+Defined in: [packages/core/src/app/app.ts:132](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L132)
 
 #### Methods
 
@@ -445,7 +450,7 @@ Defined in: [packages/core/src/app/app.ts:127](https://hlgit.5518game.com/luohao
 
 > **run**(`ctx`): `Promise`\<`void` \| `"halt"`\>
 
-Defined in: [packages/core/src/app/app.ts:129](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L129)
+Defined in: [packages/core/src/app/app.ts:134](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L134)
 
 返回 `'halt'` = 到此为止（如 native 热更已 restart，等进程重来）。
 
@@ -463,7 +468,7 @@ Defined in: [packages/core/src/app/app.ts:129](https://hlgit.5518game.com/luohao
 
 ### RemoteVersions
 
-Defined in: [packages/core/src/app/app.ts:94](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L94)
+Defined in: [packages/core/src/app/app.ts:99](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L99)
 
 远程版本表：web 热更的全部输入。
 
@@ -473,7 +478,7 @@ Defined in: [packages/core/src/app/app.ts:94](https://hlgit.5518game.com/luohao/
 
 > `readonly` `optional` **bundles**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [packages/core/src/app/app.ts:96](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L96)
+Defined in: [packages/core/src/app/app.ts:101](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L101)
 
 bundle 名 → 版本（出包 md5）。
 
@@ -481,19 +486,19 @@ bundle 名 → 版本（出包 md5）。
 
 > `readonly` `optional` **coreApiHash**: `string`
 
-Defined in: [packages/core/src/app/app.ts:100](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L100)
+Defined in: [packages/core/src/app/app.ts:105](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L105)
 
 ##### minAppVersion?
 
 > `readonly` `optional` **minAppVersion**: `string`
 
-Defined in: [packages/core/src/app/app.ts:99](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L99)
+Defined in: [packages/core/src/app/app.ts:104](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L104)
 
 ##### version?
 
 > `readonly` `optional` **version**: `string`
 
-Defined in: [packages/core/src/app/app.ts:98](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L98)
+Defined in: [packages/core/src/app/app.ts:103](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L103)
 
 本次内容版本号，喂 compat 闸。
 
@@ -503,7 +508,7 @@ Defined in: [packages/core/src/app/app.ts:98](https://hlgit.5518game.com/luohao/
 
 > **DispatchAction**: `"play"` \| `"update"` \| `"maintenance"`
 
-Defined in: [packages/core/src/app/app.ts:63](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L63)
+Defined in: [packages/core/src/app/app.ts:68](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L68)
 
 dispatcher 的判定结论。
 
@@ -513,7 +518,7 @@ dispatcher 的判定结论。
 
 > **LaunchFailure**: \{ `error`: `unknown`; `kind`: `"network"`; `retryable`: `true`; \} \| \{ `kind`: `"needFullUpdate"`; `reason`: `string`; `storeUrl`: `string`; \} \| \{ `kind`: `"maintenance"`; `notice`: `string`; `retryable`: `true`; \} \| \{ `error`: `unknown`; `kind`: `"fatal"`; \}
 
-Defined in: [packages/core/src/app/app.ts:112](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L112)
+Defined in: [packages/core/src/app/app.ts:117](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L117)
 
 失败分类：给用户看的东西完全不同（重试 / 去商店 / 等公告 / 兜底），不能糊成一个 Error。
 
@@ -533,7 +538,7 @@ Defined in: [packages/core/src/app/app.ts:24](https://hlgit.5518game.com/luohao/
 
 > `const` **APP**: [`Token`](di.md#tokent)\<[`App`](app.md#app)\>
 
-Defined in: [packages/core/src/app/app.ts:442](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L442)
+Defined in: [packages/core/src/app/app.ts:462](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L462)
 
 DI token：App 有必需配置、造不出无参默认，所以只有注册后才能 [getApp](app.md#getapp)。
 
@@ -543,7 +548,7 @@ DI token：App 有必需配置、造不出无参默认，所以只有注册后�
 
 > `const` **APP\_INFO**: `"cck.app.info"` = `'cck.app.info'`
 
-Defined in: [packages/core/src/app/app.ts:160](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L160)
+Defined in: [packages/core/src/app/app.ts:165](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L165)
 
 `ctx.bag` 里 AppInfo 的键——platform 步写入，compat 闸与项目自定义步骤读取。
 
@@ -553,7 +558,7 @@ Defined in: [packages/core/src/app/app.ts:160](https://hlgit.5518game.com/luohao
 
 > `const` **DISPATCH**: `"cck.app.dispatch"` = `'cck.app.dispatch'`
 
-Defined in: [packages/core/src/app/app.ts:163](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L163)
+Defined in: [packages/core/src/app/app.ts:168](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L168)
 
 `ctx.bag` 里 [DispatchResult](app.md#dispatchresult) 的键——dispatch 步写入，业务读 wsUrl / cdnUrl / 服务器时间。
 
@@ -563,7 +568,7 @@ Defined in: [packages/core/src/app/app.ts:163](https://hlgit.5518game.com/luohao
 
 > **abortLaunch**(`failure`): `never`
 
-Defined in: [packages/core/src/app/app.ts:178](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L178)
+Defined in: [packages/core/src/app/app.ts:183](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L183)
 
 步骤主动中止启动并指定失败分类。
 用**结构标记**而非自定义 Error 子类——跨 bundle `instanceof` 不可靠（ADR-0001）。
@@ -584,7 +589,7 @@ Defined in: [packages/core/src/app/app.ts:178](https://hlgit.5518game.com/luohao
 
 > **createApp**(`config`, `opts`?): [`App`](app.md#app)
 
-Defined in: [packages/core/src/app/app.ts:376](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L376)
+Defined in: [packages/core/src/app/app.ts:396](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L396)
 
 #### Parameters
 
@@ -612,7 +617,7 @@ readonly [`LaunchStep`](app.md#launchstep)[]
 
 > **defaultLaunchSteps**(`deps`?): readonly [`LaunchStep`](app.md#launchstep)[]
 
-Defined in: [packages/core/src/app/app.ts:234](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L234)
+Defined in: [packages/core/src/app/app.ts:239](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L239)
 
 kit 的默认启动序列。项目可整体替换，或取本函数结果再插队自己的步骤（登录 / SDK / 公告）。
 
@@ -632,7 +637,7 @@ readonly [`LaunchStep`](app.md#launchstep)[]
 
 > **getApp**(): [`App`](app.md#app)
 
-Defined in: [packages/core/src/app/app.ts:444](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L444)
+Defined in: [packages/core/src/app/app.ts:464](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L464)
 
 #### Returns
 

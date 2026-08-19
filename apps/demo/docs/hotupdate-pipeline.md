@@ -1,8 +1,8 @@
 ---
 状态: 活文档
-摘要: demo 的热更是怎么走通的 —— 三层更新边界、base 与分包两个独立更新目标、内容基址一律听服务端下发、发一次版的完整命令。含架构图与启动时序图。
+摘要: demo 的热更是怎么走通的 —— native 的三层更新边界、base 与分包两个独立更新目标、内容基址一律听服务端下发；web 那条只有一张版本表。含架构图与启动时序图、两平台对照表。
 何时读: 发一次热更、排查「更新没生效 / 更新失败」、给新 bundle 接热更、换 CDN 之前。
-依赖: [[hotupdate-service]]（机制与 API）· [[bundle-manager]] · [[hot-update-manifest]]（出包期工具）· [[adr-0006]] · [[adr-0013]]
+依赖: [[hotupdate-service]]（机制与 API）· [[bundle-manager]] · [[hot-update-manifest]] / [[web-versions]]（出包期工具）· [[adr-0006]] · [[adr-0010]] · [[adr-0013]]
 ---
 
 # demo 的热更流水线
@@ -195,6 +195,51 @@ node packages/tools/dist/cli.cjs \
 其它任意路径都回 SPA 首页、状态码照样 200 → 客户端「下载成功」写下一坨 HTML，直到解析才炸
 `readFile failed!`。**判据是 `Content-Type: application/octet-stream`。**
 
+## web 那条路（同一道闸，完全不同的机制）
+
+native 的一切都围绕「怎么把文件下下来」；**web 一个文件都不用下** —— 引擎按
+`assets/<bundle>/index.<md5>.js` 取，浏览器自己会拉。于是整条流水线只剩一张表：
+
+| | native | web |
+|---|---|---|
+| 产物 | 一 bundle 一份 manifest（每文件 md5+size） | **一张版本表** `cck-versions.json`（bundle → md5） |
+| 谁下载 | `AssetsManagerEx` 自己下 | 浏览器（换文件名即换版本） |
+| 基址 | dispatcher 下发 `cdn_url`，运行时注入 | **不需要** —— 版本表与 bundle 同源，跟着页面走 |
+| 部署 | 清空 CDN 目录再拷（只留最新一版） | **只叠加、绝不清空** |
+| 生效 | base 要重启；模块包免重启 | 免重启（下次 `load` 就是新的） |
+| 版本闸 | 两枚戳（app 戳 + 更新戳） | app 戳 + **版本表里的 `coreApiHash`** |
+
+发一次版：
+
+```bash
+cd apps/demo
+node scripts/build.mjs web-mobile-boot --manifest                          # 构建 → 版本表 → 叠加部署
+node scripts/build.mjs web-mobile-boot --manifest --manifest-version 1.0.1
+```
+
+底层是 `cck-manifest web-versions`（详见 [[web-versions]]）。落点由 `local.json` 的 `webDir` 决定
+（本机是 filebrowser 的 8082 静态口，见 skill `filebrowser-cdn`）。
+
+**⚠️ 部署只叠加、绝不清空。** 老页面还在引用上一版的 `index.<旧md5>.js`，删了它们等于把线上正在
+跑的会话打断。文件名带 md5、新旧天然共存，「免重启换代码」正是靠这个（[[adr-0010]]）。
+这条和 native 相反，别把那边的 `rmSync + cpSync` 抄过来。
+
+**⚠️ `md5Cache` 必须开。** 关着它 `bundleVers` 是 `{}`，web 根本没有版本可言 —— 换文件名就是它的
+版本机制。`web-mobile-boot.json` 里已经开了；生成版本表时会当场报错点名这一项。
+
+**⚠️ 版本表**不要**去拼 dispatcher 下发的 `cdnUrl`。** 那是 native 的解法（APK 里烘死的地址改不了，
+只能运行时注入）；web 上页面自己就是从某个地址加载的，相对路径永远跟着页面走。硬拼过去只会
+拿到跨域拒绝或 404 —— 本机实测就是 `8082` 的页面去拉 `8081` 的版本表，CORS 直接拦掉。
+所以 `APP_CONFIG.versionUrl` 写**相对文件名**，且 native 明确不配（那条压根没有 bundleVers 这回事）。
+
+**版本表的价值在于绕过 html 缓存。** 改任何一个 bundle 都会连带改掉 `index.html`（bundleVers 变 →
+settings 的 md5 变 → application.js 变 → html 引用变），所以玩家手里那份 html 可能是缓存的旧版；
+版本表用 no-store 拉、永远最新，旧页面因此也能加载新 bundle。此时 AOT 仍是旧的 —— 正是
+`coreApiHash` 闸要挡的情况：新 bundle 要新 AOT 时拒掉，让玩家刷新拿整包。
+
+**拉不到版本表不阻断启动**：退回包内那份 `bundleVers` 继续，只是这次没更新。CDN 抖动把玩家挡在
+门外，比少更新一次严重得多（与 `BundleUpdater` 同一取舍）。
+
 ## 现状
 
 | 能力 | 状态 |
@@ -203,7 +248,8 @@ node packages/tools/dist/cli.cjs \
 | 分包热更（一 bundle 一 manifest，免重启） | ✅ 真机 e2e PASS |
 | 内容基址听服务端下发（base + 分包统一） | ✅ 真机 e2e PASS，判据二值化：包内与 CDN 上所有 `packageUrl` 全烘死地址，唯一活地址是握手下发的 |
 | 从没随包发过的 bundle（新马甲皮 / 新模块）自愈 | ✅ 种子 manifest，真机 PASS |
-| 版本闸（`minAppVersion` / `coreApiHash`） | ⚠️ core 侧已实现并单测；**native backend 尚未透传 `coreApiHash`**，该字段的闸暂休眠 |
-| Web / 小游戏远程 bundle 版本化 | ❌ 未实现（`IHotUpdateBackend` 接缝在，随需接） |
+| 版本闸（`minAppVersion` / `coreApiHash`） | ✅ 两端都接上了（native 两枚戳 / web 版本表带 hash），真机与浏览器**双向 e2e**：改 hash 即拒、恢复即放行 |
+| web 远程 bundle 版本化 | ✅ 版本表 + `setVersions`，浏览器 e2e PASS：**旧页面加载新 bundle 代码**、整页未重载 |
+| 小游戏（微信 / 抖音） | ❌ 未验。机制与 web 同（版本表 + md5 文件名），差在各家自己的分包/缓存规则 |
 | 离线可进游戏 | ❌ 装了热更后端后，**热更服务器不可达 = 启动失败**（可重试）。要离线能进得把「检查失败」降级成「无更新」，属 core 启动序列的语义改动 |
 | `dispatcherUrl` | 烘死在包里，链条起点，结构性救不了；出包时可由构建插件覆盖 |

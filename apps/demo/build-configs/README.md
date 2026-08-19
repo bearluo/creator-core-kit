@@ -8,6 +8,7 @@
 |---|---|---|
 | `android-boot.json` | `db://assets/boot/Boot.scene` | 正常启动链路：dispatch → hotupdate → shared → 登录 |
 | `android-probes.json` | `db://assets/probes/Demo.scene` | 引擎适配层验证探针（不走 App 启动编排） |
+| `web-mobile-boot.json` | `db://assets/boot/Boot.scene` | 同上，出 web 产物（**`md5Cache: true`** —— web 的热更靠 `index.<md5>.js` 换文件名，关了就没有版本可言） |
 
 怎么用见 skill `/demo-build`（两条路：Creator 面板导入，或关掉编辑器走命令行）。
 
@@ -22,7 +23,10 @@ Creator 会用偏好设置里的值补齐缺的字段。
 
 ## 加一份新配置
 
-复制一份改 `startScene` 和 `taskName` 即可，并在上面的表里补一行。**起始场景路径以
+文件名**就是** `build.mjs` 的参数（`node scripts/build.mjs web-mobile-boot`）；`android-` 前缀的那两份
+另有一条兼容回退，`build.mjs boot` 仍然找得到 `android-boot.json`。
+
+复制一份改 `platform` / `startScene` / `taskName` 即可，并在上面的表里补一行。**起始场景路径以
 `assets/main/cc.config.json` 的 `scenes` 为准**（Boot 场景在 `assets/boot/` 下，不是 `assets/scenes/`——
 后者是早期路径，构建配置里可能还留着旧值，填错运行时会报
 `Can not load the scene ... because it was not in the build settings before playing`）。

@@ -49,6 +49,11 @@ export interface AppConfig {
   /**
    * web：bundle 版本表 JSON 地址（形状见 {@link RemoteVersions}）。
    * 不配则跳过该步——native 靠 searchPaths 读新文件，不需要版本表。
+   *
+   * **推荐写相对文件名**（如 `cck-versions.json`）：按页面 base 解析，跟 bundle 同源，
+   * 换部署地址天然生效。资源真放独立 CDN 时才写绝对 URL。
+   *
+   * 拉不到版本表**不阻断启动**——用包内那份 bundleVers 继续，只是这次没更新。
    */
   readonly versionUrl?: string;
   /** app 戳所在 bundle，默认 `'main'`（Cocos 主包）。 */
@@ -330,7 +335,22 @@ export function defaultLaunchSteps(deps?: AppDeps): readonly LaunchStep[] {
         // web：拉 bundle 版本表（native 靠 searchPaths 读新文件，通常不配 versionUrl → 跳过）
         const url = ctx.config.versionUrl;
         if (!url) return;
-        const remote = await assets().loadRemote<JsonLike>(url, { type: 'json' });
+        // 相对文件名交给引擎按页面 base 解析 —— web 的 bundle 本来就从页面同源加载
+        // (`assets/<bundle>/index.<md5>.js`)，版本表描述的正是这批文件，跟页面放在一起才对。
+        //
+        // **不拿 dispatcher 下发的 cdnUrl 当基址**：那是 native 的解法（APK 里烘死的地址改不了，
+        // 只能运行时注入），web 上不存在这个问题——页面自己就是从某个地址加载的，相对路径永远
+        // 跟着页面走，换部署地址天然生效。硬拼过去只会拿到跨域拒绝或 404。
+        // 资源真放独立 CDN 的项目写绝对 URL（那时 bundle 也得配 Cocos 的 remote server）。
+        // 拉不到就用包内那份 bundleVers 继续：版本表是「有新的就用新的」，不是启动前置条件。
+        // 让玩家因为 CDN 抖动进不去游戏，比少更新一次严重得多（同 BundleUpdater 的取舍）。
+        let remote: JsonLike | undefined;
+        try {
+          remote = await assets().loadRemote<JsonLike>(url, { type: 'json' });
+        } catch (e) {
+          logger.warn(`版本表拉取失败（${url}）→ 用包内版本继续`, e);
+          return;
+        }
         const j = (remote?.json ?? {}) as RemoteVersions;
         // ⚠️ web 路径没有 AssetsManager 的 apply，compat 闸只能摆在这里 —— 少了它，热更下来的新
         // bundle 引用主包 AOT 里已被裁掉的符号时，会跑到那一行才崩（ADR-0001，隐蔽）。

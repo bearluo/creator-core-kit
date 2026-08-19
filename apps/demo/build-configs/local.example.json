@@ -2,6 +2,7 @@
   "creatorPath": "C:/ProgramData/cocos/editors/Creator/3.8.7/CocosCreator.exe",
   "cdnUrl": "http://172.25.50.135:8081/api/public/dl/shCo8WNE/",
   "cdnDir": "E:/fileserve/creator-core-kit/cdn",
+  "webDir": "E:/fileserve/creator-core-kit/web",
   "packages": {
     "android": {
       "sdkPath": "E:\\android-sdk",

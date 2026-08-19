@@ -1,9 +1,9 @@
 ---
 name: demo-build
-description: Use when building the demo app for Android — producing build/android/data, an APK, or switching the launch scene (Boot vs probes) or vest. Runs Cocos Creator headlessly from a checked-in config instead of clicking through the build panel.
+description: Use when building the demo app for Android or web — producing build/android/data, an APK, a web-mobile bundle with its hot-update version table, or switching the launch scene (Boot vs probes) or vest. Runs Cocos Creator headlessly from a checked-in config instead of clicking through the build panel.
 ---
 
-# 出 demo 的 Android 包
+# 出 demo 的包（Android / web）
 
 ```bash
 cd apps/demo
@@ -11,7 +11,11 @@ node scripts/build.mjs boot                     # Creator 构建，起始场景 
 node scripts/build.mjs boot --manifest --apk    # 完整一条龙：构建 → 热更 manifest + 同步 CDN → APK
 node scripts/build.mjs boot --vest vest --apk   # 换马甲
 node scripts/build.mjs probes                   # 引擎适配层验证探针场景
+node scripts/build.mjs web-mobile-boot --manifest  # web：构建 → 版本表 → 叠加部署到 webDir
 ```
+
+**配置名就是参数**（`build-configs/<name>.json`）；`boot` / `probes` 另有一条兼容回退，仍找得到
+`android-<name>.json`。`--apk` 只对 native 平台有意义，对 web 直接报错。
 
 每次构建都会先打 **app 兼容戳**（`assets/resources/cck-app-compat.json`，版本闸的本地一端），
 `--manifest` 时再打一枚**更新戳**（`cck-update-compat.json`，随内容同步到 CDN）。两枚 hash 同源，
@@ -21,6 +25,15 @@ app 戳里的 `version` 取 `build-configs` 里 `packages['cck-build'].version`�
 
 `--manifest` 夹在 Creator 构建和 gradle **之间**，基址与同步目录取 `local.json` 的
 `cdnUrl` / `cdnDir`；版本号默认 `1.0.0`，`--manifest-version 1.0.1` 可改（做增量热更测试时用）。
+
+**web 平台下 `--manifest` 换成另一套**：出 `cck-versions.json`（bundle → md5 的版本表）并把产物
+**叠加**到 `local.json` 的 `webDir`。⚠️ **叠加、不清空**——老页面还引用着上一版的
+`index.<旧md5>.js`，删了就把线上会话打断了（native 那边相反，是清空重拷）。
+web 配置必须 `md5Cache: true`，关着 `bundleVers` 是空的、生成版本表会当场报错。
+
+**出包前会挡一道 `@cck/*` dist 陈旧**：出包吃的是 dist 不是 src，dist 旧了只会打出一个「改的代码
+没生效」的包，而且两枚戳都从同一份陈旧 dist 算、闸完全无感。报错会直接给出
+`pnpm -F @cck/core build`。
 
 配置在 `apps/demo/build-configs/`（见那儿的 `README.md`）：`android-<name>.json` 存**构建意图**、进 git，
 叠加 `local.json` 存**本机路径**、gitignore。第一次在一台新机器上跑要

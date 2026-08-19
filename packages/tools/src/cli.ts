@@ -6,11 +6,13 @@
  *   校验 manifest: cck-manifest verify --root <dir> [--manifest <path>]
  *   打戳:          cck-manifest stamp --core <core-dist-或-index.d.ts> --version <v> [--min-app-version <v>] --out <path>
  *   兼容校验:      cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <path>) [--min-app-version <v>]
+ *   web 版本表:    cck-manifest web-versions --root <web构建产物根> --version <v> [--core <dist>] [--min-app-version <v>] --out <path>
  */
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { computeCoreApiHash, readStamp, verifyCompat, writeStamp } from './api-stamp';
 import { verifyManifest, writeManifests, writeSplitManifests, type WriteResult } from './hot-update-manifest';
+import { buildWebVersions, writeWebVersions } from './web-versions';
 
 function die(msg: string): never {
   console.error(`cck-manifest: ${msg}`);
@@ -52,6 +54,24 @@ function main(): void {
       coreApiHash: computeCoreApiHash(core),
     });
     console.log(`✅ 打戳 ${out}：version=${stamp.version} coreApiHash=${stamp.coreApiHash}${stamp.minAppVersion ? ` minAppVersion=${stamp.minAppVersion}` : ''}`);
+    return;
+  }
+
+  if (sub === 'web-versions') {
+    const root = values.root ?? die('web-versions 需要 --root（web 构建产物根，含 index.html 那层）');
+    const version = values.version ?? die('web-versions 需要 --version');
+    const out = values.out ?? die('web-versions 需要 --out（版本表落盘路径）');
+    const v = writeWebVersions(
+      out,
+      buildWebVersions(root, {
+        version,
+        core: values.core,
+        minAppVersion: values['min-app-version'],
+        aotBundles: values['aot-bundles'] ? values['aot-bundles'].split(',') : undefined,
+      }),
+    );
+    const names = Object.keys(v.bundles);
+    console.log(`✅ 版本表 ${out}：version=${v.version} ${names.length} 个 bundle${v.coreApiHash ? ` coreApiHash=${v.coreApiHash}` : ''}`);
     return;
   }
 
