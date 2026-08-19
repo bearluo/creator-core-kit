@@ -134,6 +134,38 @@
   （`AssetsManagerEx.cpp:580/623`），且本框架的客户端一律经 dispatcher 下发的 `cdn_url` 自取并改写
   基址，那个烘进去的地址没人读。换址只改服务端配置。
 
+### 2026-08-18 · coreApiHash 版本闸在正式路径上真正激活
+
+戳的机制 2026-07-29 就落地了，但只在 **probes** 路径上通电；正式启动路径（`boot/Bootstrap.ts`）
+一直缺三样，缺哪一样闸都是**静悄悄地放行**——`coreApiHash` 单边缺失恒放行是设计上的容错，
+正好把漏装伪装成"通过"：
+
+1. **app 戳没进包**：`stampBundle` 默认 `'main'`，而 `main` 只收「被场景引用到」的资源，
+   散落的 JSON 会被丢掉 → 每次启动都打 `[App] app 戳未读到（main/cck-app-compat）→ 闸休眠`。
+   现在放 `assets/resources/`（Cocos 内建包、整目录必打进包，且在 tools 的 `DEFAULT_AOT_BUNDLES`
+   里 → 归 base manifest，跟 AOT 一起被 base 热更替换，戳因此永远描述"当前生效的那份 AOT"）。
+   **不能放 `shared` / `foundation`**：那是热更包，模块级热更就能改掉 app 自称的 hash，闸自己就废了。
+2. **更新戳没人生成**：`ccHotUpdateModule` 早就配了 `compatFilename: 'cck-update-compat.json'`，
+   但 CDN 上从来没有这个文件 → 拉不到就用裸 `UpdateInfo`（无 hash）→ 又是单边缺失放行。
+   现在 `build.mjs` 跟 manifest 一起打，落 `data/` 根同步到 CDN 根，base 与所有分包共用一份。
+3. **base 那条路没喂 `AppInfo`**：正式路径只给分包那条注册了 `BUNDLE_UPDATER`（带 `app`），
+   base 从没注册过 `HOTUPDATE_SERVICE` → `getHotUpdateService()` 兜底成无参构造 → 闸拿到
+   `{ appVersion: '0.0.0' }` 且无 hash。两处注册现在挨在一起。
+
+两枚戳由同一份 `packages/core/dist/index.d.ts` 算出，`build.mjs` 里比一道不等就抛。app 戳的
+`version` 会**覆盖** `AppConfig.version`（core 是 `j.version ?? ctx.config.version`），所以取
+`build-configs` 里 `packages['cck-build'].version`，空着报错而不是猜——两边必须同源。
+
+**真机双向 e2e PASS**（真 x86_64 模拟器，正式启动路径，单变量只有戳里那串 hash）：
+
+```
+装机 1.0.0，app 戳 coreApiHash=45057af6b2af，「app 戳未读到」那行 warn 归零
+CDN base 1.0.1，更新戳 hash 改 deadbeef0000 → 启动失败：needFullUpdate —— core API 不兼容，需整包更新
+                                              ← 不下载、不重启
+恢复 hash                                   → 下载 → restart → 新代码生效
+再发 base 1.0.2，重复一遍拒/放行            ← 干净复验（前一轮两个后台任务的 logcat -c 撞了缓冲区）
+```
+
 另：ADR-0006 决策 6（`python -m http.server` + `10.0.2.2` 托管）已标作废并补写「修正」节 —— 它被
 ADR-0007 取代却一直以「已接受决策」形态躺着，被当可用配方翻出来过不止一次。
 

@@ -36,7 +36,7 @@ if (!name || flag('help')) {
         .filter((l) => l.startsWith('| `android-'))
         .map((l) => l.split('`')[1].replace(/^android-|\.json$/g, ''))
     : [];
-  console.log(`用法: node scripts/build.mjs <${avail.join('|') || 'name'}> [--manifest] [--apk] [--vest <马甲>] [--dispatcher <url>]`);
+  console.log(`用法: node scripts/build.mjs <${avail.join('|') || 'name'}> [--manifest] [--apk] [--vest <马甲>] [--dispatcher <url>] [--min-app-version <v>]`);
   process.exit(name ? 0 : 1);
 }
 
@@ -74,6 +74,30 @@ const sceneUrl = cfg.startScene;
 const metaPath = join(DEMO, `${sceneUrl.replace(/^db:\/\//, '')}.meta`);
 if (!existsSync(metaPath)) throw new Error(`起始场景不存在：${sceneUrl}（找不到 ${metaPath}）`);
 cfg.startScene = read(metaPath).uuid;
+
+// 兼容戳（版本闸的两端之一）。**必须在 Creator 构建之前**：戳是 `assets/resources/` 下的一个
+// JsonAsset，要被 Creator 导入才进得了包。内容每次重写、uuid 与 .meta 不动，所以只有 core 的公开
+// API 真变了才会产生 git 改动——那正是该被看见的信号。
+//
+// 戳里的 `version` 会**覆盖** `AppConfig.version`（core 的 platform 步是 `j.version ?? ctx.config.version`），
+// 所以它必须与运行时读到的版本同源 → 取构建插件那一份，空着就报错而不是猜。
+const CLI = join(DEMO, '..', '..', 'packages', 'tools', 'dist', 'cli.cjs');
+const CORE_DTS = join(DEMO, '..', '..', 'packages', 'core', 'dist');
+const appVersion = cfg.packages['cck-build'].version;
+if (!appVersion)
+  throw new Error(`build-configs/android-${name}.json 的 packages['cck-build'].version 是空的 —— 打戳要它，且它必须与运行时 AppConfig.version 同源`);
+
+const makeStamp = (out, version, extra = []) => {
+  const r = spawnSync(process.execPath, [CLI, 'stamp', '--core', CORE_DTS, '--version', version, ...extra, '--out', out], {
+    encoding: 'utf8',
+  });
+  if (r.status !== 0) throw new Error(`打戳失败：${r.stderr || r.stdout}`);
+  return read(out).coreApiHash;
+};
+
+const appStampPath = join(DEMO, 'assets', 'resources', 'cck-app-compat.json');
+const coreApiHash = makeStamp(appStampPath, appVersion);
+console.log(`▶ app 戳 assets/resources/cck-app-compat.json（version=${appVersion} coreApiHash=${coreApiHash}）`);
 
 mkdirSync(TEMP, { recursive: true });
 const cfgPath = join(TEMP, `android-${name}.merged.json`);
@@ -113,16 +137,25 @@ if (flag('manifest')) {
   if (!cdnUrl) throw new Error('local.json 里缺 cdnUrl');
   const version = opt('manifest-version') ?? '1.0.0';
   console.log(`▶ 生成 manifest（version=${version} base=${cdnUrl}）`);
-  const cli = join(DEMO, '..', '..', 'packages', 'tools', 'dist', 'cli.cjs');
   // `--prev` 指向**当前线上那一版**（同步目录，此刻还没被下面的 cpSync 覆盖）：内容没变的包沿用
   // 旧版本号。这不只是整洁——**内容没变却涨版本号会让客户端崩**：AssetsManagerEx 在
   // `prepareUpdateAsync` 的 worker 线程任务体里遇 `diffMap.empty()` 直接调 `updateSucceed()`，
   // 绕开了本该把回调弹回主线程的 `prepareFinished`，UPDATE_FINISHED 于是在非主线程进 JS VM
   // → `se::AutoHandleScope` SIGSEGV。见 hotupdate-service.md「坑」。
   const prev = cdnDir && existsSync(cdnDir) ? ['--prev', cdnDir] : [];
-  spawnSync(process.execPath, [cli, '--root', DATA, '--url', cdnUrl, '--version', version, '--split', ...prev, '--out', DATA], {
+  spawnSync(process.execPath, [CLI, '--root', DATA, '--url', cdnUrl, '--version', version, '--split', ...prev, '--out', DATA], {
     stdio: ['ignore', 'ignore', 'inherit'],
   });
+  // 更新戳：`hotupdate-backend` 在发现新版本时按 `packageUrl + compatFilename` 直接拉它，
+  // 所以落 data/ 根（= CDN 根）即可。它不进任何 asset 表（manifest 只遍历 src|assets|jsb-adapter），
+  // 也不需要——它是按 URL 取的，不是热更下发的。**base 和所有分包共用这一份**（大家 packageUrl 同根）。
+  const upStamp = join(DATA, 'cck-update-compat.json');
+  const minApp = opt('min-app-version');
+  const upHash = makeStamp(upStamp, version, minApp ? ['--min-app-version', minApp] : []);
+  console.log(`▶ 更新戳 cck-update-compat.json（version=${version} coreApiHash=${upHash}${minApp ? ` minAppVersion=${minApp}` : ''}）`);
+  if (upHash !== coreApiHash)
+    throw new Error(`更新戳与 app 戳的 coreApiHash 不一致（${upHash} ≠ ${coreApiHash}）—— 同一次构建不该出现，检查是不是中途重编了 core`);
+
   const got = read(join(DATA, 'project.manifest')).packageUrl;
   if (got !== cdnUrl) throw new Error(`manifest 基址不对：${got}`);
   if (cdnDir) {

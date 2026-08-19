@@ -91,7 +91,43 @@ cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <p
 ## Open Questions
 
 1. **符号级深校验**（决策表 #4 上限）：需静态分析热更包实际 import 的 `@cck/core`/`cc` 符号集 vs 主包 AOT 保留集，精确报「引用了哪个被裁符号」。首版 hash 级 + 运行时闸兜底足够，用到再上。
-2. **戳如何被运行时读入**：✅ **已落地并真机 e2e 验证**（2026-07-29，见 [[adr-0007]]）。app 戳走 `resources/cck-app-compat.json` → `AssetLoader` 读 → `AppInfo`；更新戳走 sidecar `cck-update-compat.json` → engine native backend `check()` 经 `am.getRemoteManifest().getPackageUrl()+compatFilename` XHR 拉 → 并进 `UpdateInfo`（`CcHotUpdateOptions.compatFilename` opt-in；因 `native.AssetsManager` 的 Manifest 绑定不透传自定义字段，走旁挂 sidecar 而非塞 manifest）。模拟器同一 v1 APK 二分实证：远端戳 hash=app 侧 → update-available 放行下 v2；改成不同 hash → `rejected(needFullUpdate)` 不下载/不重启——coreApiHash 闸从休眠**真正激活**。
+2. **戳如何被运行时读入**：✅ **已落地并真机 e2e 验证**（2026-07-29 首验于 probes 路径；2026-08-18 正式启动路径 `boot/Bootstrap.ts` 补齐并复验，见下「正式路径接入」）。app 戳走 `resources/cck-app-compat.json` → `AssetLoader` 读 → `AppInfo`；更新戳走 sidecar `cck-update-compat.json` → engine native backend `check()` 经 `am.getRemoteManifest().getPackageUrl()+compatFilename` XHR 拉 → 并进 `UpdateInfo`（`CcHotUpdateOptions.compatFilename` opt-in；因 `native.AssetsManager` 的 Manifest 绑定不透传自定义字段，走旁挂 sidecar 而非塞 manifest）。模拟器同一 v1 APK 二分实证：远端戳 hash=app 侧 → update-available 放行下 v2；改成不同 hash → `rejected(needFullUpdate)` 不下载/不重启——coreApiHash 闸从休眠**真正激活**。
+
+## 正式路径接入（2026-08-18）
+
+戳的两端由 `apps/demo/scripts/build.mjs` 出，一次构建同时打两枚、hash 必然相等（不等就当场抛）：
+
+| 戳 | 落点 | 时机 | 谁读 |
+|---|---|---|---|
+| **app 戳** `cck-app-compat.json` | `assets/resources/` → 打进包，归 base manifest | Creator 构建**之前**（要被导入才进得了包） | core `platform` 步 → `AppInfo` |
+| **更新戳** `cck-update-compat.json` | `build/android/data/` 根 → 同步到 CDN 根 | 跟 manifest 一起 | engine 后端按 `packageUrl + compatFilename` 拉 → `UpdateInfo` |
+
+- **app 戳为什么必须放 `resources`**：`main` 只收「被场景引用到」的资源，散落的 JSON 会被丢掉
+  （`stampBundle` 默认 `'main'` 时的表现就是 `Bundle main doesn't contain cck-app-compat`）；
+  `resources` 是 Cocos 内建包、整目录必打进包，且在 tools 的 `DEFAULT_AOT_BUNDLES` 里 → 归 base
+  manifest，**跟 AOT 一起被 base 热更替换**，戳因此永远描述「当前生效的那份 AOT」。
+  **不能放 `shared` / `foundation`**：那是热更包，模块级热更就能改掉 app 自称的 coreApiHash，
+  闸自己就废了。
+- **app 戳的 `version` 会覆盖 `AppConfig.version`**（core 是 `j.version ?? ctx.config.version`），
+  所以它取构建配置里 `packages['cck-build'].version` 那一份，空着直接报错而不是猜——两边必须同源。
+- **更新戳一份供所有包共用**：base 与每个分包的 `packageUrl` 同根，各自拼出来的是同一个 URL。
+  它不进任何 asset 表（manifest 只遍历 `src|assets|jsb-adapter`），也不需要——它是按 URL 取的。
+
+⚠️ **光有戳还不够，闸有两条路，得都喂到**。此前正式路径只给分包那条喂了 `AppInfo`
+（`BUNDLE_UPDATER` 的 `app`），base 那条从没注册过 `HOTUPDATE_SERVICE` → `getHotUpdateService()`
+兜底成无参构造 → 闸拿到 `{ appVersion: '0.0.0' }` 且无 coreApiHash → 整道闸对 base 是关的
+（`coreApiHash` 单边缺失恒放行是设计上的容错，正好把漏装伪装成"通过"）。现在两处注册挨在一起，
+在 `dispatch` 阶段的项目步骤里，APP_INFO 已就位且早于 core 的 `hotupdate` 步。
+
+**真机双向 e2e PASS**（2026-08-18，真 x86_64 模拟器，干净安装，正式启动路径）：
+
+```
+装机 1.0.0，app 戳 coreApiHash=45057af6b2af（「app 戳未读到」那行 warn 归零）
+CDN 发 base 1.0.1，更新戳 hash 改成 deadbeef0000
+  → 启动失败：needFullUpdate —— core API 不兼容，需整包更新   ← 不下载、不重启
+恢复更新戳 hash=45057af6b2af
+  → 热更应用 → restart → kit 就绪【1.0.1】                    ← 放行
+```
 
 ---
 

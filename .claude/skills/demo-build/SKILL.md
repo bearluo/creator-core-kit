@@ -13,6 +13,12 @@ node scripts/build.mjs boot --vest vest --apk   # 换马甲
 node scripts/build.mjs probes                   # 引擎适配层验证探针场景
 ```
 
+每次构建都会先打 **app 兼容戳**（`assets/resources/cck-app-compat.json`，版本闸的本地一端），
+`--manifest` 时再打一枚**更新戳**（`cck-update-compat.json`，随内容同步到 CDN）。两枚 hash 同源，
+不等就当场抛。`--min-app-version <v>` 给更新戳加一道「要求 app 版本 ≥ 此」。
+app 戳里的 `version` 取 `build-configs` 里 `packages['cck-build'].version`，**空着直接报错**——
+它会覆盖运行时的 `AppConfig.version`，两边必须同源。
+
 `--manifest` 夹在 Creator 构建和 gradle **之间**，基址与同步目录取 `local.json` 的
 `cdnUrl` / `cdnDir`；版本号默认 `1.0.0`，`--manifest-version 1.0.1` 可改（做增量热更测试时用）。
 

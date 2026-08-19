@@ -58,6 +58,11 @@ export const APP_CONFIG: AppConfig = {
   version: buildValue('version', '1.3.0'),
   channel: buildValue('channel', 'dev'),
   env: envValue(),
+  // app 兼容戳所在包。默认 'main'，但 main 只收「被场景引用到」的资源，散落的 JSON 会被丢掉；
+  // `resources` 是 Cocos 内建包、整目录必打进包，且在 tools 的 DEFAULT_AOT_BUNDLES 里 → 归 base
+  // manifest，跟 AOT 一起被 base 热更替换。**不能放 shared / foundation**：那是热更包，模块级热更
+  // 就能改掉 app 自称的 coreApiHash，闸自己就废了。戳的内容由 scripts/build.mjs 每次构建前重写。
+  stampBundle: 'resources',
   // 共享**资源** bundle（i18n / 图集 / 音效）。地基不列在这里 —— 它要在 hotupdate 之后
   // 按自己的节奏加载并跑 boot，见 Bootstrap 的 `demo-foundation` 步。
   //

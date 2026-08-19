@@ -2,6 +2,7 @@ import { _decorator, Component, Prefab, js } from 'cc';
 import { EDITOR } from 'cc/env';
 import {
   createBundleUpdater,
+  createHotUpdateService,
   defaultLaunchSteps,
   getApp,
   getBundleManager,
@@ -11,6 +12,7 @@ import {
   APP_INFO,
   BUNDLE_UPDATER,
   DISPATCH,
+  HOTUPDATE_SERVICE,
   KIT,
   type AppInfo,
   type DispatchResult,
@@ -98,6 +100,16 @@ function launchSteps(onCdnUrl: (url: string) => void): readonly LaunchStep[] {
           }),
         },
         { allowOverride: true }, // Game View 停止再播放不重载 JS，根容器里可能还留着上一轮的
+      );
+      // **base 那条也要拿到同一份 app 戳**。不注册的话 `getHotUpdateService()` 会兜底成
+      // `createHotUpdateService()`（无 opts）→ 闸拿到的是 `{ appVersion: '0.0.0' }`、没有
+      // coreApiHash → minAppVersion 恒不满足才拒、coreApiHash 单边缺失恒放行，等于整道闸对
+      // base 是关的。分包那条由上面的 BUNDLE_UPDATER 带 app，两条路这才走同一道闸。
+      // 排这里同样是因为 APP_INFO 已就位，且早于 core 的 hotupdate 步（platform → dispatch → hotupdate）。
+      getRootContainer().register(
+        HOTUPDATE_SERVICE,
+        { useValue: createHotUpdateService({ app: ctx.bag.get(APP_INFO) as AppInfo | undefined }) },
+        { allowOverride: true },
       );
       return Promise.resolve();
     },
