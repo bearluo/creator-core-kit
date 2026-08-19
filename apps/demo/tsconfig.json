@@ -11,10 +11,15 @@
     // "Cannot find module '@kit/proto'"。Creator 自己的打包解析器是另一套、认 exports，
     // 所以这里只是把类型侧对齐到运行期的实际行为。
     "moduleResolution": "bundler",
-    // 不配 @cck/core 的 paths：类型与运行期解析都走 node_modules
-    // (apps/demo/node_modules/@cck/core -> packages/core，按 package.json
-    //  types->dist/index.d.ts、main->dist/index.js)。与 bearluo game-template 一致，
-    //  且最忠于 Creator 运行期实际解析（paths 只是 IDE 别名，Creator 打包不看）。
-    "paths": {}
+    // @cck/* 解析到**源码**。Creator 打包不看 paths（它按 node_modules 走 dist），所以这只影响
+    // IDE / lint:demo 的类型视图，外加 codebase 索引 —— 后者只认**工程自己这份** tsconfig 的 paths、
+    // 不跟 extends（写进 tsconfig.base.json 一条边都不换来，实测）。配了才有 ~148 条
+    // demo→packages 的 import 边，否则整个 apps/demo 在图里看不出依赖 core/engine。
+    // 代价是陈旧 dist 不再从类型报错里露馅——那道防线交给 scripts/build.mjs 的出包期硬挡板
+    // （比 src 与 dist 的 mtime，src 更新就抛），比红波浪线可靠。
+    "paths": {
+      "@cck/core": ["../../packages/core/src/index.ts"],
+      "@cck/engine": ["../../packages/engine/src/index.ts"]
+    }
   }
 }

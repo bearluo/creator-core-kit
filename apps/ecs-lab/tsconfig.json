@@ -6,7 +6,8 @@
   "compilerOptions": {
     "strict": false,
     "baseUrl": ".",
-    // 不配 @cck/* 的 paths：类型与运行期解析都走 node_modules（对齐 apps/demo）。
-    "paths": {}
+    // @cck/* 解析到源码（对齐 apps/demo，理由见那边的注释：给 codebase 索引跨包 import 边，
+    // 陈旧 dist 交给出包期挡板）。这里只用得到 ecs-bitecs。
+    "paths": { "@cck/ecs-bitecs": ["../../packages/ecs-bitecs/src/index.ts"] }
   }
 }
