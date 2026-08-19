@@ -97,15 +97,10 @@ export function createBundleManager(opts?: BundleManagerOptions): BundleManager 
       const entry: Entry = { version, refCount: 1 };
       const p = (async (): Promise<void> => {
         // 加载前先把该 bundle 更到最新。远程 url 加载不走 manifest 热更，跳过。
-        // updater 契约是「永不 reject」，但自定义实现可能违约——热更失败绝不该让加载失败。
+        // **更新失败原样抛**：不吞、不退回包内版本——掩盖发布事故的代价远大于让这次加载失败
+        // （启动期会变成启动失败页·可重试，运行期变成打开模块失败）。见 BundleUpdater 契约。
         const updater = url === undefined ? resolveUpdater() : undefined;
-        if (updater) {
-          try {
-            await updater.ensureLatest(name);
-          } catch (e) {
-            logger.warn(`bundle '${name}' 加载前更新异常，用包内版本`, e);
-          }
-        }
+        if (updater) await updater.ensureLatest(name);
         await source.loadBundle(name, { version, onProgress: loadOpts?.onProgress, url });
       })();
       entry.inflight = p;

@@ -1,3 +1,4 @@
+import type { LaunchFailure } from '../app';
 import { createToken, getRootContainer, type Token } from '../di';
 import { getLogger, type ILogger } from '../logging';
 import {
@@ -20,10 +21,17 @@ import type { AppInfo, VersionGate } from './version-gate';
  */
 export interface BundleUpdater {
   /**
-   * 把该 bundle 更到最新。同名重复调用只跑一次，并发共享同一次。
+   * 把该 bundle 更到最新。同名重复调用只跑一次（**失败的那次不留缓存**，重试能真的重跑）。
    *
-   * **永不 reject**：离线 / CDN 挂 / 版本闸拒（该发整包了）一律记日志后正常返回，退回包内版本继续加载。
-   * 热更失败让玩家进不去游戏，比不热更严重得多。
+   * **更新不成就 reject**，由 `BundleManager.load` 原样抛给上层：启动期 → 启动失败页可重试，
+   * 运行期 → 打开模块失败。**不退回包内版本静默继续** —— 那会把「CDN 少传了一个文件」这类发布事故
+   * 伪装成「玩家在玩旧版」，线上无人察觉；何况包内那份还可能压根不存在（从没随包发过的新模块 /
+   * 新马甲皮走种子 manifest 全量下载），降级只是把失败推迟到 `loadBundle`、报错更难查。
+   *
+   * 版本闸拒绝会带 `needFullUpdate` 标记（结构标记，见 {@link LaunchFailure}）——那是「该发整包了」，
+   * 跟网络错不是一回事，UI 得引导去商店而不是让玩家对着「重试」徒劳点。
+   *
+   * 唯一的 no-op 是**平台没注册热更后端**（web / 编辑器）：那不是失败，是这条路不存在。
    */
   ensureLatest(bundle: string): Promise<void>;
 }
@@ -48,35 +56,36 @@ export function createBundleUpdater(opts?: BundleUpdaterOptions): BundleUpdater 
   const done = new Map<string, Promise<void>>();
 
   async function run(bundle: string): Promise<void> {
-    if (!factory) return;
-    let hu;
-    try {
-      // 造后端本身也可能抛（如 native 侧 manifest 路径不对），别让它变成加载失败。
-      hu = createHotUpdateService({ backend: factory(bundle), gate: opts?.gate, app: opts?.app, logger });
-    } catch (e) {
-      logger.warn(`bundle '${bundle}' 热更后端创建失败，用包内版本`, e);
-      return;
-    }
+    if (!factory) return; // 平台没有热更后端（web / 编辑器）——不是失败，是没这条路
+    // 造后端就抛通常是配置错（native 侧 manifest 路径不对），与「更新失败」同罪，一样不许掩盖
+    const hu = createHotUpdateService({
+      backend: factory(bundle),
+      gate: opts?.gate,
+      app: opts?.app,
+      logger,
+    });
     const checked = await hu.check();
     if (checked.kind === 'up-to-date') return;
-    if (checked.kind === 'error') {
-      logger.warn(`bundle '${bundle}' 检查更新失败，用包内版本`, checked.error);
-      return;
-    }
+    if (checked.kind === 'error') throw checked.error;
     if (checked.kind === 'rejected') {
-      logger.warn(`bundle '${bundle}' 更新被版本闸拒绝（${checked.reason}），用包内版本`);
-      return;
+      // 结构标记而非 Error 子类：跨 bundle instanceof 不可靠（ADR-0001）。app 的 classify 只认这个字段。
+      throw Object.assign(new Error(`bundle '${bundle}' 更新被版本闸拒绝：${checked.reason}`), {
+        __cckLaunchFailure: { kind: 'needFullUpdate', reason: checked.reason } as LaunchFailure,
+      });
     }
     const updated = await hu.update((p) => opts?.onProgress?.(bundle, p));
-    if (updated.kind !== 'ready') {
-      logger.warn(`bundle '${bundle}' 更新未就绪（${updated.kind}），用包内版本`);
-    }
+    if (updated.kind === 'failed') throw updated.error;
+    if (updated.kind !== 'ready') throw new Error(`bundle '${bundle}' 更新未就绪（${updated.kind}）`);
   }
 
   return {
     ensureLatest(bundle): Promise<void> {
       let p = done.get(bundle);
-      if (!p) done.set(bundle, (p = run(bundle)));
+      if (!p) {
+        done.set(bundle, (p = run(bundle)));
+        // 失败的那次别留在表里：否则「重试」拿到的是同一个已 reject 的 promise，永远重试不动
+        void p.catch(() => done.delete(bundle));
+      }
       return p;
     },
   };

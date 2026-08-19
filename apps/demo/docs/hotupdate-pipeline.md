@@ -1,6 +1,6 @@
 ---
 状态: 活文档
-摘要: demo 的热更是怎么走通的 —— native 的三层更新边界、base 与分包两个独立更新目标、内容基址一律听服务端下发；web 那条只有一张版本表。含架构图与启动时序图、两平台对照表。
+摘要: demo 的热更是怎么走通的 —— native 的三层更新边界、base 与分包两个独立更新目标、内容基址一律听服务端下发；web 那条只有一张版本表。两平台各自的架构图与启动时序图 + 对照表。
 何时读: 发一次热更、排查「更新没生效 / 更新失败」、给新 bundle 接热更、换 CDN 之前。
 依赖: [[hotupdate-service]]（机制与 API）· [[bundle-manager]] · [[hot-update-manifest]] / [[web-versions]]（出包期工具）· [[adr-0006]] · [[adr-0010]] · [[adr-0013]]
 ---
@@ -89,7 +89,7 @@ sequenceDiagram
   App->>BU: 阶段 shared：load 前 ensureLatest
   BU->>CDN: 每个包各查各的 <bundle>.manifest
   BU-->>App: 更新完成（免重启，此刻模块尚未加载）
-  App->>App: load shared · skin-&lt;马甲&gt;-foundation · foundation
+  App->>App: load shared · skin-〈马甲〉-foundation · foundation
   Note over App: 地基跑 boot：协议 → 长连接 → 登录
   App->>App: 阶段 lobby → running
 ```
@@ -208,8 +208,100 @@ native 的一切都围绕「怎么把文件下下来」；**web 一个文件都�
 | 部署 | 清空 CDN 目录再拷（只留最新一版） | **只叠加、绝不清空** |
 | 生效 | base 要重启；模块包免重启 | 免重启（下次 `load` 就是新的） |
 | 版本闸 | 两枚戳（app 戳 + 更新戳） | app 戳 + **版本表里的 `coreApiHash`** |
+| 检查失败 | base 与分包**一律中止**·可重试 | **一律中止**·可重试（表与页面同源，缺它 = 没部署上去） |
 
-发一次版：
+### 架构图（出包 → 托管 → 页面）
+
+```mermaid
+flowchart TB
+  subgraph build["出包机 · node scripts/build.mjs web-mobile-boot --manifest"]
+    A2["① app 戳 cck-app-compat.json<br/>写进 assets/resources/（构建之前）"]
+    A1["② Creator 构建（md5Cache: true）<br/>src/settings.&lt;md5&gt;.json<br/>assets/&lt;bundle&gt;/index.&lt;md5&gt;.js"]
+    A3["③ cck-manifest web-versions<br/>读 settings.assets.bundleVers<br/>剔掉 AOT 包 → 盖 coreApiHash"]
+    A4{{"④ 两枚 coreApiHash 相等？<br/>不等当场抛，不发布"}}
+    A2 --> A1 --> A3 --> A4
+  end
+
+  subgraph host["静态托管 webDir（本机 = filebrowser 8082 · no-store）"]
+    H1["index.html · src/ · assets/&lt;bundle&gt;/index.&lt;md5&gt;.js<br/><b>只叠加，绝不清空</b> —— 新旧 md5 共存"]
+    H2["cck-versions.json<br/>{ bundles, version, coreApiHash, minAppVersion? }"]
+  end
+
+  subgraph page["浏览器里的页面（html 可能是缓存的旧版）"]
+    P1["AOT：main / resources / start-scene<br/>+ 包内 settings 的 bundleVers（旧）"]
+    P2["BundleManager.versions<br/><i>setVersions 整体覆盖</i>"]
+    P3["功能 bundle：lobby / shop / skin-*"]
+  end
+
+  A4 --> H1
+  A4 --> H2
+  H1 -->|"浏览器按 URL 拉"| P1
+  H2 -->|"loadRemote（相对页面 · 同源）"| P2
+  P2 -->|"load 时带 version"| P3
+  H1 -.->|"assets/shop/index.&lt;新md5&gt;.js"| P3
+```
+
+`cck-versions.json` 是整条链上**唯一**的热更产物：没有 manifest、没有 `packageUrl`、没有逐包版本号。
+
+### 启动时序（闸在哪一步）
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant P as 页面 index.html
+  participant App as core App
+  participant DP as dispatcher
+  participant V as 版本表
+  participant BM as BundleManager
+  participant CC as cc.assetManager
+
+  P->>App: 加载 AOT → launch()
+  Note over App: platform：读 resources/cck-app-compat<br/>→ AppInfo{ appVersion, coreApiHash }
+  App->>DP: dispatch：握手（capabilityStamp = coreApiHash）
+  DP-->>App: wsUrl · cdnUrl · notice
+  Note over App: hotupdate：web 无 native 后端<br/>check() 恒 up-to-date → 直接进版本表
+
+  App->>V: loadRemote('cck-versions.json')
+  alt 拉不到（多半是没部署上去）
+    V--xApp: 404 / 网络错
+    App-->>P: 启动失败 network·可重试<br/><b>绝不退回包内 bundleVers</b>
+  else 拿到表
+    V-->>App: { bundles, version, coreApiHash }
+    App->>App: gate.canApply(remote, local)
+    alt coreApiHash 不等 / appVersion 低于 minAppVersion
+      App-->>P: abortLaunch(needFullUpdate)<br/>「需要刷新页面」+ 刷新按钮
+    else 过闸
+      App->>BM: setVersions(bundles)
+    end
+  end
+
+  Note over App: shared → foundation → 登录 → 大厅
+  App->>BM: load('shop')
+  BM->>CC: loadBundle('shop', { version: 新 md5 })
+  CC-->>BM: assets/shop/index.〈新md5〉.js（浏览器拉，无重启）
+```
+
+**闸摆在 `setVersions` 之前**：不兼容就一个新 bundle 都不装 —— 否则新代码 call 到 AOT 里已被裁掉的
+符号，要跑到那一行才崩。
+
+### 免重启换代码的内幕（`engine/bundle-source.ts`）
+
+```mermaid
+flowchart TB
+  L["BundleManager.load(name)<br/>version = opts.version ?? versions[name]"] --> S["createCcBundleSource.loadBundle"]
+  S --> C{"loadedVersions[name]<br/>≠ 本次 version？"}
+  C -->|"首次 / 版本没变"| G["assetManager.loadBundle(name, {version})"]
+  C -->|"md5 变了"| I["invalidateBundleScripts(name)<br/>① 删 SystemJS 模块记录 + registerRegistry<br/>② js.unregisterClass(该 bundle 导出的类)"]
+  I --> G
+  G --> R["index.&lt;新md5&gt;.js 重新求值<br/>prefab 按新 classId 反序列化 → 新代码生效"]
+```
+
+模块记录与类注册**必须一起清**：只删模块 → `js.setClassName` 撞名不覆盖 `_registeredClassIds`，
+prefab 仍按旧 classId 反序列化，表现为「类换了、界面没换」；只注销类 → `System.import` 命中缓存、
+declare 不再执行，反序列化报 `Can not find class`、组件被静默丢弃。
+**⚠️ 版本没变时绝不能清**：引擎按 URL 缓存已下载脚本，清了那段代码就再也执行不到，下次 load 直接失败。
+
+### 发一次版
 
 ```bash
 cd apps/demo
@@ -237,8 +329,26 @@ settings 的 md5 变 → application.js 变 → html 引用变），所以玩家
 版本表用 no-store 拉、永远最新，旧页面因此也能加载新 bundle。此时 AOT 仍是旧的 —— 正是
 `coreApiHash` 闸要挡的情况：新 bundle 要新 AOT 时拒掉，让玩家刷新拿整包。
 
-**拉不到版本表不阻断启动**：退回包内那份 `bundleVers` 继续，只是这次没更新。CDN 抖动把玩家挡在
-门外，比少更新一次严重得多（与 `BundleUpdater` 同一取舍）。
+**⚠️ 拉不到版本表 = 启动失败（可重试），不退回包内 `bundleVers`。** 表与页面**同源**：页面都跑起来了
+却少这一个 json，几乎只有一种解释 —— 它没被部署上去，属发布事故。静默降级会把事故伪装成「玩家在玩
+旧版」，线上无人察觉；且叠加部署一旦清过历史版本，包内 `bundleVers` 指向的 md5 可能已 404，降级只是
+把失败推迟到 `load` 时、报错更难查。
+
+同一条判断贯穿三条路径（[[adr-0015]]，推翻了 ADR-0013 决策 6 的「永不 reject」）：
+
+| 路径 | 检查 / 下载失败时 |
+|---|---|
+| native base（`HotUpdateService.check`） | **中止启动**·可重试 |
+| native 分包（`BundleUpdater.ensureLatest`） | **中止**：启动期 → 启动失败页·可重试；运行期 → 打开模块失败 |
+| web 版本表 | **中止启动**·可重试 |
+
+分包唯一的 no-op 是**平台没注册热更后端**（web / 编辑器）—— 那不是失败，是这条路不存在。
+版本闸拒绝另有分类：带 `needFullUpdate` 标记（该发整包了），UI 引导去商店，而不是让玩家对着
+「重试」徒劳点。
+
+协议层面的「客户端太旧」不归它管：那是 `dispatch` 步握手时服务端按 `appVersion` / `capabilityStamp`
+判的（`action: update` → `needFullUpdate`），**排在版本表之前**；而包内 AOT 与包内 bundle 本就是同一次
+构建的产物，天然配套，不存在「新 AOT 配旧 bundle」的错配。
 
 ## 现状
 

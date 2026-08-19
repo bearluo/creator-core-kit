@@ -113,7 +113,7 @@ export const BUNDLE_RELOADER: Token<IBundleReloader>;
 - **默认 source 解析**：`opts.source ?? tryResolve(BUNDLE_SOURCE) ?? createMemoryBundleSource()`——同 [[save-manager]] 的接缝拾取范式。
 - **`setVersions` 为什么在这一层**：UIManager 打开界面时也会 load 它所属的 bundle。版本表放上层（App）就会漏掉那条路径；放这里则所有调用点零改自动带上版本。整体替换而非合并——版本表是服务器下发的一份快照，合并会让删掉的条目阴魂不散。
 - **`updater` 为什么也在这一层，且为什么"现取"**：位置同 `setVersions`（所有 load 调用点在这里汇合）。但解析时机不同——`source` 建时定死，`updater` **每次 load 才 `tryResolve`**：它要带 app 戳（`coreApiHash` 闸），而戳是启动后从资源里读出来的，注册必然晚于 BundleManager 创建。定死就等于永远拿不到。
-- **更新失败绝不阻断加载**：`BundleUpdater.ensureLatest` 契约是「永不 reject」，这里仍包一层 try/catch 兜自定义实现的违约——离线时退回包内版本继续玩，比进不去游戏轻得多。远程 url 加载（`opts.name` 形式）跳过更新：那条路径不走 manifest 热更。
+- **更新失败一起失败**：`BundleUpdater.ensureLatest` 契约是「更新不成就 reject」，这里**不吞**，原样抛给调用方（启动期 → 启动失败页·可重试；运行期 → 打开模块失败）。退回包内版本会把「CDN 少传了一个文件」这类发布事故伪装成「玩家在玩旧版」，且包内那份未必存在（从没随包发过的新模块 / 新马甲皮）。远程 url 加载（`opts.name` 形式）跳过更新：那条路径不走 manifest 热更。
 - **`BundleHandle` 为何不透明**：core 不持真 `cc.AssetManager.Bundle`。句柄只带 `name`/`version`；engine 要真 Bundle 时 `assetManager.getBundle(name)` 按名反解。
 
 ### BundleScope 的回收顺序（有语义，不是随手排的）

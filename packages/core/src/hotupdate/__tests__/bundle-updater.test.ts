@@ -115,34 +115,48 @@ describe('createBundleUpdater', () => {
     expect(f.downloads).toEqual(['shop']);
   });
 
-  it('check 失败（离线）→ 不抛、记日志，退回包内版本', async () => {
-    const { logger, warns } = fakeLogger();
+  it('check 失败（离线 / CDN 少传文件）→ reject，绝不退回包内版本', async () => {
     const f = makeFactory({ check: { shop: new Error('网络挂了') } });
-    const u = createBundleUpdater({ factory: f.factory, logger });
-    await expect(u.ensureLatest('shop')).resolves.toBeUndefined();
+    const u = createBundleUpdater({ factory: f.factory, logger: fakeLogger().logger });
+    await expect(u.ensureLatest('shop')).rejects.toThrow('网络挂了');
     expect(f.downloads).toEqual([]);
-    expect(warns.length).toBeGreaterThan(0);
   });
 
-  it('下载失败 → 不抛，不阻断加载', async () => {
+  it('下载失败 → reject（掩盖发布事故的代价大于这次加载失败）', async () => {
     const f = makeFactory({ check: { shop: newVersion('1.0.1') }, downloadFails: ['shop'] });
     const u = createBundleUpdater({ factory: f.factory, logger: fakeLogger().logger });
-    await expect(u.ensureLatest('shop')).resolves.toBeUndefined();
+    await expect(u.ensureLatest('shop')).rejects.toThrow();
   });
 
-  it('版本闸拒（coreApiHash 不符）→ 不下载、不抛', async () => {
+  it('版本闸拒（coreApiHash 不符）→ 不下载，reject 且带 needFullUpdate 标记（该发整包了，不是网络错）', async () => {
     const f = makeFactory({
       check: { shop: { status: 'new-version', info: { version: '2.0.0', coreApiHash: 'bbbb' } } },
     });
-    const { logger, warns } = fakeLogger();
     const u = createBundleUpdater({
       factory: f.factory,
       app: { appVersion: '1.0.0', coreApiHash: 'aaaa' },
-      logger,
+      logger: fakeLogger().logger,
     });
-    await expect(u.ensureLatest('shop')).resolves.toBeUndefined();
+    const e = await u.ensureLatest('shop').catch((err: unknown) => err);
+    expect((e as { __cckLaunchFailure?: { kind?: string } }).__cckLaunchFailure?.kind).toBe(
+      'needFullUpdate',
+    );
     expect(f.downloads).toEqual([]);
-    expect(warns.length).toBeGreaterThan(0);
+  });
+
+  it('失败不留缓存 → 重试真的重跑（否则拿到的是同一个已 reject 的 promise）', async () => {
+    let boom = true;
+    const factory = (): IHotUpdateBackend => ({
+      check: (): Promise<CheckResult> =>
+        boom ? Promise.reject(new Error('网络挂了')) : Promise.resolve({ status: 'up-to-date' }),
+      download: (): Promise<void> => Promise.resolve(),
+      apply: (): Promise<void> => Promise.resolve(),
+      restart: (): void => {},
+    });
+    const u = createBundleUpdater({ factory, logger: fakeLogger().logger });
+    await expect(u.ensureLatest('shop')).rejects.toThrow('网络挂了');
+    boom = false;
+    await expect(u.ensureLatest('shop')).resolves.toBeUndefined();
   });
 
   it('onProgress 带上 bundle 名转发', async () => {

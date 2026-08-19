@@ -351,9 +351,9 @@ describe('App · web 版本表地址', () => {
     expect(e.versionsSet).toEqual([{ shop: 'abc' }]);
   });
 
-  it('17. 版本表拉不到 → 用包内版本继续，不阻断启动（CDN 抖动不该把玩家挡在门外）', async () => {
+  it('17. 版本表拉不到 → 中止启动（可重试），绝不拿包内版本蒙混', async () => {
     const e = makeEnv();
-    await expect(runHotupdate(e, { versionUrl: 'cck-versions.json' })).resolves.toBeUndefined();
+    await expect(runHotupdate(e, { versionUrl: 'cck-versions.json' })).rejects.toThrow();
     expect(e.versionsSet).toEqual([]);
     expect(e.calls).not.toContain('bundle.setVersions');
   });

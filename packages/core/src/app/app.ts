@@ -53,7 +53,8 @@ export interface AppConfig {
    * **推荐写相对文件名**（如 `cck-versions.json`）：按页面 base 解析，跟 bundle 同源，
    * 换部署地址天然生效。资源真放独立 CDN 时才写绝对 URL。
    *
-   * 拉不到版本表**不阻断启动**——用包内那份 bundleVers 继续，只是这次没更新。
+   * **拉不到 = 启动失败（可重试）**：表与页面同源，拉不到基本等于它没部署上去；退回包内
+   * bundleVers 会把发布事故伪装成「玩家在玩旧版」。native 因此更不该配这一项。
    */
   readonly versionUrl?: string;
   /** app 戳所在 bundle，默认 `'main'`（Cocos 主包）。 */
@@ -342,15 +343,13 @@ export function defaultLaunchSteps(deps?: AppDeps): readonly LaunchStep[] {
         // 只能运行时注入），web 上不存在这个问题——页面自己就是从某个地址加载的，相对路径永远
         // 跟着页面走，换部署地址天然生效。硬拼过去只会拿到跨域拒绝或 404。
         // 资源真放独立 CDN 的项目写绝对 URL（那时 bundle 也得配 Cocos 的 remote server）。
-        // 拉不到就用包内那份 bundleVers 继续：版本表是「有新的就用新的」，不是启动前置条件。
-        // 让玩家因为 CDN 抖动进不去游戏，比少更新一次严重得多（同 BundleUpdater 的取舍）。
-        let remote: JsonLike | undefined;
-        try {
-          remote = await assets().loadRemote<JsonLike>(url, { type: 'json' });
-        } catch (e) {
-          logger.warn(`版本表拉取失败（${url}）→ 用包内版本继续`, e);
-          return;
-        }
+        // **拉不到就中止启动**（classify 归 network·可重试，UI 出重试按钮），不退回包内 bundleVers：
+        // 版本表与页面同源，页面都跑起来了却少这一个 json，几乎只有一种解释——它没被部署上去，
+        // 属发布事故；静默降级会把事故伪装成「玩家在玩旧版」，线上没人察觉。且叠加部署一旦清过历史
+        // 版本，包内 bundleVers 指向的 md5 可能已 404，降级只是把失败推迟到 load，报错更难查。
+        // 语义对齐 native 的 base check 失败（那边同样 throw）；「失败就用包内」是分包 BundleUpdater
+        // 的取舍——那是单个包的增量更新，这张表是「这一版整体该用哪些包」的权威，不同量级。
+        const remote = await assets().loadRemote<JsonLike>(url, { type: 'json' });
         const j = (remote?.json ?? {}) as RemoteVersions;
         // ⚠️ web 路径没有 AssetsManager 的 apply，compat 闸只能摆在这里 —— 少了它，热更下来的新
         // bundle 引用主包 AOT 里已被裁掉的符号时，会跑到那一行才崩（ADR-0001，隐蔽）。

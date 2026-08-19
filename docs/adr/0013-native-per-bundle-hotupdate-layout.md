@@ -1,5 +1,5 @@
 ---
-状态: 已接受
+状态: 已接受（决策 6 的「永不 reject」已被 docs/adr/0015-hotupdate-failure-aborts.md 取代）
 日期: 2026-08-05
 依赖: packages/core/docs/modules/hotupdate-service.md, packages/core/docs/modules/bundle-manager.md, packages/tools/docs/modules/hot-update-manifest.md, docs/adr/0006-native-android-build-and-hotupdate-e2e.md, docs/adr/0010-no-restart-bundle-code-swap.md, docs/design/2026-08-05-hotupdate-per-bundle-proposal.md
 ---

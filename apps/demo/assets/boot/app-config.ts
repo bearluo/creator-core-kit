@@ -93,6 +93,6 @@ export const APP_CONFIG: AppConfig = {
   // 按页面 base 解析，换部署地址天然跟着走，不必也不该去拼 dispatcher 下发的 cdnUrl。
   //
   // **native 明确不配**：那条走 AssetsManager + manifest，压根没有 bundleVers 这回事。配了
-  // 只会让每次启动多拉一个 CDN 上不存在的文件（拉不到不阻断启动，但 warn 是白响的）。
+  // 每次启动都会去拉一个 CDN 上不存在的文件，而拉不到是**启动失败**——等于自己把 native 锁死。
   versionUrl: sys.isNative ? undefined : 'cck-versions.json',
 };

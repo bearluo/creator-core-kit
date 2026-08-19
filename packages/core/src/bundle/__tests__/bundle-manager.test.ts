@@ -318,13 +318,12 @@ describe('BundleManager × BundleUpdater（加载前分包热更）', () => {
     expect(t.trace).toEqual(['update:shop', 'load:shop']); // 第二次只加计数
   });
 
-  it('updater 违约抛异常 → 记日志、照常加载，不带崩', async () => {
+  it('updater 更新失败 → load 一起失败，绝不静默用包内版本', async () => {
     const t = makeTraced(() => Promise.reject(new Error('更新炸了')));
-    const { logger, warns } = fakeLogger();
-    const bm = createBundleManager({ source: t.source, updater: t.updater, logger });
-    await expect(bm.load('shop')).resolves.toMatchObject({ name: 'shop' });
-    expect(t.trace).toEqual(['update:shop', 'load:shop']);
-    expect(warns.length).toBeGreaterThan(0);
+    const bm = createBundleManager({ source: t.source, updater: t.updater });
+    await expect(bm.load('shop')).rejects.toThrow('更新炸了');
+    expect(t.trace).toEqual(['update:shop']); // 没走到 loadBundle
+    expect(bm.isLoaded('shop')).toBe(false); // 失败条目已回滚，重试能重来
   });
 
   it('远程 url 加载跳过 manifest 热更', async () => {

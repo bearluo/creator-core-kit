@@ -36,7 +36,7 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:18](https://hlgit.5518g
 
 ### BundleUpdater
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:21](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L21)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L22)
 
 BundleUpdater —— 「加载前把这个 bundle 更到最新」。分包热更的编排半，纯逻辑、零 cc。
 
@@ -53,12 +53,19 @@ native 上模块 bundle 更新**不需要重启也不需要启动还原**：`Ass
 
 > **ensureLatest**(`bundle`): `Promise`\<`void`\>
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:28](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L28)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L36)
 
-把该 bundle 更到最新。同名重复调用只跑一次，并发共享同一次。
+把该 bundle 更到最新。同名重复调用只跑一次（**失败的那次不留缓存**，重试能真的重跑）。
 
-**永不 reject**：离线 / CDN 挂 / 版本闸拒（该发整包了）一律记日志后正常返回，退回包内版本继续加载。
-热更失败让玩家进不去游戏，比不热更严重得多。
+**更新不成就 reject**，由 `BundleManager.load` 原样抛给上层：启动期 → 启动失败页可重试，
+运行期 → 打开模块失败。**不退回包内版本静默继续** —— 那会把「CDN 少传了一个文件」这类发布事故
+伪装成「玩家在玩旧版」，线上无人察觉；何况包内那份还可能压根不存在（从没随包发过的新模块 /
+新马甲皮走种子 manifest 全量下载），降级只是把失败推迟到 `loadBundle`、报错更难查。
+
+版本闸拒绝会带 `needFullUpdate` 标记（结构标记，见 [LaunchFailure](app.md#launchfailure)）——那是「该发整包了」，
+跟网络错不是一回事，UI 得引导去商店而不是让玩家对着「重试」徒劳点。
+
+唯一的 no-op 是**平台没注册热更后端**（web / 编辑器）：那不是失败，是这条路不存在。
 
 ###### Parameters
 
@@ -74,7 +81,7 @@ Defined in: [packages/core/src/hotupdate/bundle-updater.ts:28](https://hlgit.551
 
 ### BundleUpdaterOptions
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:31](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L31)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L39)
 
 #### Properties
 
@@ -82,7 +89,7 @@ Defined in: [packages/core/src/hotupdate/bundle-updater.ts:31](https://hlgit.551
 
 > `optional` **app**: [`AppInfo`](hotupdate.md#appinfo)
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:37](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L37)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L45)
 
 本地客户端信息（版本 / coreApiHash），透传给闸。
 
@@ -90,7 +97,7 @@ Defined in: [packages/core/src/hotupdate/bundle-updater.ts:37](https://hlgit.551
 
 > `optional` **factory**: [`HotUpdateBackendFactory`](hotupdate.md#hotupdatebackendfactory)
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L33)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:41](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L41)
 
 按名造后端。默认 DI [HOTUPDATE\_BACKEND\_FACTORY](hotupdate.md#hotupdate_backend_factory)；未注册 → 恒 no-op。
 
@@ -98,7 +105,7 @@ Defined in: [packages/core/src/hotupdate/bundle-updater.ts:33](https://hlgit.551
 
 > `optional` **gate**: [`VersionGate`](hotupdate.md#versiongate)
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L35)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:43](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L43)
 
 版本闸，透传给每个 bundle 的 HotUpdateService。
 
@@ -106,13 +113,13 @@ Defined in: [packages/core/src/hotupdate/bundle-updater.ts:35](https://hlgit.551
 
 > `optional` **logger**: [`ILogger`](logging.md#ilogger)
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:40](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L40)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:48](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L48)
 
 ##### onProgress()?
 
 > `optional` **onProgress**: (`bundle`, `p`) => `void`
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L39)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:47](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L47)
 
 下载进度，带上是哪个 bundle。
 
@@ -509,7 +516,7 @@ update 产出。
 
 > `const` **BUNDLE\_UPDATER**: [`Token`](di.md#tokent)\<[`BundleUpdater`](hotupdate.md#bundleupdater)\>
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:86](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L86)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:95](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L95)
 
 DI token：项目可 register 自己的 BundleUpdater 覆盖默认；未注册则 BundleManager 不做加载前更新。
 
@@ -575,7 +582,7 @@ ponytail: 忽略 pre-release/build 元数据（-rc.1、+build），首版按纯�
 
 > **createBundleUpdater**(`opts`?): [`BundleUpdater`](hotupdate.md#bundleupdater)
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:44](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L44)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:52](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L52)
 
 造 BundleUpdater（纯逻辑、零 cc；平台 IO 经 HotUpdateBackendFactory 注入）。
 

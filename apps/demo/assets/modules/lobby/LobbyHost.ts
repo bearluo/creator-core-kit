@@ -167,7 +167,12 @@ class LobbyNav {
       node.setPosition(0, -i * ITEM_GAP, 0);
       const label = node.getChildByName(N_ITEM_LABEL)?.getComponent(Label);
       if (label) label.string = `${entry.kind === 'game' ? '🎮' : '🧩'} ${entry.title}`;
-      node.on(Node.EventType.TOUCH_END, () => void this.openModule(entry));
+      // 更新失败现在一路抛上来（BundleUpdater 不再退回包内版本）——不接住就只剩「点了没反应」
+      node.on(Node.EventType.TOUCH_END, () => {
+        this.openModule(entry).catch((e: unknown) =>
+          console.error(`${TAG} 打开模块 '${entry.id}' 失败（多半是热更没下来）`, e),
+        );
+      });
     });
   }
 
