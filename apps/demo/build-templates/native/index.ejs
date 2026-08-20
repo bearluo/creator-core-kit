@@ -74,7 +74,39 @@ System.warmup({
     },
 });
 
-System.import('<%= applicationJs %>')
+// ==== AOT 入口：固定名指针 → 运行时解析（这就是 AOT 可热更的全部机关）====
+//
+// Creator 内置模板把 `application.<md5>.js` 的名字**烘死**在这里，于是热更下发的新 AOT
+// （application → settings → chunks → assets/{main,resources,internal}）永远没人念 —— 整个
+// AOT 层因此结构性不可热更。而这段代码跑在**搜索路径还原之后**，完全可以改成运行时解析：
+// 读固定名 `src/cck-aot.json` 拿入口名，热更目录里有新的就命中新的，没有就落到包内那份。
+// 见 docs/design/2026-08-20-aot-hotupdate-unlock-proposal.md。
+//
+// 兜底一律「退回包内版本」而不是抛：黑屏是最坏结果，退回还能起来，下一轮 check 会重下。
+var applicationJs = '<%= applicationJs %>';
+// 包内那份的名字 = **这个 APK 的身份**（热更改不了 main.js）。engine 的 `packagedAotEntry()`
+// 读它判「APK 换没换」；不能用运行时 settings.bundleVers，那个现在会随热更翻、会自噬缓存。
+window.__cckAotEntry = applicationJs;
+(function () {
+    try {
+        var raw = jsb.fileUtils.getStringFromFile('src/cck-aot.json');
+        if (!raw) return;
+        var name = JSON.parse(raw).application;
+        if (typeof name !== 'string' || name === '' || name === applicationJs) return;
+        // 指针在、文件不在 = 半更新（下载完成、搬运被杀）。上面那段 `_temp/` 修复通常已经补齐，
+        // 补不齐就退回包内，别把玩家卡在黑屏。
+        if (!jsb.fileUtils.isFileExist(name.indexOf('./') === 0 ? name.substr(2) : name)) {
+            console.error('[cck] AOT 指针指向的文件不存在，回退包内版本: ' + name);
+            return;
+        }
+        applicationJs = name;
+        console.log('[cck] AOT 入口取热更版本: ' + name);
+    } catch (e) {
+        console.error('[cck] 读 AOT 入口指针失败，回退包内版本: ' + e);
+    }
+})();
+
+System.import(applicationJs)
 .then(({ Application }) => {
     return new Application();
 }).then((application) => {

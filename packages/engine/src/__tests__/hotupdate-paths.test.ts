@@ -1,12 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
+  aotStamp,
   bundleManifestName,
   bundleStoragePath,
   bundleVersionName,
+  manifestAssetKeys,
   normalizeSearchPaths,
+  packagedAotEntry,
   rebaseManifest,
   retiredBundleDirs,
+  searchPathsWithout,
   seedBundleManifest,
+  engineHash,
+  engineHashFromUrl,
 } from '../hotupdate-paths';
 
 describe('normalizeSearchPaths', () => {
@@ -189,5 +195,133 @@ describe('retiredBundleDirs', () => {
 
   it('空目录列表不抛', () => {
     expect(retiredBundleDirs([], ['shop'])).toEqual([]);
+  });
+});
+
+describe('manifestAssetKeys（反推该加载哪个 md5 的输入）', () => {
+  it('取 assets 的键', () => {
+    const j = JSON.stringify({
+      version: '1.0.1',
+      assets: { 'assets/shop/index.a1b2c.js': { size: 1, md5: 'x' }, 'assets/shop/cc.config.a1b2c.json': {} },
+    });
+    expect(manifestAssetKeys(j)).toEqual(['assets/shop/index.a1b2c.js', 'assets/shop/cc.config.a1b2c.json']);
+  });
+
+  it('种子 manifest（assets 空）→ 空数组', () => {
+    expect(manifestAssetKeys(seedBundleManifest('http://cdn/', 'shop'))).toEqual([]);
+  });
+
+  it('不是 JSON（CDN 路由错时会回 200 + 一坨 HTML）→ 空数组，不抛', () => {
+    expect(manifestAssetKeys('<!doctype html><html>404</html>')).toEqual([]);
+  });
+
+  it('没有 assets 字段 / assets 不是对象 → 空数组', () => {
+    expect(manifestAssetKeys('{"version":"1.0.1"}')).toEqual([]);
+    expect(manifestAssetKeys('{"assets":[1,2]}')).toEqual([]);
+    expect(manifestAssetKeys('null')).toEqual([]);
+  });
+});
+
+describe('aotStamp（APK 换没换的判据 = 包内 AOT 入口的 md5）', () => {
+  it('从 main.js 烘的入口名抠 md5，前缀形态不挑', () => {
+    expect(aotStamp('./application.56453.js')).toBe('56453');
+    expect(aotStamp('application.56453.js')).toBe('56453');
+  });
+
+  it('没开 md5Cache（application.js）→ undefined = 判不了，调用方原样不动', () => {
+    expect(aotStamp('./application.js')).toBeUndefined();
+  });
+
+  it('老模板没挂全局 / 形状不认识 → undefined 而不是抛', () => {
+    expect(aotStamp(undefined)).toBeUndefined();
+    expect(aotStamp(null)).toBeUndefined();
+    expect(aotStamp('')).toBeUndefined();
+    expect(aotStamp('./main.js')).toBeUndefined();
+    expect(aotStamp('./application.a.b.js')).toBeUndefined();
+  });
+
+  it('AOT 热更换了入口，这个判据也不该跟着翻 —— 它读的是包内那份', () => {
+    // 同一个 APK 里 main.js 烘的名字恒定；运行时真正加载的入口是另一回事（指针解析出来的）。
+    const packaged = './application.56453.js';
+    expect(aotStamp(packaged)).toBe(aotStamp(packaged));
+    expect(aotStamp('./application.99999.js')).not.toBe(aotStamp(packaged)); // 换了 APK 才翻
+  });
+});
+
+describe('packagedAotEntry（main.js 挂上来的包内入口名）', () => {
+  const g = globalThis as { __cckAotEntry?: unknown };
+  afterEach(() => delete g.__cckAotEntry);
+
+  it('挂了就取到', () => {
+    g.__cckAotEntry = './application.56453.js';
+    expect(packagedAotEntry()).toBe('./application.56453.js');
+  });
+
+  it('没挂 / 空串 / 不是字符串 → undefined（闸休眠，别当成换了 APK）', () => {
+    expect(packagedAotEntry()).toBeUndefined();
+    g.__cckAotEntry = '';
+    expect(packagedAotEntry()).toBeUndefined();
+    g.__cckAotEntry = 42;
+    expect(packagedAotEntry()).toBeUndefined();
+  });
+});
+
+describe('searchPathsWithout（删完热更目录，指向它的搜索路径也要摘掉）', () => {
+  const base = '/w/cck-remote-asset/';
+  const root = '/w/cck-bundle-asset/';
+
+  it('摘掉前缀命中的，保留其余；顺带去重滤空（复用 normalizeSearchPaths）', () => {
+    const got = searchPathsWithout(
+      [base, `${root}shop/`, '', '@assets/', '@assets/', '/w/other/'],
+      [base, root],
+    );
+    expect(got).toEqual(['@assets/', '/w/other/']);
+  });
+
+  it('没有命中项 → 只做归一化', () => {
+    expect(searchPathsWithout(['@assets/', '@assets/'], [base])).toEqual(['@assets/']);
+  });
+});
+
+describe('engineHashFromUrl（引擎内容指纹 = cc.<md5>.js 的那段 md5）', () => {
+  it('认得出各种解析形态', () => {
+    expect(engineHashFromUrl('./cocos-js/cc.25e81.js')).toBe('25e81');
+    expect(engineHashFromUrl('src/cocos-js/cc.25e81.js')).toBe('25e81');
+    expect(engineHashFromUrl('http://h/src/cocos-js/cc.25e81.js?v=1')).toBe('25e81');
+  });
+
+  it('没开 md5Cache（就叫 cc.js）→ undefined，闸休眠而不是误判', () => {
+    expect(engineHashFromUrl('src/cocos-js/cc.js')).toBeUndefined();
+  });
+
+  it('不是 cc 模块 / 非字符串 → undefined', () => {
+    expect(engineHashFromUrl('src/chunks/bundle.50111.js')).toBeUndefined();
+    expect(engineHashFromUrl('src/cocos-js/ccx.25e81.js')).toBeUndefined();
+    expect(engineHashFromUrl(undefined)).toBeUndefined();
+    expect(engineHashFromUrl(null)).toBeUndefined();
+  });
+});
+
+describe('engineHash（走 SystemJS 的 import map，不碰文件系统）', () => {
+  const g = globalThis as { System?: unknown };
+  const saved = g.System;
+  afterEach(() => {
+    if (saved === undefined) delete g.System;
+    else g.System = saved;
+  });
+
+  it('SystemJS 解析得到 cc → 抠出指纹', () => {
+    g.System = { resolve: (id: string) => (id === 'cc' ? 'src/cocos-js/cc.25e81.js' : id) };
+    expect(engineHash()).toBe('25e81');
+  });
+
+  it('没有 SystemJS（编辑器 / 单测环境）→ undefined', () => {
+    delete g.System;
+    expect(engineHash()).toBeUndefined();
+  });
+
+  it('resolve 抛（没 warmup）→ undefined 而不是炸掉启动', () => {
+    g.System = { resolve: () => { throw new Error('no such module'); } };
+    expect(engineHash()).toBeUndefined();
   });
 });

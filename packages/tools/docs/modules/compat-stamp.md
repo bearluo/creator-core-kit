@@ -32,11 +32,15 @@ export interface CompatStamp {
   version: string;         // app 戳=app 版本；更新戳=更新版本
   minAppVersion?: string;  // 更新戳可选：要求 app 版本 ≥ 此
   coreApiHash: string;     // core 公共 API 表面 hash
+  engineHash?: string;     // 引擎内容指纹（cc.<md5>.js 的 md5）——只有更新戳带得上，见下
 }
 export interface CompatResult { ok: boolean; reason?: string; }
 
 /** 归一化 d.ts（剥注释+去空白）后 md5 前 12 位 = API 表面 hash。 */
 export function hashApiSurface(dts: string): string;
+/** 从 native 构建产物读引擎内容指纹（`src/import-map*.json` 的 `imports.cc` → `cc.<md5>.js` 的 md5）。 */
+export function readEngineHash(dataRoot: string): string | undefined;
+
 /** 读 core rolled-up d.ts（传文件或含 index.d.ts 的目录）算 coreApiHash。 */
 export function computeCoreApiHash(dtsPathOrDir: string): string;
 /** 造兼容戳并落盘（JSON）。 */
@@ -57,7 +61,7 @@ cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <p
 
 1. **打戳**：出整包 → `stamp --core packages/core/dist --version <appVer> --out app-compat.json`（app 戳，随包内置，运行时读它填 `AppInfo`）。出热更包 → `stamp --core packages/core/dist --version <updVer> [--min-app-version <x>] --out update-compat.json`（更新戳，随远程 manifest 托管，check 时读它填 `UpdateInfo`）。两次同一命令、同一 `computeCoreApiHash`，只是 `version`/`minAppVersion` 不同。
 2. **hashApiSurface**：`dts.split('\n')` 逐行 `trim`，滤掉空行与以 `//`、`*`、`/*` 开头的行（JSDoc 起始 `/**`、续行 `*`、闭合 `*/`、块 `/*`、行 `//` 全覆盖；core 的字符串字面量类型如 `'singleton'|'transient'` 在代码行、不以这些开头，不误伤）→ `join('\n')` → md5(hex) 前 12 位。**剥注释是关键**：让改 JSDoc/缩进不翻 hash，只有类型面变才翻。
-3. **verifyCompat**：`update.minAppVersion` 存在且 `app.version < 它` → 拒；`app.coreApiHash !== update.coreApiHash` → 拒（需整包）；否则通过。CLI `verify-compat` 通过 → exit 0，拒 → exit 1（CI 门禁）。
+3. **verifyCompat**：`update.minAppVersion` 存在且 `app.version < 它` → 拒；`app.coreApiHash !== update.coreApiHash` → 拒（需整包）；两端 `engineHash` 都有且不等 → 拒；否则通过。CLI `verify-compat` 通过 → exit 0，拒 → exit 1（CI 门禁）。
 4. **与 cc 边界**：全程零 cc、纯 node。产物（兼容戳 JSON）由**运行时** engine/app 侧读入喂 core 版本闸，二者只经「兼容戳字段」这一契约耦合——同 [[hot-update-manifest]] 的「只经 manifest 文件格式耦合」范式。
 
 ## Key design decisions（决策表）
@@ -75,6 +79,8 @@ cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <p
 ## Platform considerations（全平台 / 小游戏兼容）
 
 - **仅 native**（iOS/Android/PC）：AOT + tree-shake 才有「热更引用被裁符号」风险，`coreApiHash` 为此而设。
+- **引擎指纹只有 native 有意义**：`readEngineHash` 读的是 native 产物的 import map。web 的 `cc.js` 跟业务代码一起版本化热更、不存在「JS 侧换了、native 侧没换」这种分裂，故不打这枚戳。
+- **它只上得了更新戳**：app 戳要进包、生成于 Creator 构建**之前**，那时产物还不存在。客户端那一端由 engine 的 `engineHash()` 运行时从 SystemJS import map 取——所以 `verifyCompat` 对这枚戳是**两端都有才比**（不同于 `coreApiHash` 的无条件比对），只有拿上一版的**更新戳**当 app 参数时才比得成。
 - **Web / 小游戏**：解释执行 / bundle 版本化，无 AOT 裁剪问题；`hotupdate-service` 的 Web 后端（后续）走 bundle 版本，不必打 coreApiHash。工具不产小游戏戳。
 - 与三种「热」：属**线上热更(hotfix)** 的出包期兼容保障，与运行时分包/开发期热重载无关。
 

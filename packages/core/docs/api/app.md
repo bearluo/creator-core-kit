@@ -221,6 +221,20 @@ Defined in: [packages/core/src/app/app.ts:153](https://hlgit.5518game.com/luohao
 
 Defined in: [packages/core/src/app/app.ts:152](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L152)
 
+##### engineHash()?
+
+> `optional` **engineHash**: () => `undefined` \| `string`
+
+Defined in: [packages/core/src/app/app.ts:168](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L168)
+
+取**引擎内容指纹**，喂 platform 步组装的 [AppInfo](hotupdate.md#appinfo)。core 零 cc，拿不到这个值，
+由 engine 的 `appModule` 注入（native 走 `engineHash()`）。返回 `undefined` = 判不了，
+闸对单边缺失恒放行。
+
+###### Returns
+
+`undefined` \| `string`
+
 ##### gate?
 
 > `optional` **gate**: [`VersionGate`](hotupdate.md#versiongate)
@@ -539,7 +553,7 @@ Defined in: [packages/core/src/app/app.ts:24](https://hlgit.5518game.com/luohao/
 
 > `const` **APP**: [`Token`](di.md#tokent)\<[`App`](app.md#app)\>
 
-Defined in: [packages/core/src/app/app.ts:461](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L461)
+Defined in: [packages/core/src/app/app.ts:470](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L470)
 
 DI token：App 有必需配置、造不出无参默认，所以只有注册后才能 [getApp](app.md#getapp)。
 
@@ -549,7 +563,7 @@ DI token：App 有必需配置、造不出无参默认，所以只有注册后�
 
 > `const` **APP\_INFO**: `"cck.app.info"` = `'cck.app.info'`
 
-Defined in: [packages/core/src/app/app.ts:166](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L166)
+Defined in: [packages/core/src/app/app.ts:172](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L172)
 
 `ctx.bag` 里 AppInfo 的键——platform 步写入，compat 闸与项目自定义步骤读取。
 
@@ -559,7 +573,7 @@ Defined in: [packages/core/src/app/app.ts:166](https://hlgit.5518game.com/luohao
 
 > `const` **DISPATCH**: `"cck.app.dispatch"` = `'cck.app.dispatch'`
 
-Defined in: [packages/core/src/app/app.ts:169](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L169)
+Defined in: [packages/core/src/app/app.ts:175](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L175)
 
 `ctx.bag` 里 [DispatchResult](app.md#dispatchresult) 的键——dispatch 步写入，业务读 wsUrl / cdnUrl / 服务器时间。
 
@@ -569,7 +583,7 @@ Defined in: [packages/core/src/app/app.ts:169](https://hlgit.5518game.com/luohao
 
 > **abortLaunch**(`failure`): `never`
 
-Defined in: [packages/core/src/app/app.ts:184](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L184)
+Defined in: [packages/core/src/app/app.ts:190](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L190)
 
 步骤主动中止启动并指定失败分类。
 用**结构标记**而非自定义 Error 子类——跨 bundle `instanceof` 不可靠（ADR-0001）。
@@ -590,7 +604,7 @@ Defined in: [packages/core/src/app/app.ts:184](https://hlgit.5518game.com/luohao
 
 > **createApp**(`config`, `opts`?): [`App`](app.md#app)
 
-Defined in: [packages/core/src/app/app.ts:395](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L395)
+Defined in: [packages/core/src/app/app.ts:404](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L404)
 
 #### Parameters
 
@@ -618,7 +632,7 @@ readonly [`LaunchStep`](app.md#launchstep)[]
 
 > **defaultLaunchSteps**(`deps`?): readonly [`LaunchStep`](app.md#launchstep)[]
 
-Defined in: [packages/core/src/app/app.ts:240](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L240)
+Defined in: [packages/core/src/app/app.ts:246](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L246)
 
 kit 的默认启动序列。项目可整体替换，或取本函数结果再插队自己的步骤（登录 / SDK / 公告）。
 
@@ -638,7 +652,7 @@ readonly [`LaunchStep`](app.md#launchstep)[]
 
 > **getApp**(): [`App`](app.md#app)
 
-Defined in: [packages/core/src/app/app.ts:463](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L463)
+Defined in: [packages/core/src/app/app.ts:472](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/app/app.ts#L472)
 
 #### Returns
 

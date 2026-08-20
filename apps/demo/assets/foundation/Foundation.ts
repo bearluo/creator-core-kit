@@ -14,7 +14,7 @@ const { ccclass } = _decorator;
  *
  * | 层 | 内容 | 换它要 |
  * |---|---|---|
- * | ① AOT | 引擎 + `@cck/core` + `@cck/engine` + `assets/boot/` | **发新包、重启** |
+ * | ① AOT | 引擎 + `@cck/core` + `@cck/engine` + `assets/boot/` | **热更、重启**（引擎指纹变才发包） |
  * | ② 地基（本 bundle） | 协议 / 登录 / 认证 / 网关搬家 / 模块清单 / 模块契约 / 跨模块事件 | **热更，不重启** |
  * | ③ 模块 | `assets/modules/*` | 按需 load / release |
  *

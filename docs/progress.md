@@ -190,6 +190,103 @@ core +3 测试、tools +7，全仓 **662 全绿**，五门齐过。
 dispatcher 尚未按渠道下发（web 与 android 该是两个渠道，web 拿到的仍是 native 的 `cdnUrl` ——
 不影响版本表寻址，但 `wsUrl` / 版本闸 / 公告都该分渠道，需求已提给服务端）。
 
+### 2026-08-20 · native 内容寻址热更（md5）· 真机 e2e 四条全过
+
+native 一直不开 `md5Cache`，所有文件同名不同内容。三个后果都不是理论推演：CDN 只能 no-store
+（热更恰是「一批文件被大量设备同时拉」的场景，命中率结构性为 0）；发布是覆盖式的，上一版的字节
+在 CDN 上已不存在，**回滚必须重新出包**；即使重传上去也不生效——引擎默认 `cmpVersion` 把「远端号
+更小」判成本地已最新，**静默跳过**。
+
+ADR-0013 当初否决 native 开 md5，理由是引用链会把「改一个模块」传导成「必须发整包」。实测推翻了
+这个前提的关键一环：**只要客户端不吃 `settings.bundleVers`、改吃显式版本，模块改动就不再传导**——
+客户端手上那套 `main.js`/`application.js`/`settings.json` 保持自洽即可，它们描述的是包内那份 AOT，
+本来就该跟 APK 走。
+
+**版本从 bundle 自己的 manifest 反推，不引入第二张表**（[[bundle-version]]）：`<bundle>.manifest` 的
+asset key 里就写着 `assets/<b>/index.<md5>.js`，而 `AssetsManagerEx` 更新成功后
+`_localManifest = _remoteManifest`——更新刚跑完，manifest 就是这个 bundle 内容的权威描述，与刚落盘的
+字节严格同步。于是 native 不必配 `versionUrl`、不必拼 dispatcher 的 `cdnUrl`、不必防版本表被缓存。
+`BundleManager` 的版本解析随之挪到 `ensureLatest` **之后**：
+`opts.version ?? updater.versionOf?.(name) ?? versions[name]`——一行覆盖 native 与 web 两条路。
+
+**这两件事必须一次做完**。改造前跑过一次「只开 md5 不改客户端」，真机拿到了活样本：日志报
+`bundle 'foundation' 更新 2/2 文件`、设备上确实躺着 54KB 真代码，**而那 54KB 从头到尾没被执行过**
+——包内 `bundleVers.foundation` 写死的是出包那天的 md5，引擎按它去取，名字对不上就静默回落包内那份，
+不报错。「热更报成功、代码不生效、不报错」比现在更糟。
+
+**base manifest 丢掉 `src/**` 与 AOT 包**（`cck-manifest --md5`）：它们的引用者
+`main.js`/`application.<md5>.js` 在产物根、结构性不可热更，下发也没人读，只会白下几 MB 并让
+**每次发布 base 版本号必涨**。代价是 **AOT 层只能整包更新**——这与 `boot/` = AOT 的分层定义一致，
+要能热修的逻辑本就该放 `foundation`。两个正向副作用：app 戳落在 AOT 包里因此**不可能被热更改动**，
+版本闸的这一端不可伪造；`cc.<md5>.js` 不再进 base manifest，「热更换了 cc.js、与包内 `.so` 绑定
+签名不匹配」这条老风险随之消失。
+
+**CDN 改叠加式 + 每版归档 `releases/<version>/`**，回滚 = `cck-manifest rollback` 把归档那版的
+manifest 配一个**更大**的号发回根，内容文件一个都不重传。两条守卫都是真机换来的：
+
+- **别去注入 `setVersionCompareHandle`**。看起来「不等即更新」能修回滚——实则同一个 handle 还服务
+  `loadLocalManifest` 的 `versionGreater`（包内 manifest 比缓存新 → 清旧热更缓存），改了会让
+  **新装的 APK 永远被上一版缓存盖住**。查 C++ 时才发现，已在代码里留注释挡住。
+- **回滚只能动内容真变了的包**。第一版实现给归档里全部 28 份 manifest 无脑涨号，真机当场 SIGSEGV
+  （`AsyncTaskPool` worker → `updateSucceed` → `dispatchUpdateEvent` → JS）：没变的包被判
+  NEW_VERSION 而 `genDiff` 是空表。与 `--prev` 同一条不变式——**「版本号变了」必须蕴含「内容真变了」**。
+
+**APK 覆盖安装 / 降级安装**另起一道冷启动对账（`resetCcHotUpdateOnAppChange()`，须早于 kit 装配）：
+主包 md5 变了就把 `cck-remote-asset/` + `cck-bundle-asset/` + `<base>_temp/` 整个删掉。引擎自带的
+`versionGreater` 只在版本号纪律成立时有效——装了**更旧**的包时包内号更小、缓存反而接管，而
+`coreApiHash` 闸此时不会跑（缓存 = 远端 → check 判 up-to-date → 不拉 sidecar）。少了这段，表现就是
+「装完新包启动报错，清数据才好」。判据用主包 md5 而非 `coreApiHash`：前者同步可取（app 戳要异步
+load，那时还没到），口径也更保守（`coreApiHash` 只描述 core 的 API 面，AOT 业务代码改了它不变）。
+
+**真机 e2e 四条全过**（Android 模拟器）：① md5 包冷启动到 `LoginView` + 长连接；② 改一行 foundation
+代码、**只传 CDN 不出 APK** → 重启后新代码真的生效（整条改造的判据），且只有 `foundation.manifest`
+涨到 1.0.1、`project.manifest` 原地不动（`--prev` 真正生效）；③ `rollback` 后回到旧代码、旧 md5
+文件被 `genDiff` 删掉；④ 覆盖安装 AOT 不同的 APK → 缓存被作废，第二次冷启动**不**误清。
+五道门全绿（全仓 708 passed）。决策见 [[adr-0016]]，提案封存于
+`docs/design/2026-08-20-native-md5-content-addressing-proposal.md`。
+**收尾两件（同日，未真机复验）**：① **base manifest 的 asset 表改为恒空** —— 先前 `--md5` 只滤
+`src/**` 与 AOT 包，剩下 `jsb-adapter/{engine,web}-adapter.js` 两条。实测确认它俩与 `libcocos.so`
+是同一次引擎构建的两半（`cc.25e81.js` 08-18 11:45 生成、`.so` 11:50，其后三次业务重建 md5 纹丝不动；
+`jsb-adapter/*` 停在 07-24 至今没变），机制上 `main.js` 里是裸名、热更目录盖得住，但换它不换 `.so`
+就崩在绑定层——「能更但绝不该更」，一并排除。② **引擎指纹闸**（`UpdateInfo.engineHash` /
+`AppInfo.engineHash`）：`coreApiHash` 只 hash `packages/core` 的 d.ts，换 Creator 版本或改引擎模块
+勾选时**一动不动**，于是老包会照单全收为新引擎编的 JS。判据取 `cc.<md5>.js` 的那段 md5——热更只
+下发 JS，要挡的正是「热更来的 JS 用了这个引擎没有的 API」，对应的就是 `cc.js` 的接口面；hash `.so`
+反而既要挑 ABI 又要分 debug/release、还读不出 JS API 面变没变。两端各自不可伪造：app 一端由 engine
+`engineHash()` 运行时从 SystemJS import map 取（那份 map 属结构性不可热更的一层），更新一端由 tools
+`readEngineHash(dataRoot)` 出包期从产物读、写进更新戳；**app 戳文件里没有这个字段**——它生成于
+Creator 构建之前，那时产物还不存在。经 `appModule` 的 `deps.engineHash` 注入，接入方零配置。
+真实产物验证 `engineHash=25e81`；全仓 **729 passed**（+21），五门全绿。
+**收尾第三件：资源归属漂移（同日，未真机复验）**——查 A/B 分层时顺手翻 `cc.config`，发现 6 个皮包
+早就是 `deps:["main"]` + `redirect`。根因是 Creator 把**被多包引用的资源判给优先级最高的引用者**
+（`resources` 8 > `main` 7 > `foundation` 6 > `shared` 5 > 皮包 1–2），其余包降级成「去那个包拿」。
+**归属会漂，而且漂了是静默的**：构建全绿、manifest 正常、热更下发成功，运行时才在 `redirect` 指向
+的包里找不到资源。产物里实测到两种漂法：① `boot`（→`main`）与 6 个皮包共用 `default_btn_normal`
+→ 图归 `main`。`main` 只随 APK 换，热更下去的皮包引用旧 APK 的 `main` 里没有的 uuid 就炸，**而改的
+还不是那个皮包、是 boot**；② 把 boot 的引用挪走后重建，两个马甲的地基皮包同为 priority 2 抢同一张图，
+Creator 挑了 `skin-base-foundation` → `skin-vest-lobby`/`skin-vest-mail` 依赖 **base 马甲**的包，
+马甲隔离直接破掉（这条推翻了「可热更包之间怎么漂都无所谓」的中途判断）。**修法**（先试了「把内置图
+复制进 `resources` + 全工程改引用副本」，被否——多出副本字节、要改 8 个 prefab 的 29 处引用）：
+**钉子 prefab** `assets/resources/internal-pin.prefab`，用到的每个内置资源在里面挂一个节点引用一次。
+`resources` priority 8 是工程内最高的，归属被它吸走后**谁也抢不动**，而**工程各处照常引用
+`db://internal`、一行都不用改**，也不产生副本字节。prefab 是手写的（照 `LaunchOverlay.prefab` 的
+`cc.PrefabInfo`/`cc.CompPrefabInfo` schema 逐字段对齐 —— 裸序列化 Node 缺 PrefabInfo 会让编辑器一打开
+就崩，见记忆 `cocos-prefab-authoring`），生成脚本带自检：`__id__` 越界、节点缺 `_prefab`、组件缺
+`__prefab`、`fileId` 重复各查一遍。重建后 `resources` 自有 7 项、`native/` 下是**原 internal uuid**
+的两张 png，`main` 从 8 项降到 3 项，**所有跨包依赖统一指向 `resources`**，跨马甲依赖清零。**两道闸**（tools 新增 `bundle-deps.ts` + 模块文档）：**产物期** `collectBundleDeps` /
+`findDepViolations`，`cck-manifest --split` 写 manifest **之前**扫 `deps`/`redirect`，指向共享仓以外
+的任何包一律 `exit 1`（`--allow-deps` 供接入方改仓名）；**源码期** `scanAssetRefs` /
+`findUnpinnedRefs` + 新子命令 `cck-manifest check-pins --assets <目录>`（本仓第六道门
+`pnpm check:pins`，**不用构建**）——`assets/` 下任何资产引用的 uuid 只要不属于本工程（没有对应
+`.meta`）就必须也被 `resources/` 引用一次。**两道缺一不可**：产物期漏「外部资源只被一个包引用」
+那一类（不产生 `deps`，当场看不出，等第二个包也用它才漂），源码期漏「工程自有资源在多个可热更包
+之间共用」那一类（uuid 不算外部）。「外部」用**「工程里没有对应 `.meta`」**判定而不是硬编码
+`db://internal`——uuid 里看不出来源，按归属反推既准又自动覆盖别的内置库。四面都验过：真产物 /
+真工程通过，造 `deps:["main"]` 的产物被拒，把钉子 prefab 挪走后 `check:pins` 报出 2 个 uuid + 8 处
+引用。规则写进 `CLAUDE.md`（① 内置资源在钉子 prefab 里钉一次 ② 共用资源只经 `resources` 这一个仓），
+门数从五道改成六道。全仓 **750 passed**（+21），六门全绿。
+
+
 ### 2026-08-18 · coreApiHash 版本闸在正式路径上真正激活
 
 戳的机制 2026-07-29 就落地了，但只在 **probes** 路径上通电；正式启动路径（`boot/Bootstrap.ts`）
@@ -225,6 +322,56 @@ CDN base 1.0.1，更新戳 hash 改 deadbeef0000 → 启动失败：needFullUpda
 另：ADR-0006 决策 6（`python -m http.server` + `10.0.2.2` 托管）已标作废并补写「修正」节 —— 它被
 ADR-0007 取代却一直以「已接受决策」形态躺着，被当可用配方翻出来过不止一次。
 
+### 2026-08-20 · 解开 AOT 热更（L1-A）· 真机 e2e 五条全过
+
+**AOT 层从「只能发 APK」变成「热更下发、重启生效」**，边界落到用户定的那条线上：**AOT 改动重启就
+生效，只有引擎指纹变才必须发 APK**。ADR-0016 决策 4 与它「AOT 只能整包更新」那条后果就此被
+[[adr-0017]] 取代，其余决策全部有效。
+
+起因是复查 0016 的理由：「下发了也没人读——引用 AOT 的 `main.js` 里写死的永远是出包那天的 md5 名」。
+这只对了一半。`main.js` 确实不可热更（它跑在搜索路径还原之前，还原本身就是它干的），但**它是我们
+自己的模板**（`build-templates/native/index.ejs`，Creator 3.8 官方覆盖点），那句
+`System.import('<%= applicationJs %>')` 是构建期插值、不是引擎硬编码，**而它执行时搜索路径已经还原
+完了**。名字写死是我们自己接受下来的，不是结构性的。
+
+**改法四处**。① `index.ejs` 改成读固定名指针 `src/cck-aot.json` 的 `application` 字段；读不到 / 不是
+合法 JSON / 指向的文件不存在（半更新）**一律退回包内烘的名字**，不抛——黑屏是最坏结果，退回还能
+起来、下一轮 check 会重下。指针**不复用 `project.manifest` 反推**：manifest 说「有哪些文件」、指针说
+「从哪进」，是两件事，且 `manifestFilename` 是可配项，接入方改了名启动就断。② `build.mjs` 在 Creator
+构建之后、gradle 之前写指针，并把产物**根上**的入口用新增的 `--files` 喂给 manifest（`dirs` 只遍历
+`src|assets|jsb-adapter`，够不着根）。③ `contentHashed` 语义翻转：base 从「恒空」变成「只丢
+`isEngineBound` 那几类」——`src/cocos-js/**`、`src/effect.bin`、`jsb-adapter/**`（与 `.so` 同一次引擎
+构建的两半）与 `src/system.bundle.*.js`、`src/polyfills.*.js`、`src/import-map*.json`（名字写死在
+`main.js` 里；`import-map` 还兼任引擎身份凭据，能热更就等于版本闸可伪造，**故意不解**）。
+④ 出包侧硬闸：`project.manifest` 里没有入口或没有指针 → 构建失败，否则就是「AOT 热更静默失效」
+（构建全绿、下发成功、玩家跑的还是旧代码）。
+
+**一处不改就会自噬**：「APK 换没换」的判据原先取运行时 `settings.bundleVers.main`。AOT 解锁后
+`settings` 自己也随热更走了，判据答的就从「APK 换没换」变成「跑的是哪一版 AOT」——每成功热更一次
+就翻一次，把刚下好的缓存当成「上一版 APK 攒的」整个删掉，下轮重下再删，**死循环**。改成读 `main.js`
+挂的 `window.__cckAotEntry`（构建期插值、属 L0、热更够不着），`packagedAotEntry()` → `aotStamp()`。
+
+**两处语义随之变**，都记进 ADR-0017：① **app 戳 `cck-app-compat.json` 从此可被热更改动**，它描述的是
+「当前跑的这套代码的身份」而非「这个 APK 的身份」——这是**必须**的，热更换掉 `chunks/bundle.js` 就是
+换掉了 core，戳若冻住，`coreApiHash` 闸会开始拒绝本来正确的模块更新；真正不可伪造的那一端是引擎
+指纹（运行时取自 SystemJS import map）。② `assets/{resources,internal}` 都留在 base：resources 是钉子仓
+（加一张内置图从此不用发 APK），internal 成本为零（引擎没变时逐字节相同、不产生 diff；引擎变了整个
+更新早被指纹闸拒成发 APK），留着只为让 `settings.bundleVers` 指向的目录一定在本地。
+
+**产物**：`project.manifest` 21 项（入口 + 指针 + settings + chunks + `assets/{main,resources,internal}`），
+`cocos-js|effect.bin|jsb-adapter|system.bundle|import-map|main.js` 泄漏 0 条。
+
+**真机 e2e 五条全过**（Android x86_64 模拟器，com.cck.demo）：① 干净装 v1 APK → `BUILD_TAG=v1`、
+LoginView + 长连接；② **改 boot 层一行、只传 CDN 不出 APK**（1.0.0→1.0.1）→ 下载 →
+`AOT 入口取热更版本: ./application.b827c.js` → 重启 → `BUILD_TAG=v2`，**这就是整条改造的判据**；
+③ 强杀后冷启动新 PID 仍 v2，且**没有**「热更缓存作废」——换源后的 `aotStamp` 不自噬（不改这条的话
+这一步就会把刚下好的缓存删掉）；④ 覆盖装 v2 APK → 作废一次（`AOT b827c`，两个存储根都删），第二次
+冷启动**不**再作废；⑤ 连续第二轮 AOT 热更（1.0.1→1.0.2，把标记那行删掉）→ 重启后 `BUILD_TAG` 不再
+打印，热更能删代码不只是加。全程无 FATAL / native signal。
+
+六门全绿（全仓 **762 passed**，+12）。提案 `docs/design/2026-08-20-aot-hotupdate-unlock-proposal.md`
+标已实施封存，决策见 [[adr-0017]]。
+
 ## 模块状态
 
 | 批次 | 模块 | 包 | 状态 | 设计文档 | commit |
@@ -246,12 +393,12 @@ ADR-0007 取代却一直以「已接受决策」形态躺着，被当可用配�
 | 2 设施 | AudioService（`IAudioService`） | core/engine | 已实现（core 半，24 测试, 覆盖 100%；BGM 单轨+双音效路径+三档音量/静音实时下发；**engine 半 `IAudioPlayer` cc.AudioSource 实现 + `ccAudioModule`，四门全绿，真机验证 DI 接入（`AUDIO_PLAYER registered`+playOneShot 不抛），真出声待 audioClip 资产**） | `packages/core/docs/modules/audio-service.md` | — |
 | 2 设施 | i18n 多语言 | core/engine | 已实现（core 半，18 测试, 覆盖 100%；**engine 半 `loadLocaleTable`+`setupLocalePersistence`，四门全绿，真机验证真加载翻译表 JSON（拍平+插值）**；字体切换随项目 onChange） | `packages/core/docs/modules/i18n.md` | — |
 | 2 设施 | ConfigTable（Excel→JSON） | core/tools/engine | 已实现（core 半，14 测试, 覆盖 100%；**engine 半 `loadTable`（JSON 经 AssetLoader 加载 → register），四门全绿，真机验证真加载配表数组**；Excel→JSON 走 tools） | `packages/core/docs/modules/config-table.md` | — |
-| 3 进阶 | HotUpdateService（线上热更统一入口） | core/engine | 已实现（core 半，25 测试, 覆盖 100%；统一状态机 + 版本兼容闸[钩子+安全默认] + 进度/重试；**engine 半 `native.AssetsManager` 后端 + `sys.isNative` 守门 `ccHotUpdateModule`，四门全绿，真机验证 web 守门 no-op + `check()=up-to-date`；**native 真更新全流程已真机 e2e 验证（真 Android APK：check→download→apply→restart，`BUILD_TAG` v1→v2，见 ADR-0006）**；出包期 manifest 生成/校验已由 tools `hot-update-manifest` 提供） | `packages/core/docs/modules/hotupdate-service.md` | — |
+| 3 进阶 | HotUpdateService（线上热更统一入口） | core/engine | 已实现（**native 走内容寻址**：`md5Cache` + 版本从 bundle 自己的 manifest 反推 + CDN 叠加式发布/归档回滚 + APK 覆盖安装作废旧缓存，见 [[adr-0016]]；**AOT 层经固定名指针 `src/cck-aot.json` 可热更、重启生效，只有引擎指纹变才发 APK，真机 e2e 五条全过，见 [[adr-0017]]**；core 半，25 测试, 覆盖 100%；统一状态机 + 版本兼容闸[钩子+安全默认] + 进度/重试；**engine 半 `native.AssetsManager` 后端 + `sys.isNative` 守门 `ccHotUpdateModule`，四门全绿，真机验证 web 守门 no-op + `check()=up-to-date`；**native 真更新全流程已真机 e2e 验证（真 Android APK：check→download→apply→restart，`BUILD_TAG` v1→v2，见 ADR-0006）**；出包期 manifest 生成/校验已由 tools `hot-update-manifest` 提供） | `packages/core/docs/modules/hotupdate-service.md` | — |
 | 3 进阶 | Network / 协议层（`INetwork`） | core/engine | 已实现（core 半，28 测试, 覆盖 100%；连接状态机+请求关联[seq 经 codec]+自动重连[退避]+心跳+推送路由，调度注入 ITimer；**engine 半 `createWebSocketSocket` + `ccNetworkModule`（Web/native WebSocket，重连 identity 卫），四门全绿，真机 gameView 验证 `NETWORK_SOCKET registered=true` + 真 echo 端到端往返 OK（连 jmalloc/echo-server，request/seq 回显闭环）**） | `packages/core/docs/modules/network.md` | — |
 | 3 进阶 | ECS 扩展（bitECS 接入范例，不进 core） | ecs-bitecs | 已实现（pin `bitecs@0.3.40`；`export * from 'bitecs'` 全套 + 薄 kit 胶水 `createEcsWorld`/`createEcsRunner`[秒制 `world.time` + `tick(dt)` 每帧驱动接缝]；6 测试全绿含**ITimer.onFrame 驱动 runner** 的 kit 接入证明；四门全绿[全仓 369]、`dist` 33KB 自包含[tsup noExternal 打进 bitecs]；**demo cc 渲染场景[大量 agent 移动]留后续**——需玩法 + 真机验证，本包纯逻辑已 node 全测不阻塞） | `packages/ecs-bitecs/docs/modules/ecs.md` | — |
 | 3 进阶 | ECS spatial（寻路/碰撞/群体避让 高性能 system 组） | ecs-bitecs | 已实现（5 system + 4 规范组件：`SpatialHash`/`FlowField`/`seek`/`flowFollow`/`separation`/`collision`/`movement`/`spatialIndex`；全 hand-roll 零第三方[不上物理引擎/navmesh/ORCA/yuka]，纯 SoA·node 可测；**ORCA 不做**[单向 swarm 无对穿礼让]；10 测试全绿[结构+系统+集成 pipeline]，四门全绿[全仓 379]；**独立 Cocos Creator 工程渲染验证留下一步**） | `packages/ecs-bitecs/docs/modules/spatial.md` | — |
 | 3 进阶 | reactive（MVVM 数据绑定：响应式原语 + 绑 cc 节点） | core/engine | 已实现（core 半 10 测试全绿[signal/computed/effect/untracked，自动依赖追踪+幂等 setter+动态依赖+清理+菱形收敛]；engine 半 `bindText`/`bindProp`/`bindEditBox`/`bindToggle`+`BindingScope`，四门全绿[全仓 363]；**engine 半真机 gameView 预览验证 PASS**[代码化 UI smoke：改 signal→Label/active 自动刷，dispose 后冻结]） | `packages/core/docs/modules/reactive.md` | — |
 | 渲染骨架 | camera-rig（kit 常驻相机组）+ resolution（横竖屏锁短边适配） | engine | 已实现（纯决策逻辑 `render-policy.ts` **零 cc**、20 测试全绿[含 `computeCameraCenter` 3 条回归]；cc 薄壳 `camera-rig.ts`/`resolution.ts` 按 ADR-0002 决策 3 不进 mock，靠 `tsc -b` 官方真类型 + demo 预览验证；四门全绿[全仓 410]；**apps/demo Game View 预览实测 0 error**：跨 `loadScene` 常驻渲染 / 场景内 `RenderRoot2D` 被常驻相机按 layer 渲染 / `Widget` 满屏锚定 三项 PASS，**转屏与 `claimClear` 两项待真机**） | `packages/engine/docs/modules/camera-rig.md` | — |
-| 工具 | hot-update-manifest（热更清单生成/校验） | tools | 已实现（8 测试 + bin 冒烟；`buildManifest`/`toVersionManifest`/`writeManifests`/`verifyManifest` + CLI `cck-manifest`，格式对齐 Cocos 官方 `version_generator.js`，纯 node 零 cc，四门全绿；remote-assets 本地托管走 filebrowser CDN） | `packages/tools/docs/modules/hot-update-manifest.md` | — |
+| 工具 | hot-update-manifest（热更清单生成/校验） | tools | 已实现（`buildManifest`/`toVersionManifest`/`writeManifests`/`verifyManifest`/**`buildSplitManifests`（`--split`/`--prev`/`--md5`）**/**`archiveManifests`+`rollbackManifests`（`archive`/`rollback` 子命令，回滚只动内容真变了的包）** + CLI `cck-manifest`，格式对齐 Cocos 官方 `version_generator.js`，纯 node 零 cc，四门全绿；remote-assets 本地托管走 filebrowser CDN） | `packages/tools/docs/modules/hot-update-manifest.md` | — |
 | 工具 | config-excel（Excel→JSON 配表转换） | tools | 已实现（9 测试 + bin 冒烟；`rowsToTable`(纯)/`parseWorkbook`/`excelToJson` + CLI `cck-excel`，4 行表头约定[名/类型/注释/数据]，exceljs 读[本仓首个依赖，tsup external]，输出裸行数组对齐 config-loader；四门全绿） | `packages/tools/docs/modules/config-excel.md` | — |
 | 工具 | compat-stamp（出包期打戳/校验） | tools | 已实现（10 测试 + 真 bin 冒烟；`computeCoreApiHash`(剥注释 d.ts 表面 hash)/`writeStamp`/`verifyCompat` + CLI `cck-manifest stamp`/`verify-compat`，纯 node 零 cc，四门全绿；首版 hash 级）；**运行时读入已闭环**（app 戳→AppInfo、更新戳 sidecar→UpdateInfo，真机 e2e 兼容放行+不兼容拦截双向 PASS，闸激活，ADR-0007） | `packages/tools/docs/modules/compat-stamp.md` | — |

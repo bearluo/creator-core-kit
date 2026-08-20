@@ -2,6 +2,7 @@ import { sys } from 'cc';
 import { createApp, getHotUpdateService, APP, BUNDLE_RELOADER } from '@cck/core';
 import type { AppConfig, IBundleReloader, KitModule, LaunchStep } from '@cck/core';
 import { invalidateBundleScripts } from './bundle-source';
+import { engineHash } from './hotupdate-paths';
 
 /**
  * App 的「引擎半」：接上两件平台相关的事——**怎么重启**、**能不能让 bundle 脚本失效**——
@@ -18,7 +19,10 @@ export function appModule(config: AppConfig, opts?: { steps?: readonly LaunchSte
       if (ownsReloader) {
         ctx.container.register(BUNDLE_RELOADER, { useValue: createCcBundleReloader() });
       }
-      const app = createApp(config, { steps: opts?.steps, deps: { restart: platformRestart } });
+      const app = createApp(config, {
+        steps: opts?.steps,
+        deps: { restart: platformRestart, engineHash },
+      });
       ctx.container.register(APP, { useValue: app });
     },
     /**

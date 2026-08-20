@@ -11,7 +11,7 @@
  * 见 packages/core/docs/modules/hotupdate-service.md Open Questions #2、[[adr-0001]]。
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -26,6 +26,12 @@ export interface CompatStamp {
   minAppVersion?: string;
   /** core 公共 API 表面 hash。 */
   coreApiHash: string;
+  /**
+   * 引擎内容指纹（`cc.<md5>.js` 的那段 md5，见 {@link readEngineHash}）。只有更新戳带得上
+   * —— app 戳要进包、在 Creator 构建**之前**就得写好，那时产物还不存在。客户端那一端由
+   * engine 的 `engineHash()` 运行时取。
+   */
+  engineHash?: string;
 }
 
 /** 出包期校验结果（对齐 core GateResult 语义）。 */
@@ -60,6 +66,32 @@ export function computeCoreApiHash(dtsPathOrDir: string): string {
   return hashApiSurface(readFileSync(file, 'utf8'));
 }
 
+/**
+ * 从 native 构建产物读**引擎内容指纹**：`<root>/src/import-map*.json` 的 `imports.cc`
+ * （内容就一行 `"cc": "./cocos-js/cc.<md5>.js"`）→ `<md5>`。
+ *
+ * 它与 `libcocos.so` 是同一次引擎构建的两半，业务代码怎么改都不动它 —— 所以它是「这个包的引擎
+ * 身份」，喂 core 版本闸的 `UpdateInfo.engineHash`，挡住「热更来的 JS 配上另一个引擎」。
+ * 没开 `md5Cache`、或产物里没有 import-map → `undefined`（闸休眠，不误判）。
+ */
+export function readEngineHash(dataRoot: string): string | undefined {
+  const dir = join(dataRoot, 'src');
+  if (!existsSync(dir)) return undefined;
+  const f = readdirSync(dir).find((x) => x.startsWith('import-map') && x.endsWith('.json'));
+  if (f === undefined) return undefined;
+  let url: unknown;
+  try {
+    url = (JSON.parse(readFileSync(join(dir, f), 'utf8') || '{}') as { imports?: Record<string, unknown> }).imports?.cc;
+  } catch {
+    return undefined;
+  }
+  if (typeof url !== 'string') return undefined;
+  const file = url.split('?')[0].split('#')[0].split('/').pop() ?? '';
+  if (!file.startsWith('cc.') || !file.endsWith('.js')) return undefined;
+  const v = file.slice('cc.'.length, -'.js'.length);
+  return v !== '' && !v.includes('.') ? v : undefined;
+}
+
 /** 造兼容戳并落盘（JSON）。 */
 export function writeStamp(outPath: string, stamp: CompatStamp): CompatStamp {
   writeFileSync(outPath, JSON.stringify(stamp, null, 2));
@@ -86,6 +118,14 @@ export function verifyCompat(app: CompatStamp, update: CompatStamp): CompatResul
     return {
       ok: false,
       reason: `core API 表面不一致（app ${app.coreApiHash} ≠ 更新 ${update.coreApiHash}），需整包更新`,
+    };
+  }
+  // 引擎指纹**两端都有才比**（不同于 coreApiHash 的无条件比对）：app 戳生成在 Creator 构建之前、
+  // 结构性拿不到本次产物的指纹，只有拿上一版的**更新戳**当 app 参数时这一端才有值。
+  if (app.engineHash && update.engineHash && app.engineHash !== update.engineHash) {
+    return {
+      ok: false,
+      reason: `引擎不一致（app ${app.engineHash} ≠ 更新 ${update.engineHash}），热更换不了引擎，需整包更新`,
     };
   }
   return { ok: true };

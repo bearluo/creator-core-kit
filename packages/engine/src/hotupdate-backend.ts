@@ -9,12 +9,16 @@ import type {
   UpdateInfo,
 } from '@cck/core';
 import {
+  aotStamp,
   bundleManifestName,
   bundleStoragePath,
   bundleVersionName,
+  manifestAssetKeys,
   normalizeSearchPaths,
+  packagedAotEntry,
   rebaseManifest,
   retiredBundleDirs,
+  searchPathsWithout,
   seedBundleManifest,
 } from './hotupdate-paths';
 
@@ -51,7 +55,7 @@ export interface CcHotUpdateOptions {
   searchPathsKey?: string;
   /**
    * 更新戳 sidecar 文件名（相对远程 packageUrl，由 tools 的 `cck-manifest stamp` 产出）。
-   * 设置后 check() 发现新版本时拉取它，把 `coreApiHash`/`minAppVersion` 并进 `UpdateInfo` → **激活版本闸**
+   * 设置后 check() 发现新版本时拉取它，把 `coreApiHash`/`engineHash`/`minAppVersion` 并进 `UpdateInfo` → **激活版本闸**
    * （否则远端无这俩字段，闸单边缺失恒放行）。默认不拉。见 [[compat-stamp]] / hotupdate-service.md。
    */
   compatFilename?: string;
@@ -93,9 +97,9 @@ function fetchText(url: string, what: string): Promise<string> {
  * 拉更新戳 sidecar。非 2xx / 解析失败 / 无 XHR → reject，由调用方降级为「无兼容字段」
  * （闸放行，不因 sidecar 缺失阻断正常热更）。
  */
-function fetchCompat(url: string): Promise<{ minAppVersion?: string; coreApiHash?: string }> {
+function fetchCompat(url: string): Promise<{ minAppVersion?: string; coreApiHash?: string; engineHash?: string }> {
   return fetchText(url, 'compat sidecar').then(
-    (t) => JSON.parse(t) as { minAppVersion?: string; coreApiHash?: string },
+    (t) => JSON.parse(t) as { minAppVersion?: string; coreApiHash?: string; engineHash?: string },
   );
 }
 
@@ -146,6 +150,25 @@ function startCheck(
     });
 }
 
+/**
+ * 本地 manifest 的 asset key 列表 —— 缓存那份（`AssetsManagerEx` 更新成功后落的
+ * `<storagePath>/project.manifest`，`MANIFEST_FILENAME` 是宏，base 与每个 bundle 都叫这个名）
+ * 优先，没有就读包内那份。供 core 反推「该加载哪个 md5」（`bundleVersionFromAssetKeys`）。
+ *
+ * 读不到 / 不是 JSON → 返回空数组，由 core 回落到别的版本来源（解析那半在
+ * {@link manifestAssetKeys}，按 ADR-0002「能算清的先挪到纯函数里测掉」）。
+ */
+function readAssetKeys(storagePath: string, packagedName: string): readonly string[] {
+  const cached = `${storagePath}project.manifest`;
+  // 裸文件名走 fileUtils 搜索路径 → 命中包内那份（缓存那份在 storagePath 下叫 project.manifest，
+  // 名字不同，不会被裸名误命中）。
+  const file = native.fileUtils.isFileExist(cached) ? cached : packagedName;
+  if (!native.fileUtils.isFileExist(file)) return [];
+  const keys = manifestAssetKeys(native.fileUtils.getStringFromFile(file));
+  if (keys.length === 0) console.warn(`[cck] ${file} 里没读到 assets，版本回落包内 bundleVers`);
+  return keys;
+}
+
 /** 一个更新目标（base 或某个 bundle）的全部装配参数。 */
 interface BackendSpec {
   /** 本地 manifest 路径；`seed` 给了则忽略。 */
@@ -172,6 +195,13 @@ interface BackendSpec {
 function createBackend(spec: BackendSpec): IHotUpdateBackend {
   const { manifestUrl, storagePath, persistKey, compatFilename, seed, remote } = spec;
   const am = native.AssetsManager.create(seed === undefined ? manifestUrl : '', storagePath);
+  // ⚠️ **别注入 `setVersionCompareHandle`**（比如「不等即更新」，为了让回滚——版本号回退——
+  // 能触发下载）。同一个 handle 还服务另一处完全不同的语义：`loadLocalManifest` 用
+  // `versionGreater(cached, handle) > 0` 判断「包内 manifest 比缓存新 → `removeDirectory`
+  // 清掉旧热更缓存」（`AssetsManagerEx.cpp:213/287`）。一个恒不返回正数的 handle 会让
+  // **新装的 APK 永远被上一版的热更缓存盖住**，比它要修的回滚问题严重得多。
+  // 回滚的正解是发布侧约定「版本号只增」：把旧 manifest 的 version 改成一个更大的号再发
+  // （内容仍指向旧 md5 文件，内容寻址下它们还躺在 CDN 上）。见 tools 的 `rollback` 子命令。
   if (seed !== undefined) am.loadLocalManifest(new native.Manifest(seed, storagePath), storagePath);
 
   // AssetsManager 只有单个事件回调；check 与 download 各自把当前分派器挂到 handler，用完即卸。
@@ -194,7 +224,7 @@ function createBackend(spec: BackendSpec): IHotUpdateBackend {
                 version: am.getRemoteManifest().getVersion(),
                 totalBytes: am.getTotalBytes(),
               };
-              // 有 compatFilename → 拉更新戳 sidecar 把 coreApiHash/minAppVersion 并进 info（激活闸）；
+              // 有 compatFilename → 拉更新戳 sidecar 把 coreApiHash/engineHash/minAppVersion 并进 info（激活闸）；
               // 拉不到就用裸 info（闸放行），不因兼容戳缺失阻断正常热更。
               if (compatFilename) {
                 const url = am.getRemoteManifest().getPackageUrl() + compatFilename;
@@ -202,7 +232,12 @@ function createBackend(spec: BackendSpec): IHotUpdateBackend {
                   (c) =>
                     resolve({
                       status: 'new-version',
-                      info: { ...info, minAppVersion: c.minAppVersion, coreApiHash: c.coreApiHash },
+                      info: {
+                        ...info,
+                        minAppVersion: c.minAppVersion,
+                        coreApiHash: c.coreApiHash,
+                        engineHash: c.engineHash,
+                      },
                     }),
                   () => resolve({ status: 'new-version', info }),
                 );
@@ -270,6 +305,8 @@ function createBackend(spec: BackendSpec): IHotUpdateBackend {
     restart(): void {
       void game.restart();
     },
+
+    assetKeys: () => readAssetKeys(storagePath, manifestUrl),
   };
 }
 
@@ -351,6 +388,60 @@ export function createCcBundleBackendFactory(opts: CcHotUpdateOptions): HotUpdat
       remote,
     });
   };
+}
+
+/**
+ * **APK 换了就把热更缓存整个作废**，返回删掉的目录（没换 / 判不了 / 非原生 → 空数组）。
+ *
+ * ## 为什么需要它
+ *
+ * 覆盖安装、降级安装、换渠道包之后，设备上还躺着上一版 APK 攒下的热更内容。引擎自己有一道
+ * 防线——`loadLocalManifest` 用 `versionGreater(cached)` 比「包内 manifest」与「缓存 manifest」，
+ * 包内更新就 `removeDirectory(storagePath)`。但它**只在版本号纪律成立时有效**：
+ *
+ * - 用户装了**更旧**的包（应用商店回滚、手动装历史 apk）→ 包内版本号更小 → **缓存接管** →
+ *   旧 AOT 配着为新 AOT 编译的模块代码跑；
+ * - `--prev` 指错目录、或出包时压根没跑 `--manifest` → 包内号可能低于线上。
+ *
+ * 而 `coreApiHash` 闸救不了这一场：缓存接管后 `check()` 判 `ALREADY_UP_TO_DATE`（缓存 = 远端），
+ * 根本不会去拉更新戳 sidecar，闸不跑。表现就是「装完新包启动报错」，且清数据才好得了。
+ *
+ * ## 判据与时机
+ *
+ * 判据是**包内 AOT 入口的 md5**（见 {@link aotStamp}）。**必须在 kit 装配之前调**——`AssetsManagerEx`
+ * 在 `create()` 里就会 `prependSearchPaths`，晚了就是在删一个已经挂进搜索链的目录。
+ *
+ * ⚠️ 判据取的是 `main.js` 烘进来的那个名字，**不是**运行时的 `settings.bundleVers` —— AOT 现在
+ * 可热更，后者每更新一次就翻一次，会把刚下好的缓存当成「上一版 APK 的」删掉，死循环。
+ *
+ * ⚠️ 产物没开 `md5Cache` 时入口就叫 `application.js`、抠不出 md5 → 判不了 → **原样不动**
+ * （不是「当作换了」，那会让每次冷启动都全量重下）。
+ */
+export function resetCcHotUpdateOnAppChange(
+  opts?: Pick<CcHotUpdateOptions, 'storagePath' | 'bundleStorageRoot' | 'searchPathsKey'> & {
+    /** 记上一次 AOT 指纹的 localStorage 键。默认 `'cck.aotStamp'`。 */
+    stampKey?: string;
+  },
+): string[] {
+  if (!sys.isNative) return [];
+  const stamp = aotStamp(packagedAotEntry());
+  if (stamp === undefined) return [];
+  const key = opts?.stampKey ?? 'cck.aotStamp';
+  if (sys.localStorage.getItem(key) === stamp) return [];
+
+  const base = opts?.storagePath ?? `${native.fileUtils.getWritablePath()}cck-remote-asset/`;
+  const root = bundleRoot(opts ?? {});
+  const removed: string[] = [];
+  // `<dir>_temp` 是 AssetsManagerEx 的断点续传目录，与 storagePath **平级**（不在它下面），
+  // 所以要单独删——留着会让下一轮更新从一个属于旧 APK 的半成品接着续。
+  for (const d of [base, root, `${base.replace(/\/$/, '')}_temp/`]) {
+    if (native.fileUtils.isDirectoryExist(d) && native.fileUtils.removeDirectory(d)) removed.push(d);
+  }
+  native.fileUtils.setSearchPaths(searchPathsWithout(native.fileUtils.getSearchPaths(), [base, root]));
+  sys.localStorage.removeItem(opts?.searchPathsKey ?? 'HotUpdateSearchPaths');
+  sys.localStorage.setItem(key, stamp);
+  console.log(`[cck] APK 换了（AOT ${stamp}）→ 热更缓存作废：${removed.join(' ') || '(本来就没有)'}`);
+  return removed;
 }
 
 /**

@@ -93,15 +93,25 @@ export function createBundleManager(opts?: BundleManagerOptions): BundleManager 
         return handleOf(name, existing);
       }
 
-      const version = loadOpts?.version ?? versions[name];
-      const entry: Entry = { version, refCount: 1 };
+      const entry: Entry = { version: loadOpts?.version ?? versions[name], refCount: 1 };
       const p = (async (): Promise<void> => {
         // 加载前先把该 bundle 更到最新。远程 url 加载不走 manifest 热更，跳过。
         // **更新失败原样抛**：不吞、不退回包内版本——掩盖发布事故的代价远大于让这次加载失败
         // （启动期会变成启动失败页·可重试，运行期变成打开模块失败）。见 BundleUpdater 契约。
         const updater = url === undefined ? resolveUpdater() : undefined;
-        if (updater) await updater.ensureLatest(name);
-        await source.loadBundle(name, { version, onProgress: loadOpts?.onProgress, url });
+        if (updater) {
+          await updater.ensureLatest(name);
+          // 版本**在更新之后**才定：native 内容寻址产物里入口叫 `index.<md5>.js`，而这个 md5
+          // 只有刚更新完的那份 manifest 知道（包内 settings.bundleVers 写死的是出包那天的值，
+          // 拿它去取会 404 后**静默回落包内旧代码**——热更报成功、代码没生效、还不报错）。
+          // 三个来源互不重叠：调用方显式指定最高（逃生口）；native 用 manifest 反推；web 用版本表。
+          entry.version = loadOpts?.version ?? updater.versionOf?.(name) ?? versions[name];
+        }
+        await source.loadBundle(name, {
+          version: entry.version,
+          onProgress: loadOpts?.onProgress,
+          url,
+        });
       })();
       entry.inflight = p;
       table.set(name, entry);

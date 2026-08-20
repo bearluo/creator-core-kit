@@ -1,6 +1,7 @@
 import type { LaunchFailure } from '../app';
 import { createToken, getRootContainer, type Token } from '../di';
 import { getLogger, type ILogger } from '../logging';
+import { bundleVersionFromAssetKeys } from './bundle-version';
 import {
   HOTUPDATE_BACKEND_FACTORY,
   type HotUpdateBackendFactory,
@@ -34,6 +35,17 @@ export interface BundleUpdater {
    * 唯一的 no-op 是**平台没注册热更后端**（web / 编辑器）：那不是失败，是这条路不存在。
    */
   ensureLatest(bundle: string): Promise<void>;
+  /**
+   * 该 bundle 更新完之后**该按哪个版本加载**（native 内容寻址产物 = `index.<md5>.js` 的 md5）。
+   *
+   * 只有 {@link ensureLatest} 成功跑完才有值；之前、失败后、以及后端不认 manifest（web / 空后端）
+   * 一律 `undefined` —— 调用方回落到别的版本来源。同步取值，因为 `BundleManager` 正是在
+   * `await ensureLatest(...)` 的下一行用它。
+   *
+   * 可选：项目可以 register 自己的 `BundleUpdater`（见 {@link BUNDLE_UPDATER}），别为这个
+   * 后加的能力把它们全判成不合法——不实现就等于「我不知道版本」，调用方回落。
+   */
+  versionOf?(bundle: string): string | undefined;
 }
 
 export interface BundleUpdaterOptions {
@@ -54,18 +66,29 @@ export function createBundleUpdater(opts?: BundleUpdaterOptions): BundleUpdater 
   const logger = opts?.logger ?? getLogger('BundleUpdater');
   // 一 bundle 一次；存 promise 而非布尔，并发天然共享、跑完也不再重来。
   const done = new Map<string, Promise<void>>();
+  const versions = new Map<string, string>();
 
   async function run(bundle: string): Promise<void> {
     if (!factory) return; // 平台没有热更后端（web / 编辑器）——不是失败，是没这条路
     // 造后端就抛通常是配置错（native 侧 manifest 路径不对），与「更新失败」同罪，一样不许掩盖
+    const backend = factory(bundle);
+    // 无论走哪条分支返回，都把版本记下：内容寻址产物里「加载哪个 md5」只有 manifest 知道，
+    // 而 up-to-date 那条路同样需要它——包内 settings.bundleVers 只在从没更新过时才碰巧对得上。
+    const remember = (): void => {
+      const v = backend.assetKeys ? bundleVersionFromAssetKeys(bundle, backend.assetKeys()) : undefined;
+      if (v !== undefined) versions.set(bundle, v);
+    };
     const hu = createHotUpdateService({
-      backend: factory(bundle),
+      backend,
       gate: opts?.gate,
       app: opts?.app,
       logger,
     });
     const checked = await hu.check();
-    if (checked.kind === 'up-to-date') return;
+    if (checked.kind === 'up-to-date') {
+      remember();
+      return;
+    }
     if (checked.kind === 'error') throw checked.error;
     if (checked.kind === 'rejected') {
       // 结构标记而非 Error 子类：跨 bundle instanceof 不可靠（ADR-0001）。app 的 classify 只认这个字段。
@@ -76,6 +99,7 @@ export function createBundleUpdater(opts?: BundleUpdaterOptions): BundleUpdater 
     const updated = await hu.update((p) => opts?.onProgress?.(bundle, p));
     if (updated.kind === 'failed') throw updated.error;
     if (updated.kind !== 'ready') throw new Error(`bundle '${bundle}' 更新未就绪（${updated.kind}）`);
+    remember();
   }
 
   return {
@@ -84,9 +108,17 @@ export function createBundleUpdater(opts?: BundleUpdaterOptions): BundleUpdater 
       if (!p) {
         done.set(bundle, (p = run(bundle)));
         // 失败的那次别留在表里：否则「重试」拿到的是同一个已 reject 的 promise，永远重试不动
-        void p.catch(() => done.delete(bundle));
+        void p.catch(() => {
+          done.delete(bundle);
+          // 版本一并作废：留着会让重试后的 load 拿旧 md5 去取一个可能已被 genDiff 删掉的文件。
+          versions.delete(bundle);
+        });
       }
       return p;
+    },
+
+    versionOf(bundle): string | undefined {
+      return versions.get(bundle);
     },
   };
 }

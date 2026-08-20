@@ -10,7 +10,7 @@
 
 ### AppInfo
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:14](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L14)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L22)
 
 本地（当前安装的客户端）信息，构建期打戳。
 
@@ -20,7 +20,7 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:14](https://hlgit.5518g
 
 > **appVersion**: `string`
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L16)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:24](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L24)
 
 当前 app 版本号（点分数字）。
 
@@ -28,15 +28,24 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:16](https://hlgit.5518g
 
 > `optional` **coreApiHash**: `string`
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:18](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L18)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:26](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L26)
 
 当前主包 core API 表面 hash（可选）。
+
+##### engineHash?
+
+> `optional` **engineHash**: `string`
+
+Defined in: [packages/core/src/hotupdate/version-gate.ts:31](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L31)
+
+当前**引擎内容指纹**（可选）。native 由 engine 层运行时取（`cc.<md5>.js` 的那段 md5）——
+它属于跟 `libcocos.so` 同源、结构性不可热更的那一层，所以它就是「这个包的引擎身份」。
 
 ***
 
 ### BundleUpdater
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L22)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:23](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L23)
 
 BundleUpdater —— 「加载前把这个 bundle 更到最新」。分包热更的编排半，纯逻辑、零 cc。
 
@@ -53,7 +62,7 @@ native 上模块 bundle 更新**不需要重启也不需要启动还原**：`Ass
 
 > **ensureLatest**(`bundle`): `Promise`\<`void`\>
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L36)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:37](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L37)
 
 把该 bundle 更到最新。同名重复调用只跑一次（**失败的那次不留缓存**，重试能真的重跑）。
 
@@ -77,11 +86,36 @@ Defined in: [packages/core/src/hotupdate/bundle-updater.ts:36](https://hlgit.551
 
 `Promise`\<`void`\>
 
+##### versionOf()?
+
+> `optional` **versionOf**(`bundle`): `undefined` \| `string`
+
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:48](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L48)
+
+该 bundle 更新完之后**该按哪个版本加载**（native 内容寻址产物 = `index.<md5>.js` 的 md5）。
+
+只有 [ensureLatest](hotupdate.md#ensurelatest) 成功跑完才有值；之前、失败后、以及后端不认 manifest（web / 空后端）
+一律 `undefined` —— 调用方回落到别的版本来源。同步取值，因为 `BundleManager` 正是在
+`await ensureLatest(...)` 的下一行用它。
+
+可选：项目可以 register 自己的 `BundleUpdater`（见 [BUNDLE\_UPDATER](hotupdate.md#bundle_updater)），别为这个
+后加的能力把它们全判成不合法——不实现就等于「我不知道版本」，调用方回落。
+
+###### Parameters
+
+###### bundle
+
+`string`
+
+###### Returns
+
+`undefined` \| `string`
+
 ***
 
 ### BundleUpdaterOptions
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L39)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:51](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L51)
 
 #### Properties
 
@@ -89,7 +123,7 @@ Defined in: [packages/core/src/hotupdate/bundle-updater.ts:39](https://hlgit.551
 
 > `optional` **app**: [`AppInfo`](hotupdate.md#appinfo)
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L45)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:57](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L57)
 
 本地客户端信息（版本 / coreApiHash），透传给闸。
 
@@ -97,7 +131,7 @@ Defined in: [packages/core/src/hotupdate/bundle-updater.ts:45](https://hlgit.551
 
 > `optional` **factory**: [`HotUpdateBackendFactory`](hotupdate.md#hotupdatebackendfactory)
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:41](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L41)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:53](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L53)
 
 按名造后端。默认 DI [HOTUPDATE\_BACKEND\_FACTORY](hotupdate.md#hotupdate_backend_factory)；未注册 → 恒 no-op。
 
@@ -105,7 +139,7 @@ Defined in: [packages/core/src/hotupdate/bundle-updater.ts:41](https://hlgit.551
 
 > `optional` **gate**: [`VersionGate`](hotupdate.md#versiongate)
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:43](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L43)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:55](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L55)
 
 版本闸，透传给每个 bundle 的 HotUpdateService。
 
@@ -113,13 +147,13 @@ Defined in: [packages/core/src/hotupdate/bundle-updater.ts:43](https://hlgit.551
 
 > `optional` **logger**: [`ILogger`](logging.md#ilogger)
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:48](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L48)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:60](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L60)
 
 ##### onProgress()?
 
 > `optional` **onProgress**: (`bundle`, `p`) => `void`
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:47](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L47)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:59](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L59)
 
 下载进度，带上是哪个 bundle。
 
@@ -141,7 +175,7 @@ Defined in: [packages/core/src/hotupdate/bundle-updater.ts:47](https://hlgit.551
 
 ### GateResult
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L22)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L35)
 
 版本闸判定结果。
 
@@ -151,7 +185,7 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:22](https://hlgit.5518g
 
 > `optional` **needFullUpdate**: `boolean`
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L27)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:40](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L40)
 
 是否需整包更新（AOT 缺代码风险 → 不能只热更）。
 
@@ -159,13 +193,13 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:27](https://hlgit.5518g
 
 > **ok**: `boolean`
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:23](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L23)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L36)
 
 ##### reason?
 
 > `optional` **reason**: `string`
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:25](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L25)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:38](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L38)
 
 不通过原因（面向提示）。
 
@@ -333,6 +367,22 @@ Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:28](https://hlgit.
 
 `Promise`\<`void`\>
 
+##### assetKeys()?
+
+> `optional` **assetKeys**(): readonly `string`[]
+
+Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:38](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L38)
+
+本地 manifest（更新成功后 = 远端那份）的 asset key 列表，供反推该 bundle 的内容版本
+（见 [bundleVersionFromAssetKeys](hotupdate.md#bundleversionfromassetkeys)）。**只在 check/download 跑完后调用才有意义**。
+
+可选：没有 manifest 概念的后端（web / 空后端）不实现，`BundleUpdater.versionOf` 随之恒
+`undefined`，版本回落到别的来源。
+
+###### Returns
+
+readonly `string`[]
+
 ##### check()
 
 > **check**(): `Promise`\<[`CheckResult`](hotupdate.md#checkresult)\>
@@ -393,6 +443,18 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:8](https://hlgit.5518ga
 
 兼容要求：core 公共 API 表面 hash 须与本地相等（缺省不校验；呼应 ADR-0001 强引用白名单）。
 
+##### engineHash?
+
+> `optional` **engineHash**: `string`
+
+Defined in: [packages/core/src/hotupdate/version-gate.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L16)
+
+兼容要求：**引擎内容指纹**须与本地相等（缺省不校验）。出包期从产物的 `cc.<md5>.js` 取。
+
+与 [coreApiHash](hotupdate.md#coreapihash-1) 挡的是两回事，两道闸不可互相替代：前者描述 `@cck/core` 的 API 面，
+换 Creator 版本 / 改引擎模块勾选时它**一动不动**；而热更下发的全是 JS，它们是对着**某一个**
+`cc.js` 的 API 面编译的，配上另一个引擎就崩在绑定层。
+
 ##### minAppVersion?
 
 > `optional` **minAppVersion**: `string`
@@ -405,7 +467,7 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:6](https://hlgit.5518ga
 
 > `optional` **totalBytes**: `number`
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:10](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L10)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:18](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L18)
 
 待下载总字节（进度用，可选）。
 
@@ -421,7 +483,7 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:4](https://hlgit.5518ga
 
 ### VersionGate
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:34](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L34)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:47](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L47)
 
 版本兼容闸：apply 前判定「这个远程更新能否安全应用到当前客户端」。
 默认实现见 createSemverVersionGate；项目可注入自定义 gate 做灰度/强更/自定义兼容矩阵（override 即自担责）。
@@ -432,7 +494,7 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:34](https://hlgit.5518g
 
 > **canApply**(`remote`, `local`): [`GateResult`](hotupdate.md#gateresult)
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L35)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:48](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L48)
 
 ###### Parameters
 
@@ -474,7 +536,7 @@ check 结果：已最新 / 发现新版本（带远程信息）。
 
 > **HotUpdateBackendFactory**: (`bundle`) => [`IHotUpdateBackend`](hotupdate.md#ihotupdatebackend)
 
-Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:42](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L42)
+Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:50](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L50)
 
 按 bundle 名造后端 —— 分包热更的接缝（一 bundle 一份 manifest、一个独立更新目标）。
 native 实现给每个 bundle 一份独立 storagePath：`AssetsManagerEx` 的缓存 manifest 路径写死成
@@ -516,7 +578,7 @@ update 产出。
 
 > `const` **BUNDLE\_UPDATER**: [`Token`](di.md#tokent)\<[`BundleUpdater`](hotupdate.md#bundleupdater)\>
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:95](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L95)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:127](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L127)
 
 DI token：项目可 register 自己的 BundleUpdater 覆盖默认；未注册则 BundleManager 不做加载前更新。
 
@@ -526,7 +588,7 @@ DI token：项目可 register 自己的 BundleUpdater 覆盖默认；未注册�
 
 > `const` **HOTUPDATE\_BACKEND**: [`Token`](di.md#tokent)\<[`IHotUpdateBackend`](hotupdate.md#ihotupdatebackend)\>
 
-Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:34](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L34)
+Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:42](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L42)
 
 DI token：engine Bootstrap register 平台适配；未注册时 HotUpdateService 回退空后端（恒 up-to-date）。
 
@@ -536,7 +598,7 @@ DI token：engine Bootstrap register 平台适配；未注册时 HotUpdateServic
 
 > `const` **HOTUPDATE\_BACKEND\_FACTORY**: [`Token`](di.md#tokent)\<[`HotUpdateBackendFactory`](hotupdate.md#hotupdatebackendfactory)\>
 
-Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L45)
+Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:53](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L53)
 
 DI token：engine 仅 native 注册；未注册 → BundleUpdater 恒 no-op（bundle 用包内版本）。
 
@@ -552,11 +614,41 @@ DI token：项目可 register 自己的 HotUpdateService 覆盖默认。
 
 ## Functions
 
+### bundleVersionFromAssetKeys()
+
+> **bundleVersionFromAssetKeys**(`bundle`, `keys`): `undefined` \| `string`
+
+Defined in: packages/core/src/hotupdate/bundle-version.ts:26
+
+从 asset key 列表里认出该 bundle 的内容版本 = `assets/<bundle>/index.<v>.js` 里的 `<v>`。
+
+认不出就返回 `undefined`（**不是错误**）：产物没开 `md5Cache` 时入口就叫 `index.js`，
+此时引擎按不带版本的名字取，正是我们要的行为 —— 调用方回落到下一个版本来源即可。
+
+bundle 名按字面匹配、不当正则用（`mini-clicker`、`skin-base-lobby` 这类名字里的 `-` 无害，
+但名字来自配置，别给它解释元字符的机会）。
+
+#### Parameters
+
+##### bundle
+
+`string`
+
+##### keys
+
+readonly `string`[]
+
+#### Returns
+
+`undefined` \| `string`
+
+***
+
 ### compareVersion()
 
 > **compareVersion**(`a`, `b`): `number`
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:43](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L43)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:56](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L56)
 
 比较点分数字版本号：a<b→-1，a==b→0，a>b→1。
 逐段数字比较（"1.10.0" > "1.9.9"），长度不等按缺位补 0（"1.2"=="1.2.0"）。
@@ -582,7 +674,7 @@ ponytail: 忽略 pre-release/build 元数据（-rc.1、+build），首版按纯�
 
 > **createBundleUpdater**(`opts`?): [`BundleUpdater`](hotupdate.md#bundleupdater)
 
-Defined in: [packages/core/src/hotupdate/bundle-updater.ts:52](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L52)
+Defined in: [packages/core/src/hotupdate/bundle-updater.ts:64](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-updater.ts#L64)
 
 造 BundleUpdater（纯逻辑、零 cc；平台 IO 经 HotUpdateBackendFactory 注入）。
 
@@ -622,7 +714,7 @@ Defined in: [packages/core/src/hotupdate/hotupdate-service.ts:65](https://hlgit.
 
 > **createMemoryHotUpdateBackend**(`preset`?): [`IHotUpdateBackend`](hotupdate.md#ihotupdatebackend)
 
-Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:52](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L52)
+Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:60](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/hotupdate-backend.ts#L60)
 
 空后端（null object）：恒报「已最新」、下载/应用/重启皆 no-op。
 默认实现（非 native 或未接热更时）+ 可预置 check 结果供测试。
@@ -645,11 +737,12 @@ Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:52](https://hlgit.
 
 > **createSemverVersionGate**(): [`VersionGate`](hotupdate.md#versiongate)
 
-Defined in: [packages/core/src/hotupdate/version-gate.ts:62](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L62)
+Defined in: [packages/core/src/hotupdate/version-gate.ts:76](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L76)
 
 默认安全闸（承 ADR-0001）：
 - remote.minAppVersion 存在且 local.appVersion 低于它 → 拒，needFullUpdate（防 AOT 缺代码崩）。
 - remote/local 都声明 coreApiHash 且不等 → 拒，needFullUpdate。
+- remote/local 都声明 engineHash 且不等 → 拒，needFullUpdate（热更换不了引擎，只能发包）。
 - 否则放行。零配置即享此安全默认；纯比对，可 node 单测。
 
 #### Returns

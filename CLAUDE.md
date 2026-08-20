@@ -35,7 +35,7 @@ docs/design       设计文档
 纵向 = 「改它要付什么代价」：
 
 ```
-boot/        ① AOT：Boot.scene / Bootstrap / app-config(VEST) / 启动界面 / foundation-api → 发新包、重启
+boot/        ① AOT：Boot.scene / Bootstrap / app-config(VEST) / 启动界面 / foundation-api → 热更、重启
 foundation/  ② 地基 bundle：协议 / 连接 / 登录与认证 / 网关搬家 / 模块清单 / 模块契约    → 热更，不重启
              一个功能一个目录（net/ login/ …），**只有逻辑、没有脸**
 modules/*/   ③ 功能 bundle：lobby / mail / shop / mini-clicker / mini-dodge            → 按需 load/release
@@ -65,6 +65,7 @@ skins/vest/…           → `skin-vest-*`（示例马甲）      同名同路�
 - 地基**必须在 `hotupdate` 之后加载**（`shared` 阶段），否则更新下来的要等下次启动才生效。长连接与认证跟着后移。
 - **主包不得 `import` 地基的任何值**——那段代码会被判给主包 → 地基进 AOT → 热更失效。唯一接缝是 `boot/foundation-api.ts`（`import type` + `js.getClassByName`）。
 - 模块**可以**正常 `import` 地基的函数：`foundation` 的 bundle 优先级（6）高于所有业务包，被多包引用的资源归属优先级最高者，同级才各复制一份。**改优先级前先读 [`ADR-0014`](docs/adr/0014-foundation-bundle-and-priority-sharing.md)**。
+- **资源归属只有一个共享仓 `resources`，跨包依赖不许指向别处**。Creator 把被多包引用的资源判给**优先级最高**的引用者（`resources` 8 > `main` 7 > `foundation` 6 > `shared` 5 > `lobby` 3 > 地基皮包 2 > 其余 1），其余包降级成 `cc.config` 的 `deps` + `redirect`。**归属会漂，且漂了是静默的**——构建全绿、热更下发成功，运行时才在 `redirect` 指向的包里找不到资源。demo 实测出过两种：共用图漂进 `main`（AOT，只随 APK 换 → 热更下去的包引用旧 APK 没有的 uuid 就炸，而改的还不是那个包、是 `boot`），以及两个马甲的地基皮包同优先级抢同一张图 → vest 的皮包依赖 base 马甲的包。所以：**① 用到的每个内置资源在 `assets/resources/internal-pin.prefab` 里挂个节点「钉」一次**——`resources` priority 8 是工程内最高的，归属被它吸走后谁也抢不动，而**工程各处照常引用 `db://internal`、一行都不用改**；**② 共用资源一律经这个仓**；③ 代价是它们随 APK 走，要用钉子里没有的内置图得发版——这正确，它跟 AOT 同寿命。两道闸：**源码期** `pnpm check:pins`（不用构建，「引用了外部资源却没钉」当场报）＋ **产物期** `cck-manifest --split`（写 manifest 前扫 `deps`/`redirect`）。判据见 [`hotupdate-pipeline`](apps/demo/docs/hotupdate-pipeline.md#资源归属一个共享仓别的都不许借)。
 - **马甲换皮走 UI 变体，不进代码分支**：登记了换皮的界面，prefab **一律**从 `skin-<马甲>-<跟随者>` 包取（`foundation/catalog.ts` 的 `skinBundle(owner)`），**原层里不留脸**——脸留在地基意味着别的马甲白下、改它还要热更整个地基包；脚本仍归原层（地基 6 / 模块 1），一套逻辑配任意一张脸。马甲标识 `VEST` 是打包期常量（`boot/app-config.ts`），demo 自己的地基皮是 `skin-base-foundation`。**给哪几种登录方式也由 prefab 决定**——节点在就接线、不在就没有这条路。存储 key 一律带 `appId` 前缀（Web / 小游戏同域名共用 localStorage，不隔离两个马甲会共用同一个游客号）。
 
 ---
@@ -83,7 +84,7 @@ skins/vest/…           → `skin-vest-*`（示例马甲）      同名同路�
 3. **测试不进 `assets/`**——Creator 会把 `.test.ts` 当游戏脚本打包并炸构建。放 `apps/<project>/test/`，路径**镜像** `assets/`（`assets/a/B.ts` → `test/a/B.test.ts`）。
 
 > 业务侧 lint 规则要写进 `apps/<project>/eslint.config.mjs`（`pnpm lint:demo`）——根 `eslint.config.js` 把 `apps/**` 整个 ignore 了，加在那里**静默失效**。
-> 五道门：`pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm check:vm-tests`（每个 `*VM.ts` 必须有镜像路径的测试）/ `pnpm docs:api`（改了 `core` 公开 API 就重新生成并一起提交，CI 会挡不同步）。
+> 六道门：`pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm check:vm-tests`（每个 `*VM.ts` 必须有镜像路径的测试）/ `pnpm check:pins`（工程引用到的 Creator 内置资源必须都被 `resources` 钉住，见下条铁律）/ `pnpm docs:api`（改了 `core` 公开 API 就重新生成并一起提交，CI 会挡不同步）。
 
 ---
 
@@ -147,6 +148,7 @@ packages/core/docs/api/                      **typedoc 生成物，勿手改**�
 ## 三种"热"
 
 - **线上热更(hotfix)**：`HotUpdateService` 统一入口。原生走官方 `AssetsManager` + manifest；Web/小游戏走远程 Asset Bundle 版本化加载。
+  native 的边界：**AOT 层（boot + 主包 + 业务代码）热更后重启生效，只有引擎指纹（`cc.<md5>.js`）变才必须发 APK**——靠 `main.js` 读固定名入口指针实现，见 [`ADR-0017`](docs/adr/0017-aot-hotupdate-via-fixed-name-pointer.md)。
 - **运行时按需分包**：`BundleManager.load/release(name)`，一模块一 bundle。
 - **开发期热重载**：Cocos 无原生脚本 HMR。逻辑层用 `vitest --watch` 秒级反馈（不必开 Creator）；引擎层维持 Creator 预览。
 

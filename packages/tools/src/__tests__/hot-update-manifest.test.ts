@@ -1,12 +1,15 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  archiveManifests,
   buildManifest,
   buildSplitManifests,
+  isEngineBound,
   toVersionManifest,
+  rollbackManifests,
   verifyManifest,
   writeManifests,
   writeSplitManifests,
@@ -283,5 +286,189 @@ describe('writeManifests + verifyManifest', () => {
     writeFileSync(join(root, 'assets', 'pack.zip'), 'ZIPBYTES'); // 复原
 
     rmSync(out, { recursive: true, force: true });
+  });
+});
+
+describe('contentHashed：md5 产物下 base 只丢引擎那一半', () => {
+  let croot: string;
+
+  beforeAll(() => {
+    croot = mkdtempSync(join(tmpdir(), 'cck-md5-'));
+    mkdirSync(join(croot, 'src', 'cocos-js'), { recursive: true });
+    mkdirSync(join(croot, 'jsb-adapter'), { recursive: true });
+    for (const b of ['main', 'internal', 'resources', 'foundation', 'shop']) {
+      mkdirSync(join(croot, 'assets', b), { recursive: true });
+      writeFileSync(join(croot, 'assets', b, `index.${b.slice(0, 5)}.js`), `// ${b}`);
+      writeFileSync(join(croot, 'assets', b, `cc.config.${b.slice(0, 5)}.json`), '{}');
+    }
+    mkdirSync(join(croot, 'src', 'chunks'), { recursive: true });
+    writeFileSync(join(croot, 'src', 'settings.763c7.json'), '{}');
+    writeFileSync(join(croot, 'src', 'cck-aot.json'), '{"application":"./application.56453.js"}');
+    writeFileSync(join(croot, 'src', 'chunks', 'bundle.30ac6.js'), '// biz');
+    writeFileSync(join(croot, 'application.56453.js'), '// entry');
+    writeFileSync(join(croot, 'main.js'), '// boot');
+    // 引擎那一半 —— 一个都不许进 base
+    writeFileSync(join(croot, 'src', 'import-map.1d8b3.json'), '{}');
+    writeFileSync(join(croot, 'src', 'system.bundle.590c7.js'), 'sys');
+    writeFileSync(join(croot, 'src', 'effect.bin'), 'bin');
+    writeFileSync(join(croot, 'src', 'cocos-js', 'cc.aaaaa.js'), 'cc');
+    writeFileSync(join(croot, 'jsb-adapter', 'engine-adapter.js'), 'ea');
+  });
+
+  afterAll(() => rmSync(croot, { recursive: true, force: true }));
+
+  const copts = () => ({
+    root: croot,
+    packageUrl: 'http://host/cdn',
+    version: '3.0.0',
+    files: ['application.56453.js'],
+  });
+
+  it('AOT 整条链都在 base 里：入口 + 指针 + settings + chunks + AOT 包', () => {
+    const keys = Object.keys(buildSplitManifests({ ...copts(), contentHashed: true }).base.assets);
+    expect(keys).toContain('application.56453.js');
+    expect(keys).toContain('src/cck-aot.json');
+    expect(keys).toContain('src/settings.763c7.json');
+    expect(keys).toContain('src/chunks/bundle.30ac6.js');
+    for (const b of ['main', 'internal', 'resources']) {
+      expect(keys).toContain(`assets/${b}/index.${b.slice(0, 5)}.js`);
+    }
+  });
+
+  it('引擎绑死 / 名字写死的那几类一个都不发', () => {
+    const keys = Object.keys(buildSplitManifests({ ...copts(), contentHashed: true }).base.assets);
+    expect(keys).not.toContain('src/cocos-js/cc.aaaaa.js');
+    expect(keys).not.toContain('src/effect.bin');
+    expect(keys).not.toContain('src/system.bundle.590c7.js');
+    expect(keys).not.toContain('src/import-map.1d8b3.json');
+    expect(keys).not.toContain('jsb-adapter/engine-adapter.js');
+  });
+
+  it('main.js 永远不进任何 manifest —— 它跑在搜索路径还原之前', () => {
+    const keys = Object.keys(buildSplitManifests({ ...copts(), contentHashed: true }).base.assets);
+    expect(keys).not.toContain('main.js');
+  });
+
+  it('模块 bundle 一个不少，内容与不开这个开关时完全一致', () => {
+    const off = buildSplitManifests(copts());
+    const on = buildSplitManifests({ ...copts(), contentHashed: true });
+    expect(Object.keys(on.bundles).sort()).toEqual(['foundation', 'shop']);
+    expect(on.bundles).toEqual(off.bundles);
+  });
+
+  it('不开开关时 base 照收全表，连引擎那一半也在（老产物行为不变）', () => {
+    const keys = Object.keys(buildSplitManifests(copts()).base.assets);
+    expect(keys).toContain('src/settings.763c7.json');
+    expect(keys).toContain('assets/main/index.main.js');
+    expect(keys).toContain('src/cocos-js/cc.aaaaa.js');
+    expect(keys).toContain('jsb-adapter/engine-adapter.js');
+  });
+});
+
+describe('isEngineBound（与 .so 绑死 / 名字被 main.js 写死的那几类）', () => {
+  it('引擎那一半', () => {
+    expect(isEngineBound('src/cocos-js/cc.25e81.js')).toBe(true);
+    expect(isEngineBound('src/effect.bin')).toBe(true);
+    expect(isEngineBound('jsb-adapter/engine-adapter.js')).toBe(true);
+    expect(isEngineBound('jsb-adapter/web-adapter.js')).toBe(true);
+  });
+
+  it('名字被 main.js 写死的引导链（开不开 md5 都认）', () => {
+    expect(isEngineBound('src/system.bundle.590c7.js')).toBe(true);
+    expect(isEngineBound('src/system.bundle.js')).toBe(true);
+    expect(isEngineBound('src/polyfills.abc12.js')).toBe(true);
+    expect(isEngineBound('src/import-map.1d8b3.json')).toBe(true);
+    expect(isEngineBound('src/import-map.json')).toBe(true);
+  });
+
+  it('AOT 那一半一个都不误伤', () => {
+    for (const k of [
+      'application.56453.js',
+      'src/cck-aot.json',
+      'src/settings.a25ff.json',
+      'src/chunks/bundle.30ac6.js',
+      'assets/main/index.59bfe.js',
+      'assets/resources/native/20835ba4.png',
+    ]) {
+      expect(isEngineBound(k)).toBe(false);
+    }
+  });
+
+  it('前缀相近的不误伤：cocos-js 得是目录、effect.bin 得在 src 根', () => {
+    expect(isEngineBound('src/cocos-jsx/a.js')).toBe(false);
+    expect(isEngineBound('assets/main/effect.bin')).toBe(false);
+    expect(isEngineBound('src/chunks/effect.bin')).toBe(false);
+    expect(isEngineBound('src/system.bundle.a.b.js')).toBe(false); // 不是 Creator 的产物形态
+  });
+});
+
+describe('files（收产物根上的散文件）', () => {
+  it('收进来，key 相对 root；不存在的跳过', () => {
+    const m = buildManifest({ ...opts(), files: ['src/app.js', 'nope.js'] });
+    expect(m.assets['src/app.js']).toBeDefined();
+    expect(m.assets['nope.js']).toBeUndefined();
+  });
+
+  it('传目录名不当文件收', () => {
+    const m = buildManifest({ ...opts(), dirs: [], files: ['src'] });
+    expect(Object.keys(m.assets)).toEqual([]);
+  });
+});
+
+describe('archive + rollback（回滚 = 发一版号更大、内容是旧的）', () => {
+  let cdn: string;
+
+  beforeAll(() => {
+    cdn = mkdtempSync(join(tmpdir(), 'cck-cdn-'));
+  });
+  afterAll(() => rmSync(cdn, { recursive: true, force: true }));
+
+  /** 往 CDN 根写一版 manifest（只关心 version 与 assets 的身份，不必是真产物）。 */
+  const publish = (version: string, entry: string): void => {
+    for (const f of ['project.manifest', 'shop.manifest']) {
+      writeFileSync(join(cdn, f), JSON.stringify({ version, assets: { [entry]: { size: 1, md5: 'x' } } }));
+    }
+    writeFileSync(join(cdn, 'shop.version.manifest'), JSON.stringify({ version }));
+    archiveManifests(cdn, version);
+  };
+
+  it('archive 把这一版的 manifest 收进 releases/<version>/（只收 manifest，不收内容）', () => {
+    publish('1.0.3', 'assets/shop/index.aaaaa.js');
+    const dir = join(cdn, 'releases', '1.0.3');
+    expect(readdirSync(dir).sort()).toEqual(['project.manifest', 'shop.manifest', 'shop.version.manifest']);
+  });
+
+  it('rollback 把旧内容配上更大的号发回根，并顺手归档新号', () => {
+    publish('1.0.3', 'assets/shop/index.aaaaa.js');
+    publish('1.0.5', 'assets/shop/index.bbbbb.js');
+
+    const r = rollbackManifests({ cdnDir: cdn, release: '1.0.3', version: '1.0.6' });
+    expect(r.changed.sort()).toEqual(['project.manifest', 'shop.manifest']);
+
+    const m = JSON.parse(readFileSync(join(cdn, 'shop.manifest'), 'utf8')) as Manifest;
+    expect(m.version).toBe('1.0.6'); // 号必须更大，否则客户端判 up-to-date、无声失败
+    expect(Object.keys(m.assets)).toEqual(['assets/shop/index.aaaaa.js']); // 内容是 1.0.3 那版
+    // version.manifest 同步，否则 check 拿到的头与 manifest 对不上
+    expect(JSON.parse(readFileSync(join(cdn, 'shop.version.manifest'), 'utf8')).version).toBe('1.0.6');
+    expect(readdirSync(join(cdn, 'releases'))).toContain('1.0.6');
+  });
+
+  it('⚠️ 内容与当前在发的一致的包**不许**涨版本号 —— 涨了客户端会在 worker 线程 SIGSEGV', () => {
+    // 归档 1.1.0 与 1.1.1 内容完全相同（模拟「这次发布只改了别的包」）
+    publish('1.1.0', 'assets/shop/index.same0.js');
+    publish('1.1.1', 'assets/shop/index.same0.js');
+
+    const r = rollbackManifests({ cdnDir: cdn, release: '1.1.0', version: '1.1.2' });
+
+    expect(r.changed).toEqual([]);
+    expect(r.skipped.sort()).toEqual(['project.manifest', 'shop.manifest']);
+    // 根上那份原样不动：版本号还是 1.1.1，客户端判 up-to-date、什么也不做
+    const m = JSON.parse(readFileSync(join(cdn, 'shop.manifest'), 'utf8')) as Manifest;
+    expect(m.version).toBe('1.1.1');
+    expect(JSON.parse(readFileSync(join(cdn, 'shop.version.manifest'), 'utf8')).version).toBe('1.1.1');
+  });
+
+  it('没归档过的版本 → 直接抛，别让人以为回滚成功了', () => {
+    expect(() => rollbackManifests({ cdnDir: cdn, release: '9.9.9', version: '2.0.0' })).toThrow();
   });
 });

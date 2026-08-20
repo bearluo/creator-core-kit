@@ -165,8 +165,9 @@ export function createLaunchOverlay(app: App, prefab: Prefab | null): LaunchOver
           showAction('重试', () => void app.retry());
           break;
         case 'needFullUpdate':
-          // 热更换不动的东西（引擎 / AOT chunks / 主包）变了，或版本已被 dispatcher 退休
-          // —— 只能整包更新，重试没有意义。
+          // 热更换不动的那一层变了（引擎指纹 —— 引擎 JS 与 `libcocos.so` 是同一次构建的两半），
+          // 或 core API 不兼容 / 版本已被 dispatcher 退休 —— 只能整包更新，重试没有意义。
+          // AOT 业务代码本身是能热更的（ADR-0017），走不到这里。
           //
           // **"整包"在两个平台上是两件事**：native 要去商店重装；web 的整包就是那张页面，
           // 刷新一下就换到最新的 AOT 了（`app.restart()` 在 web 上正是 location.reload()）。

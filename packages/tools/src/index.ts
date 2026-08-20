@@ -4,6 +4,7 @@
  */
 export {
   DEFAULT_AOT_BUNDLES,
+  isEngineBound,
   buildManifest,
   buildSplitManifests,
   toVersionManifest,
@@ -22,6 +23,15 @@ export type {
   WriteResult,
   VerifyIssue,
 } from './hot-update-manifest';
+
+export {
+  DEFAULT_SHARED_BUNDLES,
+  collectBundleDeps,
+  findDepViolations,
+  scanAssetRefs,
+  findUnpinnedRefs,
+} from './bundle-deps';
+export type { BundleDeps, DepViolation, AssetRefs, UnpinnedRef } from './bundle-deps';
 
 export { rowsToTable, parseWorkbook, excelToJson } from './config-excel';
 export type { FieldType, ConventionOptions, ExcelOptions, TableResult } from './config-excel';

@@ -160,6 +160,12 @@ export interface AppDeps {
    * engine 侧按平台注入——**web 必须 `location.reload()`**：只有整页重来才会重新拉 `index.<md5>.js`。
    */
   restart?: () => void;
+  /**
+   * 取**引擎内容指纹**，喂 platform 步组装的 {@link AppInfo}。core 零 cc，拿不到这个值，
+   * 由 engine 的 `appModule` 注入（native 走 `engineHash()`）。返回 `undefined` = 判不了，
+   * 闸对单边缺失恒放行。
+   */
+  engineHash?: () => string | undefined;
 }
 
 /** `ctx.bag` 里 AppInfo 的键——platform 步写入，compat 闸与项目自定义步骤读取。 */
@@ -267,7 +273,10 @@ export function defaultLaunchSteps(deps?: AppDeps): readonly LaunchStep[] {
             `app 戳未读到（${bundle}/${path}）→ coreApiHash 闸休眠：${(e as Error)?.message ?? String(e)}`,
           );
         }
-        ctx.bag.set(APP_INFO, info);
+        // 引擎指纹不在戳里（app 戳生成于 Creator 构建之前、拿不到本次产物），运行时现取；
+        // 读戳失败那条路也要带上它——引擎闸与 coreApiHash 闸互不依赖。
+        const eng = deps?.engineHash?.();
+        ctx.bag.set(APP_INFO, eng === undefined ? info : { ...info, engineHash: eng });
       },
     },
 

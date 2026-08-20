@@ -64,7 +64,7 @@ export interface BundleManager {
   isLoaded(name: string): boolean;                    // 计数>0、无 inflight、且引擎侧就绪
   get(name: string): BundleHandle | undefined;
   list(): BundleInfo[];                               // name 升序快照
-  /** bundle → 版本（web 出包 md5）。**整体替换不是合并**；load 时 `opts.version` 优先，否则查此表。 */
+  /** bundle → 版本（web 出包 md5）。**整体替换不是合并**；见下「版本来源优先级」。 */
   setVersions(map: Readonly<Record<string, string>>): void;
 }
 export function createBundleManager(opts?: BundleManagerOptions): BundleManager;
@@ -108,12 +108,24 @@ export const BUNDLE_RELOADER: Token<IBundleReloader>;
 ### BundleManager
 
 - **注册表**：`Map<name, { version?, refCount, inflight? }>`。`name` 是解析后的注册名（远程取 `opts.name ?? nameOrUrl`）。
-- **load**：① 已就绪（有条目无 inflight）→ `refCount++` 返回句柄；② 加载中 → `refCount++` 并 `await` 同一 inflight；③ 未加载 → 建条目 `refCount=1`，`version = opts.version ?? versions[name]`，`inflight = source.loadBundle(...)`；成功清 inflight，失败**回滚条目**（删表、不留计数）并 reject。
+- **load**：① 已就绪（有条目无 inflight）→ `refCount++` 返回句柄；② 加载中 → `refCount++` 并 `await` 同一 inflight；③ 未加载 → 建条目 `refCount=1`，`inflight = ensureLatest → 定版本 → source.loadBundle(...)`；成功清 inflight，失败**回滚条目**（删表、不留计数）并 reject。
 - **release**：无条目 → 告警 no-op；否则 `refCount--`，`<=0` → `source.releaseBundle(name)` + 删表（计数夹 0 不为负）。
 - **默认 source 解析**：`opts.source ?? tryResolve(BUNDLE_SOURCE) ?? createMemoryBundleSource()`——同 [[save-manager]] 的接缝拾取范式。
 - **`setVersions` 为什么在这一层**：UIManager 打开界面时也会 load 它所属的 bundle。版本表放上层（App）就会漏掉那条路径；放这里则所有调用点零改自动带上版本。整体替换而非合并——版本表是服务器下发的一份快照，合并会让删掉的条目阴魂不散。
 - **`updater` 为什么也在这一层，且为什么"现取"**：位置同 `setVersions`（所有 load 调用点在这里汇合）。但解析时机不同——`source` 建时定死，`updater` **每次 load 才 `tryResolve`**：它要带 app 戳（`coreApiHash` 闸），而戳是启动后从资源里读出来的，注册必然晚于 BundleManager 创建。定死就等于永远拿不到。
 - **更新失败一起失败**：`BundleUpdater.ensureLatest` 契约是「更新不成就 reject」，这里**不吞**，原样抛给调用方（启动期 → 启动失败页·可重试；运行期 → 打开模块失败）。退回包内版本会把「CDN 少传了一个文件」这类发布事故伪装成「玩家在玩旧版」，且包内那份未必存在（从没随包发过的新模块 / 新马甲皮）。远程 url 加载（`opts.name` 形式）跳过更新：那条路径不走 manifest 热更。
+- **版本来源优先级（三档，且**在 `ensureLatest` 之后才定**）**：
+
+  ```ts
+  version = opts.version ?? updater.versionOf?.(name) ?? versions[name];
+  //         ↑ 调用方显式（逃生口）  ↑ native：刚更新完的 manifest  ↑ web：setVersions 的表
+  ```
+
+  三个来源互不重叠：web 上没注册热更后端 → `versionOf` 恒 `undefined`；native 上不配版本表 →
+  `versions` 恒空。**顺序不能提前**：内容寻址产物（`md5Cache`）的 bundle 入口叫
+  `index.<md5>.js`，这个 md5 只有**刚更新完的那份 manifest** 知道；包内 `settings.bundleVers`
+  写死的是出包那天的值，拿它去取会 404 后**静默回落包内旧代码**——热更报成功、代码没生效、
+  还不报错。见 [[hotupdate-service]] 与 `docs/design/2026-08-20-native-md5-content-addressing-proposal.md`。
 - **`BundleHandle` 为何不透明**：core 不持真 `cc.AssetManager.Bundle`。句柄只带 `name`/`version`；engine 要真 Bundle 时 `assetManager.getBundle(name)` 按名反解。
 
 ### BundleScope 的回收顺序（有语义，不是随手排的）

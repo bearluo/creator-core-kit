@@ -27,6 +27,8 @@ function fakeLogger(): { logger: ILogger; warns: unknown[][] } {
 function makeFactory(preset?: {
   check?: Record<string, CheckResult | Error>;
   downloadFails?: string[];
+  /** 后端的本地 manifest asset key；不给则该后端不实现 assetKeys（web / 老实现的形状）。 */
+  keys?: Record<string, string[]>;
 }) {
   const created: string[] = [];
   const checks: string[] = [];
@@ -51,6 +53,7 @@ function makeFactory(preset?: {
       },
       apply: () => Promise.resolve(),
       restart: () => {},
+      ...(preset?.keys?.[bundle] ? { assetKeys: (): string[] => preset.keys![bundle] } : {}),
     };
   };
   return {
@@ -181,5 +184,49 @@ describe('createBundleUpdater', () => {
     const u = createBundleUpdater();
     getRootContainer().register(BUNDLE_UPDATER, { useValue: u });
     expect(getRootContainer().tryResolve(BUNDLE_UPDATER)).toBe(u);
+  });
+});
+
+describe('BundleUpdater.versionOf（内容寻址产物：加载哪个 md5）', () => {
+  const K = { shop: ['assets/shop/cc.config.a1b2c.json', 'assets/shop/index.a1b2c.js'] };
+
+  it('ensureLatest 之前没有值 —— 版本只有更新跑完才作数', () => {
+    const f = makeFactory({ keys: K });
+    expect(createBundleUpdater({ factory: f.factory }).versionOf?.('shop')).toBeUndefined();
+  });
+
+  it('走下载那条路 → 记下更新后 manifest 里的版本', async () => {
+    const f = makeFactory({ check: { shop: newVersion('1.0.1') }, keys: K });
+    const u = createBundleUpdater({ factory: f.factory });
+    await u.ensureLatest('shop');
+    expect(u.versionOf?.('shop')).toBe('a1b2c');
+  });
+
+  it('up-to-date 那条路同样记 —— 包内 bundleVers 只在从没更新过时才碰巧对得上', async () => {
+    const f = makeFactory({ keys: K });
+    const u = createBundleUpdater({ factory: f.factory });
+    await u.ensureLatest('shop');
+    expect(u.versionOf?.('shop')).toBe('a1b2c');
+  });
+
+  it('后端不实现 assetKeys（web / 空后端）→ undefined，调用方回落别的来源', async () => {
+    const f = makeFactory({ check: { shop: newVersion('1.0.1') } });
+    const u = createBundleUpdater({ factory: f.factory });
+    await u.ensureLatest('shop');
+    expect(u.versionOf?.('shop')).toBeUndefined();
+  });
+
+  it('更新失败 → 不留版本（留着会让重试后的 load 去取一个可能已被删掉的 md5 文件）', async () => {
+    const f = makeFactory({ check: { shop: newVersion('1.0.1') }, downloadFails: ['shop'], keys: K });
+    const u = createBundleUpdater({ factory: f.factory });
+    await expect(u.ensureLatest('shop')).rejects.toThrow();
+    expect(u.versionOf?.('shop')).toBeUndefined();
+  });
+
+  it('只回答问到的那个 bundle', async () => {
+    const f = makeFactory({ keys: K });
+    const u = createBundleUpdater({ factory: f.factory });
+    await u.ensureLatest('shop');
+    expect(u.versionOf?.('lobby')).toBeUndefined();
   });
 });

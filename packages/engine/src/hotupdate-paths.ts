@@ -134,3 +134,123 @@ export function retiredBundleDirs(entries: readonly string[], keep: readonly str
     return !kept(name);
   });
 }
+
+/**
+ * 从一份 manifest JSON 文本里取 asset key 列表 —— 供 core 反推「该加载哪个 md5」
+ * （`bundleVersionFromAssetKeys`）。
+ *
+ * 只能自己 parse：`native.Manifest` 的 JS 绑定没有 `getAssets()`（`cc.d.ts:34383-34408` 只暴露了
+ * isLoaded / getPackageUrl / getVersion / getSearchPaths 那几个）。
+ *
+ * 不是合法 manifest → 空数组，**不抛**：版本取不到只是退回「按包内 `settings.bundleVers` 加载」，
+ * 而热更本身的成败早在 check/update 判过了，不该在这里再制造一次失败。
+ */
+export function manifestAssetKeys(content: string): readonly string[] {
+  try {
+    const j = JSON.parse(content) as { assets?: Record<string, unknown> };
+    const a = j.assets;
+    return a && typeof a === 'object' && !Array.isArray(a) ? Object.keys(a) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * `main.js` 启动时挂上来的**包内 AOT 入口名**（`build-templates/native/index.ejs` 里那句
+ * `window.__cckAotEntry = '<%= applicationJs %>'`）—— 构建期插值，**热更改不了**。
+ *
+ * 它与运行时真正加载的入口不是一回事：AOT 热更之后 `main.js` 会改从 `src/cck-aot.json` 指针
+ * 解析出新入口，而这个全局仍是出包那天烘进去的那个名字。正因如此它才等于「这个 APK 的身份」。
+ */
+export function packagedAotEntry(): string | undefined {
+  const v = (globalThis as { __cckAotEntry?: unknown }).__cckAotEntry;
+  return typeof v === 'string' && v !== '' ? v : undefined;
+}
+
+/**
+ * APK 换了没有 —— 判据是**包内 AOT 入口的 md5**：`./application.56453.js` → `56453`，
+ * 取自 {@link packagedAotEntry}。
+ *
+ * 返回 `undefined` 表示「判不了」（产物没开 `md5Cache`，入口就叫 `application.js`；或老模板没挂
+ * 这个全局）：调用方应当**什么也不做**，别把「判不了」当成「换了」而去清缓存——那会让每次冷启动
+ * 都全量重下。
+ *
+ * ## 为什么必须取包内那份，不能取运行时的 `settings.bundleVers.main`
+ *
+ * AOT 解锁之前 `bundleVers` 是安全的：`settings` 只随 APK 换，所以它答的就是「APK 换没换」。
+ * 解锁之后 `settings.<md5>.json` 本身也随热更走了，于是 `bundleVers` 答的变成「**跑的是哪一版
+ * AOT**」——每成功热更一次 AOT，它就与上一轮存下的指纹不同，缓存被判成「上一版 APK 攒的」而
+ * **整个删掉**，下一轮冷启动重下、再删，死循环。而 `main.js` 属 L0（它自己就是搜索路径还原），
+ * 热更够不着，烘在里面的入口名因此是唯一不可伪造的 APK 身份。
+ *
+ * ## 为什么不是 app 戳的 `coreApiHash`
+ *
+ * - **拿得到**。这一步必须跑在 kit 装配之前（`AssetsManagerEx` 一 `create` 就前插搜索路径了），
+ *   而 app 戳在 `resources` bundle 里、要异步 load，那时还没到；全局是同步可取的。
+ * - **口径更保守且正确**。`coreApiHash` 只描述 core 的 API 面，AOT 业务代码改了它不变；而热更
+ *   下来的模块代码是对着**整个 AOT** 编译的，AOT 的字节变了就该重新拉一遍。
+ * - 入口名随 `settings` md5 走，而 `settings` 含全部 `bundleVers` → 任何内容变动都会翻它。
+ *   代价是「新出的 APK 只改了个日志文案也重下」，换来的是不会出现「新 AOT 配旧模块」。
+ */
+export function aotStamp(packagedEntry: string | null | undefined): string | undefined {
+  if (typeof packagedEntry !== 'string') return undefined;
+  const file = packagedEntry.split('?')[0].split('/').pop() ?? '';
+  if (!file.startsWith('application.') || !file.endsWith('.js')) return undefined;
+  const v = file.slice('application.'.length, -'.js'.length);
+  // `application.js`（没开 md5）切出空串；多段的不是 Creator 的产物形态，一并不认。
+  return v !== '' && !v.includes('.') ? v : undefined;
+}
+
+/**
+ * 该清掉哪些搜索路径 —— 热更缓存目录被删之后，指向它们的搜索路径条目也必须摘掉。
+ * 留着不会崩（`FileUtils` 找不到就跳过），但它们会被 `apply()` 重新持久化进 localStorage，
+ * 一轮轮攒下去；而且冷启动还原时会把已删目录重新前插到搜索链最前面。
+ */
+export function searchPathsWithout(paths: readonly string[], prefixes: readonly string[]): string[] {
+  return normalizeSearchPaths(paths).filter((p) => !prefixes.some((pre) => p.startsWith(pre)));
+}
+
+/**
+ * 从 `cc` 模块的解析 URL 抠**引擎内容指纹**：`src/cocos-js/cc.25e81.js` → `25e81`。
+ * 没开 `md5Cache`（名字就是 `cc.js`）或形状不认识 → `undefined`。
+ */
+export function engineHashFromUrl(url: string | null | undefined): string | undefined {
+  if (typeof url !== 'string') return undefined;
+  const file = url.split('?')[0].split('#')[0].split('/').pop() ?? '';
+  if (!file.startsWith('cc.') || !file.endsWith('.js')) return undefined;
+  const v = file.slice('cc.'.length, -'.js'.length);
+  // `cc.js`（没开 md5）切出空串；`cc.a.b.js` 这种多段的不是 Creator 的产物形态，一并不认。
+  return v !== '' && !v.includes('.') ? v : undefined;
+}
+
+/**
+ * 当前**引擎内容指纹** —— 喂 core 版本闸的 `AppInfo.engineHash`，判不了返回 `undefined`（闸休眠）。
+ *
+ * ## 为什么是 `cc.<md5>.js` 而不是 `.so` 的 hash
+ *
+ * 热更只下发 JS 和资源，要挡的是「热更来的 JS 用了这个引擎没有的 API」—— 对应的正是 `cc.js`
+ * 的接口面。`.so` 只在与 `cc.js` 不同步时出问题，而这两者是同一次引擎构建的两半、永远一起变
+ * （实测：`cc.25e81.js` 与 `libcocos.so` 生成时间相差 5 分钟，其后三次业务重建 md5 纹丝不动）。
+ * 反过来 hash `.so` 既要挑 ABI 又要区分 debug/release，还读不出「JS API 面变没变」。
+ * 唯一漏网的是只改 `native/engine/` 的 C++ 而不动 JS —— 那种改动本来也只能发包。
+ *
+ * ## 为什么不用 `aotStamp` / `coreApiHash`
+ *
+ * 三个指纹管三件事，别混用：`aotStamp`（包内 AOT 入口 md5）答「APK 换没换」，业务代码一改就翻，
+ * 敏感是它的特性；`coreApiHash` 答「core 的 API 面变没变」，换引擎时一动不动；本函数答
+ * 「引擎换没换」，只在换 Creator 版本或改引擎模块勾选时变 —— 那时 `.so` 必须重编。
+ *
+ * ## 取值路径
+ *
+ * 走 SystemJS 的 import map（`main.js` `System.warmup` 时注册的那份，内容就一行
+ * `"cc": "./cocos-js/cc.<md5>.js"`），不碰文件系统 —— 那份 map 属于结构性不可热更的一层，
+ * 所以读到的恒是**这个包**的引擎身份，热更改不动它。
+ */
+export function engineHash(): string | undefined {
+  const sys = (globalThis as { System?: { resolve?: (id: string) => string } }).System;
+  try {
+    return engineHashFromUrl(sys?.resolve?.('cc'));
+  } catch {
+    return undefined; // resolve 抛（没 warmup / 没这个模块）等同判不了
+  }
+}

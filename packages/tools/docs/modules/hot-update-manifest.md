@@ -52,6 +52,7 @@ export interface ManifestOptions {
   packageUrl: string;           // 远程根 URL；内部确保以 / 结尾
   version: string;
   dirs?: string[];              // 遍历子目录，默认 ['src','assets','jsb-adapter']（不存在的跳过）
+  files?: readonly string[];    // 额外收的**散文件**（相对 root，不存在的跳过）；AOT 入口在产物根，靠它进表
   manifestFilename?: string;    // 默认 'project.manifest'
   versionFilename?: string;     // 默认 'version.manifest'
   searchPaths?: string[];       // 默认 []
@@ -63,11 +64,26 @@ export interface SplitManifestOptions extends ManifestOptions {
   aotBundles?: readonly string[];
   /** 上一次发布的 manifest 目录；内容未变的包沿用其 version（必须是**紧邻**的上一版，见下）。 */
   prevDir?: string;
+  /** 产物开了 `md5Cache`（内容寻址）；base manifest 丢掉 `isEngineBound` 那几类，AOT 照发。见下。 */
+  contentHashed?: boolean;
 }
+
+/** 与 `libcocos.so` 绑死、或名字被 `main.js` 写死的 asset key —— 一个都不下发。 */
+export function isEngineBound(key: string): boolean;
 export interface SplitManifests { base: Manifest; bundles: Record<string, Manifest> }
 export interface SplitWriteResult { base: WriteResult; bundles: Record<string, WriteResult> }
 export function buildSplitManifests(opts: SplitManifestOptions): SplitManifests;
 export function writeSplitManifests(opts: SplitManifestOptions & { outDir?: string }): SplitWriteResult;
+
+// —— 叠加式发布的两件配套（内容寻址下新旧文件天然共存）——
+/** 把 CDN 根上当前这套 manifest 归档进 `<cdnDir>/releases/<version>/`，返回归档的文件名。 */
+export function archiveManifests(cdnDir: string, version: string): string[];
+/** 回滚：把 `releases/<release>/` 那版配上更大的 `version` 发回 CDN 根。内容文件不重传。 */
+export function rollbackManifests(opts: { cdnDir: string; release: string; version: string }): {
+  changed: string[];   // 真的退回去了的（内容与当前在发的不同）
+  skipped: string[];   // 内容一致、原样不动的 —— **绝不能给它们涨号**，见下
+  from: string;
+};
 
 /** 遍历 root/dirs 算 md5+size，产出完整 project manifest 对象（读 fs 但不落盘，便于测）。 */
 export function buildManifest(opts: ManifestOptions): Manifest;
@@ -119,13 +135,24 @@ demo 实测：47 条全表 → base 22 条（`src/` 6 + `jsb-adapter/` 2 + `asse
 
 -1. `--prev` 的版本沿用（`buildSplitManifests` 内）：每份 manifest 落定前读 `<prevDir>/<同名文件>`，比对 **version 之外的一切**——资产表（key + md5 + size + compressed）、`packageUrl`、`searchPaths`；全等就把 `version` 换成上一版的。读不到 / 坏 JSON 一律当"没有上一版"，用新版本号（宁可多发一次，不可少发）。`packageUrl` 也算内容：它变了不涨版本的话，客户端缓存 manifest 里留着旧 URL，后续增量下载还去老地址。
 
+2. `contentHashed`（`--md5`，Creator 开了 `md5Cache` 时）：base manifest **只丢 `isEngineBound` 那几类，AOT 整条链照发**（入口 `application.<md5>.js` + 指针 `src/cck-aot.json` + `src/settings.<md5>.json` + `src/chunks/**` + `assets/{main,resources,internal}`）。AOT 发得出去是因为 `main.js` 改读固定名指针拿入口名，而那段跑在搜索路径还原之后（[[adr-0017]]）。丢掉的两类各有理由：
+
+   - **与 `.so` 绑死**：`src/cocos-js/**`、`src/effect.bin`、`jsb-adapter/**`。它们与 `libcocos.so` 里的 C++ 同属一次引擎构建，换引擎或改模块勾选时两边一起变、`.so` 必须重编——单独下发新 JS 配旧 `.so` 就是崩在绑定层，而它想修的东西本来也只能随包发。`cc.<md5>.js` 一个就好几 MB，下了还无人问津。
+   - **名字被 `main.js` 写死**：`src/system.bundle.*.js`、`src/polyfills.*.js`、`src/import-map*.json`。`main.js` 里 `require` 的是字面量旧 md5 名，新文件下下来没人念。`import-map` 还兼任引擎身份凭据（`imports.cc` → `engineHash()`），能热更就等于版本闸可伪造，**故意不解**。
+
+   `main.js` 自己两类都不占——它跑在搜索路径还原**之前**（还原本身就是它干的），天然不在 `dirs` 里，也**永远不许**出现在 `files` 里。模块 bundle 不受影响：它们的 `index.<md5>.js` 由客户端显式传 version 加载（版本从这张 manifest 自己反推，见 core 的 `bundleVersionFromAssetKeys` 与 [[adr-0016]]）。
+
+-1.5 `archiveManifests` / `rollbackManifests`：内容寻址下发布改成**只叠加、绝不清空**，历史各版本的字节都留在 CDN 上，于是「回滚」退化成「把旧那版的 manifest 重新发一遍」。两条硬约束：**① 号只能更大**——引擎默认 `cmpVersion` 把「远端号更小」判成本地已最新、**静默跳过**；而改掉比较规则是陷阱（同一个 `setVersionCompareHandle` 还服务 `loadLocalManifest` 的 `versionGreater`，改了会让新装的 APK 被旧缓存盖住）。**② 只能动内容真变了的包**——归档目录里躺着全部 manifest，给没变的也涨号 = 客户端判 NEW_VERSION 而 `genDiff` 空表 → worker 线程 SIGSEGV（真机崩过）。所以逐份与**当前在发的那版**比资产表，一致就原样不动；`*.version.manifest` 没有资产表，跟随它对应的主 manifest 的决定。这与 `--prev` 是同一条不变式：**「版本号变了」必须蕴含「内容真变了」**。
+
 0. `buildSplitManifests`（`--split`）：先跑一次 `buildManifest` 拿全表，再按 key 前缀分派——`assets/<name>/…` 且 `<name>` 不在 `aotBundles` 里的归该 bundle，其余（含 `assets/` 下的散文件）归 base。**只分派不重算**，所以 base ∪ bundles 恒等于不切时的全表，无重叠无遗漏（有测试守）。**各 manifest 的 asset key 一律相对 data 根**，bundle manifest 只是全表的子集——下载落盘后相对 storagePath 的结构必须与包内一致，搜索路径前缀一挂才解析得到（[[adr-0013]] 决策 2）。空目录不产出空 manifest。
 
-1. `buildManifest`：对 `dirs` 里每个存在的子目录，`fs.readdirSync(..,{recursive})`（或递归 walk）取全部文件；跳过**隐藏文件/目录**（basename 以 `.` 开头，对齐官方）。每文件：
+1. `buildManifest`：先对 `dirs` 里每个存在的子目录，`fs.readdirSync(..,{recursive})`（或递归 walk）取全部文件；跳过**隐藏文件/目录**（basename 以 `.` 开头，对齐官方）。每文件：
    - `size = fs.statSync(f).size`；
    - `md5 = crypto.createHash('md5').update(fs.readFileSync(f)).digest('hex')`（**全文件字节**，对齐官方；构建期非热路径，不做流式）；
    - key = `path.relative(root, f)` → `.replace(/\\/g,'/')`（POSIX 正斜杠）→ `encodeURI`（对齐官方）；
    - `compressed: true` **仅当** `path.extname(f) === '.zip'`。
+
+   再把 `files` 里点名的散文件按同一口径收进来（相对 root，不存在 / 不是文件的跳过）。它给产物**根上**那些不在任何子目录里、却必须随 base 更新的文件用 —— 目前只有 AOT 入口 `application.<md5>.js`。
 2. 组装 `remoteManifestUrl = packageUrl + manifestFilename`、`remoteVersionUrl = packageUrl + versionFilename`；`packageUrl` 强制补 `/` 结尾。
 3. `toVersionManifest`：浅拷贝后 `delete assets; delete searchPaths`。
 4. `writeManifests`：两份 `JSON.stringify(m, null, 2)` 写到 `outDir`（默认 root，使 `project.manifest` 随包内置）。
@@ -181,3 +208,9 @@ demo 实测：47 条全表 → base 22 条（`src/` 6 + `jsb-adapter/` 2 + `asse
 - **bin 冒烟**：`node dist/cli.cjs` 真跑——生成 3 资源（md5/size 正确、`.zip` 标 compressed、URL 拼接对、`version.manifest` 正确精简）→ verify 通过退出码 0 → 改文件后 `size-mismatch` 退出码 1。
 - **commit**：待提交。
 - **遗留 Minors**：Excel→配表转换（`config-excel.md`）、脚手架另开（YAGNI，用到再写）；native 端到端热更（remote-assets 托管到 filebrowser CDN + 原生构建真跑 `AssetsManager` 更新流程）待后续（决策表 #8 已备存储方案，`packageUrl` 即分享 base URL）。
+
+## 发包前的归属检查（`--split` 自带）
+
+`--split` 在写 manifest **之前**先扫一遍产物里各 bundle 的 `deps`/`redirect`，跨包依赖指向共享仓
+以外的包一律 `exit 1`、不出 manifest —— 资源归属漂了的话热更会在运行时找不到资源。判据、两道闸的
+分工与实况见 [[bundle-deps]]。

@@ -285,6 +285,74 @@ describe('App · 启动编排', () => {
     expect(e.calls).toContain('asset.release:cck-app-compat');
   });
 
+  it('10b. deps.engineHash 注入 → 并进 AppInfo（戳里没有它，运行时才取得到）', async () => {
+    const e = makeEnv();
+    e.setJson('cck-app-compat', { json: { version: '2.0.0', coreApiHash: 'h1' } });
+    const deps = { ...e.deps, engineHash: () => '25e81' };
+    let seen: unknown;
+    const app = createApp(e.config(), {
+      deps,
+      steps: [
+        defaultLaunchSteps(deps)[0],
+        {
+          name: 'peek',
+          phase: 'shared',
+          run: (ctx) => {
+            seen = ctx.bag.get(APP_INFO);
+            return Promise.resolve();
+          },
+        },
+      ],
+    });
+    await app.launch();
+    expect(seen).toEqual({ appVersion: '2.0.0', coreApiHash: 'h1', engineHash: '25e81' });
+  });
+
+  it('10c. 戳读不到时 engineHash 照样带上（两道闸互不依赖）', async () => {
+    const e = makeEnv();
+    const deps = { ...e.deps, engineHash: () => '25e81' };
+    let seen: unknown;
+    const app = createApp(e.config({ version: '3.0.0' }), {
+      deps,
+      steps: [
+        defaultLaunchSteps(deps)[0],
+        {
+          name: 'peek',
+          phase: 'shared',
+          run: (ctx) => {
+            seen = ctx.bag.get(APP_INFO);
+            return Promise.resolve();
+          },
+        },
+      ],
+    });
+    await app.launch();
+    expect(seen).toEqual({ appVersion: '3.0.0', engineHash: '25e81' });
+  });
+
+  it('10d. engineHash 返回 undefined（没开 md5Cache）→ AppInfo 里不出现这个键', async () => {
+    const e = makeEnv();
+    e.setJson('cck-app-compat', { json: { version: '2.0.0', coreApiHash: 'h1' } });
+    const deps = { ...e.deps, engineHash: () => undefined };
+    let seen: unknown;
+    const app = createApp(e.config(), {
+      deps,
+      steps: [
+        defaultLaunchSteps(deps)[0],
+        {
+          name: 'peek',
+          phase: 'shared',
+          run: (ctx) => {
+            seen = ctx.bag.get(APP_INFO);
+            return Promise.resolve();
+          },
+        },
+      ],
+    });
+    await app.launch();
+    expect(seen).toEqual({ appVersion: '2.0.0', coreApiHash: 'h1' });
+  });
+
   it('11. config.shared 自定义：按序加载多个共享 bundle', async () => {
     const e = makeEnv();
     const app = createApp(e.config({ shared: ['shared-ui', 'shared-config'] }), { deps: e.deps });

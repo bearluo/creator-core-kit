@@ -354,6 +354,63 @@ describe('BundleManager × BundleUpdater（加载前分包热更）', () => {
   });
 });
 
+describe('BundleManager 版本来源优先级（显式 > updater 反推 > 版本表）', () => {
+  /** 记下真正传给 source.loadBundle 的 version —— 这才是引擎拼 `index.<v>.js` 用的那个。 */
+  function makeEnv(versionOf?: string) {
+    const seen: (string | undefined)[] = [];
+    const source: IBundleSource = {
+      ...createMemoryBundleSource(),
+      loadBundle: (name, opts?: BundleLoadOptions) => {
+        seen.push(opts?.version);
+        return Promise.resolve();
+      },
+    };
+    const updater: BundleUpdater = {
+      ensureLatest: () => Promise.resolve(),
+      versionOf: () => versionOf,
+    };
+    return { seen, source, updater };
+  }
+
+  it('native：updater 反推的版本压过版本表 —— 更新刚落盘的那份才是对的', async () => {
+    const e = makeEnv('a1b2c');
+    const bm = createBundleManager({ source: e.source, updater: e.updater });
+    bm.setVersions({ shop: '旧表里的值' });
+    await bm.load('shop');
+    expect(e.seen).toEqual(['a1b2c']);
+    expect(bm.get('shop')?.version).toBe('a1b2c');
+  });
+
+  it('调用方显式指定最高（逃生口）', async () => {
+    const e = makeEnv('a1b2c');
+    const bm = createBundleManager({ source: e.source, updater: e.updater });
+    await bm.load('shop', { version: '手动指定' });
+    expect(e.seen).toEqual(['手动指定']);
+  });
+
+  it('web：updater 答不上来 → 回落版本表', async () => {
+    const e = makeEnv(undefined);
+    const bm = createBundleManager({ source: e.source, updater: e.updater });
+    bm.setVersions({ shop: 'webmd5' });
+    await bm.load('shop');
+    expect(e.seen).toEqual(['webmd5']);
+  });
+
+  it('都没有 → undefined（引擎按不带版本的名字取，即没开 md5Cache 的形态）', async () => {
+    const e = makeEnv(undefined);
+    await createBundleManager({ source: e.source, updater: e.updater }).load('shop');
+    expect(e.seen).toEqual([undefined]);
+  });
+
+  it('远程 url 加载不问 updater —— 那条路没有 manifest', async () => {
+    const e = makeEnv('a1b2c');
+    const bm = createBundleManager({ source: e.source, updater: e.updater });
+    bm.setVersions({ shop: 'webmd5' });
+    await bm.load('http://cdn/shop', { name: 'shop' });
+    expect(e.seen).toEqual(['webmd5']);
+  });
+});
+
 describe('createMemoryBundleSource', () => {
   it('loadBundle→hasBundle true；releaseBundle→false', async () => {
     const src = createMemoryBundleSource();

@@ -4,7 +4,7 @@
   "taskName": "android-boot",
   "startScene": "db://assets/boot/Boot.scene",
   "debug": true,
-  "md5Cache": false,
+  "md5Cache": true,
   "sourceMaps": false,
   "buildMode": "normal",
   "mainBundleCompressionType": "merge_dep",

@@ -21,6 +21,7 @@ export type {
   CheckResult,
   HotUpdateProgress,
 } from './hotupdate-backend';
+export { bundleVersionFromAssetKeys } from './bundle-version';
 export { createBundleUpdater, BUNDLE_UPDATER } from './bundle-updater';
 export type { BundleUpdater, BundleUpdaterOptions } from './bundle-updater';
 export {

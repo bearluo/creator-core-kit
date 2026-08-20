@@ -58,4 +58,32 @@ describe('createSemverVersionGate（默认安全闸）', () => {
     const r = gate.canApply({ version: '1.1.0' }, { appVersion: '1.0.0' });
     expect(r.ok).toBe(true);
   });
+  it('12. engineHash 两边都有且不等 → 拒（热更换不了引擎）', () => {
+    const r = gate.canApply(
+      { version: '1.1.0', engineHash: '25e81' },
+      { appVersion: '1.0.0', engineHash: '9c2f1' },
+    );
+    expect(r.ok).toBe(false);
+    expect(r.needFullUpdate).toBe(true);
+    expect(r.reason).toContain('引擎');
+  });
+  it('13. engineHash 相等、coreApiHash 也相等 → 放行', () => {
+    const r = gate.canApply(
+      { version: '1.1.0', coreApiHash: 'aaa', engineHash: '25e81' },
+      { appVersion: '1.0.0', coreApiHash: 'aaa', engineHash: '25e81' },
+    );
+    expect(r.ok).toBe(true);
+  });
+  it('14. engineHash 单边缺失 → 放行（判不了不阻断，与 coreApiHash 同语义）', () => {
+    expect(gate.canApply({ version: '1.1.0', engineHash: '25e81' }, { appVersion: '1.0.0' }).ok).toBe(true);
+    expect(gate.canApply({ version: '1.1.0' }, { appVersion: '1.0.0', engineHash: '25e81' }).ok).toBe(true);
+  });
+  it('15. coreApiHash 一致但引擎换了 → 仍拒（两道闸不可互相替代）', () => {
+    const r = gate.canApply(
+      { version: '1.1.0', coreApiHash: 'aaa', engineHash: '25e81' },
+      { appVersion: '1.0.0', coreApiHash: 'aaa', engineHash: '9c2f1' },
+    );
+    expect(r.ok).toBe(false);
+    expect(r.needFullUpdate).toBe(true);
+  });
 });

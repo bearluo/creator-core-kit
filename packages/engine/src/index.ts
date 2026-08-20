@@ -37,6 +37,7 @@ export {
   createCcHotUpdateBackend,
   createCcBundleBackendFactory,
   pruneCcBundleStorage,
+  resetCcHotUpdateOnAppChange,
   ccHotUpdateModule,
 } from './hotupdate-backend';
 export type { CcHotUpdateOptions } from './hotupdate-backend';
@@ -48,6 +49,9 @@ export {
   rebaseManifest,
   seedBundleManifest,
   retiredBundleDirs,
+  engineHash,
+  packagedAotEntry,
+  aotStamp,
 } from './hotupdate-paths';
 
 // —— 第 3 批 · 进阶（Network engine 半：ISocket 的 WebSocket 实现）——

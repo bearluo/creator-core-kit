@@ -1,9 +1,10 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   computeCoreApiHash,
+  readEngineHash,
   hashApiSurface,
   readStamp,
   verifyCompat,
@@ -93,5 +94,70 @@ describe('verifyCompat（出包期主动校验）', () => {
     expect(
       verifyCompat(app, { version: '1.3.0', minAppVersion: '1.0.0', coreApiHash: 'aaaaaaaaaaaa' }),
     ).toEqual({ ok: true });
+  });
+});
+
+describe('readEngineHash（引擎指纹 = 产物 import-map 里 cc 的 md5）', () => {
+  let root: string;
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'cck-eng-'));
+  });
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  /** 造一份 native 产物的 `src/import-map*.json`。 */
+  const make = (dir: string, file: string, content: string): string => {
+    const d = join(root, dir, 'src');
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, file), content);
+    return join(root, dir);
+  };
+
+  it('开了 md5Cache → 抠出那段 md5', () => {
+    const r = make('a', 'import-map.1d8b3.json', JSON.stringify({ imports: { cc: './cocos-js/cc.25e81.js' } }));
+    expect(readEngineHash(r)).toBe('25e81');
+  });
+
+  it('没开 md5Cache（cc.js）→ undefined，闸休眠而不是拿个假值去比', () => {
+    const r = make('b', 'import-map.json', JSON.stringify({ imports: { cc: './cocos-js/cc.js' } }));
+    expect(readEngineHash(r)).toBeUndefined();
+  });
+
+  it('产物里没有 src/ 或没有 import-map → undefined', () => {
+    expect(readEngineHash(join(root, 'nope'))).toBeUndefined();
+    mkdirSync(join(root, 'c', 'src'), { recursive: true });
+    expect(readEngineHash(join(root, 'c'))).toBeUndefined();
+  });
+
+  it('import-map 坏了 / 没有 cc 这一项 → undefined 而不是抛', () => {
+    expect(readEngineHash(make('d', 'import-map.x.json', '{ 不是 json'))).toBeUndefined();
+    expect(readEngineHash(make('e', 'import-map.y.json', JSON.stringify({ imports: {} })))).toBeUndefined();
+  });
+});
+
+describe('verifyCompat 的引擎指纹一端', () => {
+  const base: CompatStamp = { version: '1.0.0', coreApiHash: 'h1' };
+
+  it('两端都有且不等 → 拒', () => {
+    const r = verifyCompat({ ...base, engineHash: '25e81' }, { ...base, version: '1.0.1', engineHash: '9c2f1' });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain('引擎');
+  });
+
+  it('两端都有且相等 → 过', () => {
+    expect(verifyCompat({ ...base, engineHash: '25e81' }, { ...base, engineHash: '25e81' }).ok).toBe(true);
+  });
+
+  it('单边缺失 → 过（app 戳结构性打不上引擎指纹，不能因此拦下所有发布）', () => {
+    expect(verifyCompat(base, { ...base, engineHash: '25e81' }).ok).toBe(true);
+    expect(verifyCompat({ ...base, engineHash: '25e81' }, base).ok).toBe(true);
+  });
+
+  it('引擎相同但 coreApiHash 不同 → 仍拒（两道闸各管各的）', () => {
+    const r = verifyCompat(
+      { version: '1.0.0', coreApiHash: 'h1', engineHash: '25e81' },
+      { version: '1.0.1', coreApiHash: 'h2', engineHash: '25e81' },
+    );
+    expect(r.ok).toBe(false);
+    expect(r.reason).toContain('core API');
   });
 });

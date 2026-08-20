@@ -6,8 +6,25 @@
 
 | 文件 | 起始场景 | 用途 |
 |---|---|---|
-| `android-boot.json` | `db://assets/boot/Boot.scene` | 正常启动链路：dispatch → hotupdate → shared → 登录 |
+| `android-boot.json` | `db://assets/boot/Boot.scene` | 正常启动链路：dispatch → hotupdate → shared → 登录（**`md5Cache: true`**，见下） |
 | `web-mobile-boot.json` | `db://assets/boot/Boot.scene` | 同上，出 web 产物（**`md5Cache: true`** —— web 的热更靠 `index.<md5>.js` 换文件名，关了就没有版本可言） |
+
+## 两个平台都开 `md5Cache`
+
+内容寻址（`index.<md5>.js`）是热更的地基，不是可选优化：**同名不同内容**意味着 CDN 只能 no-store、
+回滚要重新出包、老客户端正在拉的文件会被新版本抽走。开了之后新旧天然共存，CDN 可以 immutable 缓存，
+回滚只需把旧 manifest 重新发一遍。
+
+native 侧多两件配套事，`scripts/build.mjs` 已经做进流程，改配置前先知道：
+
+- **客户端加载 bundle 时必须显式传 version**，且这个 version 从**刚更新完的那份 manifest** 反推
+  （core 的 `bundleVersionFromAssetKeys`）。包内 `settings.bundleVers` 写死的是出包那天的 md5，
+  热更后拿它去取会 404 后**静默回落包内旧代码**——热更报成功、代码没生效、还不报错。
+- **base manifest 只丢引擎绑定的那几类**（`cck-manifest --md5`）：`src/cocos-js/**`、
+  `src/effect.bin`、`jsb-adapter/**`（与 `libcocos.so` 是同一次引擎构建的两半）与
+  `src/system.bundle.*` / `src/polyfills.*` / `src/import-map*`（名字写死在 `main.js` 里）。
+  **AOT 整条链照发**，`main.js` 改读固定名指针 `src/cck-aot.json` 拿入口名（ADR-0017），
+  所以改 `assets/boot` 只要热更 + 重启，不必发 APK。
 
 怎么用见 skill `/demo-build`（两条路：Creator 面板导入，或关掉编辑器走命令行）。
 

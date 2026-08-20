@@ -16,13 +16,104 @@
 
 ## 三层更新边界
 
-热更能覆盖多少，由「搜索路径还原发生在什么时候」这条时间线切死：
+热更能覆盖多少，由两条线切死：搜索路径还原发生在什么时候，以及**谁的名字带 md5**
+（产物开了 `md5Cache`，见 [[build-configs/README]]）。
 
-| 层 | 内容 | 能否热更 |
+| 层 | 内容 | 拦住它的是什么 |
 |---|---|---|
-| **L0** 还原之前 | native `.so`（引擎 C++ + jsb 绑定）、`jsb-adapter/web-adapter.js`、**`main.js` 自身** | **不能**，只能发版 |
-| **L1** 还原之后 · 需重启 | `src/`（含 `settings.json`）、`assets/main`、`assets/res`、`jsb-adapter/engine-adapter.js` | 能，`game.restart()` 生效 |
-| **L2** 模块 bundle | 各功能 Asset Bundle | 能，**可不重启** |
+| **L0** 还原之前 | `libcocos.so`（引擎 C++ + jsb 绑定）、`jsb-adapter/web-adapter.js`、**`main.js` 自身** | 跑在搜索路径还原**之前**，而 `main.js` 就是还原本身 → 只能发版 |
+| **L1-E** 引擎那一半 | `src/cocos-js/cc.<md5>.js`、`jsb-adapter/engine-adapter.js`、`src/effect.bin`（引擎 UBO 描述表，**不带 md5**） | 与 `.so` 是同一次引擎构建的两半，换 JS 不换 `.so` 崩在绑定层 → **只能发 APK**；`engineHash` 闸按 `cc.<md5>.js` 识别 |
+| **L1-N** 被 `main.js` 写死名字 | `src/system.bundle.<md5>.js`、`src/polyfills.<md5>.js`、`src/import-map.<md5>.json` | 纯 JS、与 `.so` 无关（`system.bundle` 里 `jsb`/`native`/`cc.` 出现 0 次），但 `main.js` 里 `require` 的是字面量旧 md5 名，新文件下下来没人念。`import-map` 还兼任引擎身份凭据（`imports.cc`），**故意不解** |
+| **L1-A** 内容驱动的 AOT | `application.<md5>.js` → `settings.<md5>.json` → `src/chunks/bundle.<md5>.js`、`assets/{main,resources,internal}` | **无 —— 能热更，重启生效**（[[adr-0017]]）。入口名不再写死：`main.js` 读固定名指针 `src/cck-aot.json`，而那段跑在还原**之后** |
+| **L2** 模块 bundle | 各功能 Asset Bundle（`foundation` / 业务模块 / 皮包） | 无 —— 能热更，**可不重启** |
+
+## AOT 入口：解锁 L1-A 的那把钥匙
+
+Creator 内置模板把 `application.<md5>.js` 的名字**烘死**在 `main.js` 里，热更下发的新 AOT 因此
+没人念。但 `main.js` 是我们自己的（`build-templates/native/index.ejs`，官方覆盖点），而那句
+`System.import` 跑在**搜索路径还原之后** —— 改成运行时解析就行：
+
+```
+main.js  ── 读 src/cck-aot.json（固定名，随 base 热更）
+            └─ { "application": "./application.<md5>.js" }
+                 └─ settingsPath = src/settings.<md5>.json
+                      ├─ scriptPackages = ../chunks/bundle.<md5>.js   全部业务代码
+                      └─ bundleVers.{main,resources,internal}
+```
+
+出包时 `build.mjs` 在 Creator 构建之后、gradle 之前写这份指针，并把根上的入口用 `--files`
+喂给 manifest（子目录遍历够不着产物根）。三道兜底，任何一道触发都**退回包内 AOT** 而不是抛
+——黑屏是最坏结果，退回还能起来、下一轮 check 会重下：指针读不到 / 不是合法 JSON / 指向的
+文件不存在（半更新）。出包侧另有一道硬闸：`project.manifest` 里没有入口或没有指针就构建失败，
+否则「AOT 热更静默失效」——构建全绿、下发成功、玩家跑的还是包内旧代码。
+
+**base manifest 因此装的是 AOT 整条链**（实测 21 项：入口 + 指针 + settings + chunks +
+`assets/{main,resources,internal}`），L1-E 与 L1-N 一个都不发。`assets/boot` 从「发新包、重启」
+变成「热更、重启」；仍要能**不打断玩家**地热修的逻辑照旧放 `foundation`（免重启），见 [[bundle-layout]]。
+引擎指纹变才回到「必须发 APK」。
+
+⚠️ **`assets/internal` 结构上属 L1-A，实践上跟引擎走。** 两半都实测过：
+① 它的资源集合与 `settings.engine.builtinAssets` **双向完全相等**（各 20 项），由**引擎模块开关**决定
+而不是场景用了什么 —— demo 从没用过 spine，但 `engine.json` 里 `spine`/`spine-3.8`/`dragon-bones` 开着，
+`builtin-spine` + `default-spine-material` 照样进包；`3d` 关着，`builtin-standard` 就不在。
+② **工程引用的 `db://internal` 资源不进 internal**，走的是普通 bundle 归属规则 —— 而那条规则会漂，
+见下节。
+⇒ **internal 变 ⟺ 引擎模块变 ⟺ `cc.<md5>.js` 变 ⟺ 引擎指纹闸拦成整包更新**。它在 base manifest 里，
+但**成本为零**：引擎没变时逐字节相同、不产生 diff；引擎变了整个更新早被闸拒成「发 APK」。
+留着它只为让 `settings.bundleVers.internal` 指向的目录一定在本地。
+`src/effect.bin` 连结构上都不属 L1-A：5.7 KB zlib 解压出 256 KB，全是 `cc_matView` ×324、
+`cc_fogColor` ×80 这类**引擎 UBO / descriptor 布局**，不含任何 effect 名，跟工程内容无关；且它
+**固定名无 md5**，一旦下发会直接破坏内容寻址的 immutable 缓存。两条理由各自都够，`isEngineBound`
+里单列了它。
+
+## 资源归属：一个共享仓，别的都不许借
+
+Creator 把**被多个 bundle 引用的资源判给优先级最高的引用者**，其余包降级成 `cc.config` 的
+`deps` + `redirect`（「去那个包拿」）。归属因此随引用关系漂移，而漂移**静默**：构建全绿、
+manifest 正常、热更下发成功，直到运行时在 `redirect` 指向的包里找不到资源。
+
+demo 的 2026-08-20 产物里两种漂法都出过：
+
+| 漂法 | 实况 | 后果 |
+|---|---|---|
+| **漂进 AOT** | `boot`（→`main`，priority 7）与 6 个皮包共用 `default_btn_normal` → 图归 `main`，皮包 `deps:["main"]` | `main` 只随 APK 换。热更下去的皮包引用旧 APK 的 `main` 里没有的 uuid → 界面一开就挂。**改的还不是那个皮包，是 boot** |
+| **跨马甲漂** | 两个马甲的地基皮包同为 priority 2、都引用它 → Creator 挑了 `skin-base-foundation` | `skin-vest-lobby`/`skin-vest-mail` 依赖 **base 马甲**的包，马甲隔离破掉 |
+
+优先级（`.meta` 的 `userData.priority`）：`resources` 8 > **`main` 7**（Creator 内置）>
+`foundation` 6 > `shared` 5 > `lobby` 3 > 地基皮包 2 > 其余 1。抬高 `foundation`/`shared` 去压
+`main` 会把 AOT 框架拉进热更包，[[adr-0014]] 已经否掉了 —— 所以压不过 `main`，只能绕开它。
+
+**规则（硬）**：
+
+1. **共享资源只有一个仓 = `resources`**（priority 8，工程里最高，谁也抢不走 → 归属钉死）。
+   跨包依赖只许指向它。
+2. **用到的每个 `db://internal` 资源，在 `assets/resources/internal-pin.prefab` 里挂一个节点
+   「钉」一次**。仓的优先级最高，归属被它吸走 —— **工程各处照常引用 `db://internal`，一行都不用改**，
+   也不产生副本字节。加新内置图 = 往钉子里加一个节点。
+3. 它们跟 AOT 同寿命 —— L1-A 解锁后这意味着「加一张内置图要热更整个 base 并重启」，不再是发 APK。
+
+**两道闸**（判据与分工见 [[bundle-deps]]）：
+
+- **源码期** `pnpm check:pins`（= `cck-manifest check-pins --assets apps/demo/assets`）——
+  不用构建。`assets/` 下任何资产引用的 uuid，只要不属于本工程（没有对应 `.meta`），就必须也被
+  `resources/` 里的资产引用一次，否则报出 uuid + 引用它的文件列表并 `exit 1`。
+- **产物期** `cck-manifest --split` 写 manifest 之前扫 `assets/*/cc.config*.json` 的
+  `deps`/`redirect`，指向共享仓以外的任何包一律拒发（`--allow-deps` 可声明别的仓名）。
+
+产物期那道**会漏一类**：一个外部资源只被**一个**包引用时不产生 `deps`，当场看不出问题，等哪天
+第二个包也用它才漂 —— 源码期那道要求「引用即钉」，把这类提前拦住。反过来工程自有资源在多个
+可热更包之间共用时 uuid 不算「外部」，只有产物期看得见，所以两道都要有。
+
+钉上之后的产物：`resources` 自有 7 项，`native/` 下是**原 internal uuid** 的两张 png
+（`20835ba4-….90cf4.png` / `7d8f9b89-….cea68.png`）；`main` 自有从 8 项降到 3 项；
+**所有跨包依赖统一指向 `resources`**，跨马甲依赖清零。
+
+⚠️ **app 戳 `assets/resources/cck-app-compat.json` 随 AOT 一起热更**，因此它描述的是「当前跑的
+这套代码的身份」，不是「这个 APK 的身份」。这是**必须**的：热更换掉 `chunks/bundle.js` 就是换掉了
+core，戳若冻在 APK 上，`coreApiHash` 闸会开始拒绝本来正确的模块更新。真正不可伪造的那一端是
+**引擎指纹** —— `AppInfo.engineHash` 运行时取自 SystemJS import map（L1-N，热更够不着）。
+同理「APK 换没换」也不能再问 `settings.bundleVers`（它现在会随热更翻，会把刚下好的缓存删掉、
+死循环），改问 `main.js` 烘进来的 `window.__cckAotEntry`。
 
 落到实处：定时器 / Promise polyfill / DOM 垫片 / `WebSocket` / **`localStorage`** 出问题热更修不了
 （`apply()` 靠 `localStorage` 存搜索路径 —— 存档机制自己不可热更）。
@@ -149,6 +240,26 @@ node scripts/build.mjs boot --manifest --apk        # 出包：Creator 构建 �
 node scripts/build.mjs boot --manifest --manifest-version 1.0.1   # 只更新 CDN（不出包）
 ```
 
+**CDN 是叠加式的，只叠加、绝不清空**（与 web 同理，与开 `md5Cache` 之前相反）：文件名带 md5，
+历史各版本的字节留在 CDN 上正是「回滚只换 manifest」成立的前提。每次发布顺手把这一版的
+manifest 归档进 `releases/<version>/`。
+
+### 回滚
+
+```bash
+# 号必须比当前在发的大，否则客户端判 up-to-date、回滚无声失败
+node ../../packages/tools/dist/cli.cjs rollback --cdn <cdnDir> --release 1.0.1 --version 1.0.3
+```
+
+它把 `releases/1.0.1/` 的 manifest 配上更大的号发回 CDN 根，**内容文件一个都不用重传**。
+
+- **⚠️ 版本号只增，别去注入 `setVersionCompareHandle`。** 引擎默认 `cmpVersion` 会把「远端号更小」
+  判成本地已最新，看起来注入「不等即更新」就解决了——**那是陷阱**：同一个 handle 还服务
+  `loadLocalManifest` 的 `versionGreater`（包内 manifest 比缓存新 → 清掉旧热更缓存），
+  改了会让**新装的 APK 永远被上一版热更缓存盖住**。
+- **⚠️ 只有内容真变了的包才涨号**（`rollback` 已自动比对）。给没变的包也涨号 = 客户端判
+  NEW_VERSION、`genDiff` 却是空表 → worker 线程 SIGSEGV，与下面 `--prev` 那条是同一个坑。
+
 `--manifest` 底层是 `packages/tools` 的 CLI：
 
 ```bash
@@ -163,6 +274,17 @@ node packages/tools/dist/cli.cjs \
 - CDN base 取 filebrowser 的固定分享（`/api/public/dl/<hash>/`，hash 永久不变），见 skill
   `filebrowser-cdn`。
 
+### APK 覆盖安装 / 降级安装
+
+`Bootstrap` 在 `bootCoreKit` **之前**调 `resetCcHotUpdateOnAppChange()`：主包 md5
+（`settings.bundleVers.main`）变了就把 `cck-remote-asset/` + `cck-bundle-asset/` + `<base>_temp/`
+整个删掉，从头再更新一遍。
+
+引擎自带的 `versionGreater` 只在版本号纪律成立时有效——装了**更旧**的包时包内号更小、缓存反而接管，
+而 `coreApiHash` 闸此时不会跑（缓存 = 远端 → check 判 up-to-date → 不拉 sidecar）。
+少了这段，表现就是「装完新包启动报错，清数据才好」。AOT 没变时该判据不变，**不会**让玩家因一次
+纯业务热更而重下所有包。
+
 ### 版本闸的两枚戳
 
 `build.mjs` 每次构建自动打两枚，hash 由同一份 `packages/core/dist/index.d.ts` 算出，不等就当场抛：
@@ -172,13 +294,18 @@ node packages/tools/dist/cli.cjs \
 | **app 戳** `cck-app-compat.json` | `assets/resources/`（进包，归 base manifest） | Creator 构建**之前** | core `platform` 步 → `AppInfo` |
 | **更新戳** `cck-update-compat.json` | `build/android/data/` 根 → CDN 根 | 跟 manifest 一起 | engine 后端拉 sidecar → `UpdateInfo` |
 
-闸的判定：两端 `coreApiHash` 不等 → 拒并要求整包更新（`needFullUpdate`），不下载、不重启；
+更新戳还多一枚 **`engineHash`**（`cc.<md5>.js` 的那段 md5，`--root` 从产物 `src/import-map*.json` 读）。
+app 戳里**没有**它 —— app 戳生成于 Creator 构建之前、那时产物还不存在；客户端那一端由 engine 的
+`engineHash()` 运行时从 SystemJS import map 取。两端比对挡住「热更来的 JS 配上另一个引擎」，
+这是 `coreApiHash` 够不着的一层（换 Creator 版本 / 改引擎模块勾选时 `coreApiHash` 一动不动）。
+
+闸的判定：两端 `coreApiHash` 不等、或两端 `engineHash` 不等 → 拒并要求整包更新（`needFullUpdate`），不下载、不重启；
 `--min-app-version <v>` 可再加一道「要求 app 版本 ≥ 此」。**单边缺失恒放行**——所以漏装会伪装成
 "通过"，判据要看 `[App] app 戳未读到` 那行 warn 有没有出现，出现了就是闸在休眠。
 
 ⚠️ app 戳**只能放 `resources`**：`main` 只收被场景引用到的资源，散落的 JSON 会被丢掉；而
 `shared` / `foundation` 是热更包，放那儿等于让模块级热更能改掉 app 自称的 hash，闸自己就废了。
-`resources` 归 base manifest，跟 AOT 一起被 base 热更替换，戳因此永远描述"当前生效的那份 AOT"。
+`resources` 是 AOT 包、被 `--md5` 排除出 base manifest → **戳不可能被热更改动**，它严格等于「这个 APK 的身份」，闸的这一端因此不可伪造。
 
 **⚠️ `--manifest` 必须夹在 Creator 构建与 gradle 之间**：Creator 每次清空 `data/`，gradle 又把
 `data/` 整个塞进 APK。顺序错了 APK 里一个 manifest 都没有，且要装到机器上才报错。
@@ -205,8 +332,10 @@ native 的一切都围绕「怎么把文件下下来」；**web 一个文件都�
 | 产物 | 一 bundle 一份 manifest（每文件 md5+size） | **一张版本表** `cck-versions.json`（bundle → md5） |
 | 谁下载 | `AssetsManagerEx` 自己下 | 浏览器（换文件名即换版本） |
 | 基址 | dispatcher 下发 `cdn_url`，运行时注入 | **不需要** —— 版本表与 bundle 同源，跟着页面走 |
-| 部署 | 清空 CDN 目录再拷（只留最新一版） | **只叠加、绝不清空** |
+| 部署 | **只叠加、绝不清空** + 归档 `releases/<version>/` | **只叠加、绝不清空** |
 | 生效 | base 要重启；模块包免重启 | 免重启（下次 `load` 就是新的） |
+| bundle 版本 | 从**刚更新完的那份 manifest** 反推（`bundleVersionFromAssetKeys`） | 版本表 `cck-versions.json` |
+| 回滚 | `cck-manifest rollback`（换 manifest，不重传内容） | 换版本表（旧 md5 文件还在） |
 | 版本闸 | 两枚戳（app 戳 + 更新戳） | app 戳 + **版本表里的 `coreApiHash`** |
 | 检查失败 | base 与分包**一律中止**·可重试 | **一律中止**·可重试（表与页面同源，缺它 = 没部署上去） |
 

@@ -16,6 +16,7 @@
     "lint:pkgs": "eslint .",
     "lint:demo": "eslint --no-config-lookup --config apps/demo/eslint.config.mjs apps/demo",
     "check:vm-tests": "node scripts/check-vm-tests.mjs",
+    "check:pins": "node packages/tools/dist/cli.cjs check-pins --assets apps/demo/assets",
     "proto:sync": "node scripts/sync-proto.mjs",
     "docs:api": "typedoc",
     "typecheck": "tsc -b"

@@ -28,6 +28,14 @@ export interface IHotUpdateBackend {
   apply(): Promise<void>;
   /** 重启生效（native：game.restart；web：location.reload）。 */
   restart(): void;
+  /**
+   * 本地 manifest（更新成功后 = 远端那份）的 asset key 列表，供反推该 bundle 的内容版本
+   * （见 {@link bundleVersionFromAssetKeys}）。**只在 check/download 跑完后调用才有意义**。
+   *
+   * 可选：没有 manifest 概念的后端（web / 空后端）不实现，`BundleUpdater.versionOf` 随之恒
+   * `undefined`，版本回落到别的来源。
+   */
+  assetKeys?(): readonly string[];
 }
 
 /** DI token：engine Bootstrap register 平台适配；未注册时 HotUpdateService 回退空后端（恒 up-to-date）。 */

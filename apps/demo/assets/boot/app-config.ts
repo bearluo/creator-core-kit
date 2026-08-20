@@ -10,7 +10,7 @@ import { buildValue } from './build-config';
  *
  * | 层 | 内容 | 换它要 |
  * |---|---|---|
- * | ① **AOT** | 引擎 + `@cck/core` + `@cck/engine` + `assets/boot/`（本文件 + Bootstrap + Boot.scene + 启动界面） | **发新包、重启** |
+ * | ① **AOT** | 引擎 + `@cck/core` + `@cck/engine` + `assets/boot/`（本文件 + Bootstrap + Boot.scene + 启动界面） | **热更、重启**（引擎指纹变才发包） |
  * | ② **地基** | `assets/foundation/`：协议 / 登录 / 认证 / 网关搬家 / 模块清单 / 模块契约 / 跨模块事件 | 热更，不重启 |
  * | ③ **模块** | `assets/modules/*`：lobby / mail / shop / mini-clicker / mini-dodge | 按需 load / release |
  *

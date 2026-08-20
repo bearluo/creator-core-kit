@@ -547,7 +547,7 @@ Defined in: [packages/core/src/bundle/bundle-manager.ts:17](https://hlgit.5518ga
 
 > `const` **BUNDLE\_MANAGER**: [`Token`](di.md#tokent)\<[`BundleManager`](bundle.md#bundlemanager)\>
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:154](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L154)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:164](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L164)
 
 DI token：项目可 register 自己的 BundleManager 覆盖默认。
 
@@ -642,7 +642,7 @@ preset.present 里的名字视为一开始就已就绪（免加载）。不含�
 
 > **getBundleManager**(): [`BundleManager`](bundle.md#bundlemanager)
 
-Defined in: [packages/core/src/bundle/bundle-manager.ts:159](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L159)
+Defined in: [packages/core/src/bundle/bundle-manager.ts:169](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-manager.ts#L169)
 
 便捷取用：优先 tryResolve(BUNDLE_MANAGER)；未注册则进程级默认（BUNDLE_SOURCE/内存背书）。
 

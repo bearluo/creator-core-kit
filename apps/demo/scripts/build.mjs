@@ -114,11 +114,11 @@ const makeStamp = (out, version, extra = []) => {
     encoding: 'utf8',
   });
   if (r.status !== 0) throw new Error(`打戳失败：${r.stderr || r.stdout}`);
-  return read(out).coreApiHash;
+  return read(out);
 };
 
 const appStampPath = join(DEMO, 'assets', 'resources', 'cck-app-compat.json');
-const coreApiHash = makeStamp(appStampPath, appVersion);
+const { coreApiHash } = makeStamp(appStampPath, appVersion);
 console.log(`▶ app 戳 assets/resources/cck-app-compat.json（version=${appVersion} coreApiHash=${coreApiHash}）`);
 
 mkdirSync(TEMP, { recursive: true });
@@ -162,6 +162,19 @@ if (settingsMtime() === before) {
 }
 console.log(`✓ Creator 构建完成 → ${OUT_REL}`);
 
+// —— AOT 入口指针：解开 L1-A 的那把钥匙 ——
+//
+// `main.js` 不再写死 `application.<md5>.js`，改读这个固定名文件（见 build-templates/native/index.ejs）。
+// 它跟着 base manifest 热更下发 → AOT 整条链（application → settings → chunks →
+// assets/{main,resources,internal}）都能换，重启生效。落 `src/` 下才进得了 manifest 的遍历集合。
+// 必须夹在 Creator 构建与 manifest / gradle **之间**：Creator 每次清空 data/，gradle 打包 data/。
+let aotEntry;
+if (isNative) {
+  aotEntry = readdirSync(DATA).find((f) => /^application\..+\.js$/.test(f)) ?? 'application.js';
+  writeFileSync(join(DATA, 'src', 'cck-aot.json'), `${JSON.stringify({ application: `./${aotEntry}` }, null, 2)}\n`);
+  console.log(`▶ AOT 入口指针 src/cck-aot.json → ./${aotEntry}`);
+}
+
 // 热更 manifest 必须夹在 Creator 构建与 gradle **之间**：Creator 每次都会清空 data/，
 // gradle 又把 data/ 整个塞进 APK 的 assets。顺序错了 APK 里就一个 manifest 都没有，
 // 而且是静默的——要等装到机器上，热更那步才报「loadRemoteManifest 拒收」。
@@ -201,7 +214,13 @@ if (flag('manifest')) {
   // 绕开了本该把回调弹回主线程的 `prepareFinished`，UPDATE_FINISHED 于是在非主线程进 JS VM
   // → `se::AutoHandleScope` SIGSEGV。见 hotupdate-service.md「坑」。
   const prev = cdnDir && existsSync(cdnDir) ? ['--prev', cdnDir] : [];
-  spawnSync(process.execPath, [CLI, '--root', DATA, '--url', cdnUrl, '--version', version, '--split', ...prev, '--out', DATA], {
+  // 内容寻址产物（md5Cache）：base manifest 只丢与引擎绑死 / 名字被 main.js 写死的那几类
+  // （cocos-js、effect.bin、jsb-adapter、system.bundle、import-map），AOT 照发 —— 入口名现在
+  // 由 src/cck-aot.json 指针运行时解析，下发的新 AOT 有人念了。
+  const md5 = cfg.md5Cache ? ['--md5'] : [];
+  // `--files`：AOT 入口躺在产物**根**上，不在 src|assets|jsb-adapter 里，子目录遍历够不着它。
+  const files = ['--files', aotEntry];
+  spawnSync(process.execPath, [CLI, '--root', DATA, '--url', cdnUrl, '--version', version, '--split', ...prev, ...md5, ...files, '--out', DATA], {
     stdio: ['ignore', 'ignore', 'inherit'],
   });
   // 更新戳：`hotupdate-backend` 在发现新版本时按 `packageUrl + compatFilename` 直接拉它，
@@ -209,17 +228,43 @@ if (flag('manifest')) {
   // 也不需要——它是按 URL 取的，不是热更下发的。**base 和所有分包共用这一份**（大家 packageUrl 同根）。
   const upStamp = join(DATA, 'cck-update-compat.json');
   const minApp = opt('min-app-version');
-  const upHash = makeStamp(upStamp, version, minApp ? ['--min-app-version', minApp] : []);
-  console.log(`▶ 更新戳 cck-update-compat.json（version=${version} coreApiHash=${upHash}${minApp ? ` minAppVersion=${minApp}` : ''}）`);
+  // `--root DATA` → 一并打**引擎指纹**（产物 `src/import-map*.json` 里 cc 的 md5）。app 戳打不上：
+  // 它在 Creator 构建之前就要写进 assets/resources/，那时产物还不存在；客户端那一端由 engine 的
+  // `engineHash()` 运行时从 SystemJS import map 取，两边比对挡住「热更来的 JS 配上另一个引擎」。
+  const { coreApiHash: upHash, engineHash } = makeStamp(upStamp, version, [
+    '--root', DATA,
+    ...(minApp ? ['--min-app-version', minApp] : []),
+  ]);
+  console.log(`▶ 更新戳 cck-update-compat.json（version=${version} coreApiHash=${upHash}${engineHash ? ` engineHash=${engineHash}` : ''}${minApp ? ` minAppVersion=${minApp}` : ''}）`);
+  if (cfg.md5Cache && !engineHash)
+    throw new Error('开了 md5Cache 却读不到引擎指纹（src/import-map*.json 的 imports.cc）—— 引擎版本闸会静默休眠，先查产物');
   if (upHash !== coreApiHash)
     throw new Error(`更新戳与 app 戳的 coreApiHash 不一致（${upHash} ≠ ${coreApiHash}）—— 同一次构建不该出现，检查是不是中途重编了 core`);
 
-  const got = read(join(DATA, 'project.manifest')).packageUrl;
-  if (got !== cdnUrl) throw new Error(`manifest 基址不对：${got}`);
+  const baseManifest = read(join(DATA, 'project.manifest'));
+  if (baseManifest.packageUrl !== cdnUrl) throw new Error(`manifest 基址不对：${baseManifest.packageUrl}`);
+  // AOT 热更的两个必要条件，缺一就**静默失效**（构建全绿、下发成功、玩家跑的还是包内旧 AOT）：
+  // 入口本体要下得来，指针要能被换掉。
+  for (const k of [aotEntry, 'src/cck-aot.json']) {
+    if (!baseManifest.assets[k])
+      throw new Error(`base manifest 里没有 ${k} —— AOT 热更会静默失效，查 --files / --md5 的排除清单`);
+  }
   if (cdnDir) {
-    rmSync(cdnDir, { recursive: true, force: true });
-    cpSync(DATA, cdnDir, { recursive: true });
-    console.log(`✓ manifest 就位，并同步到 ${cdnDir}`);
+    if (cfg.md5Cache) {
+      // ⚠️ 内容寻址下**只叠加、绝不清空**（与 web 同理）：文件名带 md5，新旧天然共存，历史各版本的
+      // 字节留在 CDN 上正是「回滚只换 manifest、不重传内容」成立的前提。清空等于把回滚路堵死，
+      // 还会把正在更新中的老客户端要的文件抽走。清历史版本是另一件事（按时间保留 N 版）。
+      cpSync(DATA, cdnDir, { recursive: true });
+      const r = spawnSync(process.execPath, [CLI, 'archive', '--cdn', cdnDir, '--version', version], { encoding: 'utf8' });
+      if (r.status !== 0) throw new Error(`manifest 归档失败：${r.stderr || r.stdout}`);
+      console.log(`✓ manifest 就位，叠加到 ${cdnDir}，并归档 releases/${version}/`);
+      console.log(`  回滚：node ${CLI} rollback --cdn ${cdnDir} --release <旧版本> --version <更大的号>`);
+    } else {
+      // 不开 md5：同名不同内容，历史版本留着只会让 CDN 上混着对不上任何 manifest 的孤儿文件。
+      rmSync(cdnDir, { recursive: true, force: true });
+      cpSync(DATA, cdnDir, { recursive: true });
+      console.log(`✓ manifest 就位，并同步到 ${cdnDir}`);
+    }
   } else {
     console.log('✓ manifest 就位（local.json 没配 cdnDir，跳过同步）');
   }

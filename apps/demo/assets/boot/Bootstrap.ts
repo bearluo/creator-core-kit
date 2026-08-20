@@ -32,6 +32,7 @@ import {
   ccStorageModule,
   ccUIModule,
   loadLocaleTable,
+  resetCcHotUpdateOnAppChange,
   resolutionModule,
 } from '@cck/engine';
 import { APP_CONFIG, VEST } from './app-config';
@@ -204,6 +205,17 @@ export class Bootstrap extends Component {
         await stale.shutdown();
       }
     }
+    // APK 换了（覆盖安装 / 降级 / 换渠道包）就把上一版攒下的热更缓存整个作废。
+    // **必须在 bootCoreKit 之前** —— `ccHotUpdateModule` 一装，`AssetsManagerEx.create()` 就把
+    // storagePath 前插进搜索路径了，那之后再删就是在拆一条已经挂上的链。
+    // 判据是 `main.js` 烘进来的包内 AOT 入口名（`window.__cckAotEntry` → `aotStamp`），没换 /
+    // 没开 md5Cache 时原样不动。**不能用运行时 settings.bundleVers** —— AOT 现在可热更，那个
+    // 每更新一次就翻一次，会把刚下好的缓存当成「上一版 APK 的」删掉，死循环（ADR-0017 决策 6）。
+    // 少了这段，装了**更旧**的包时引擎那道 `versionGreater` 会判「缓存更新」→ 旧 AOT 配着
+    // 为新 AOT 编译的模块代码跑，而 coreApiHash 闸救不了（缓存 = 远端 → check 判 up-to-date，
+    // 压根不去拉更新戳）。表现就是「装完启动报错，清数据才好」。
+    for (const d of resetCcHotUpdateOnAppChange()) console.log(`${TAG} 热更缓存作废 ${d}`);
+
     // 内容基址 —— dispatcher 握手才下发（内容托管在哪由服务端说了算），而热更后端在下面
     // 这一行就装好了，只能惰性接。**base 与分包共用**：两边 check 时都自取 remote manifest
     // 再把基址改到这里；拉不到就退回包内烘的地址。
