@@ -136,12 +136,19 @@ demo 的 2026-08-20 产物里两种漂法都出过：
 
 **规则（硬）**：
 
-1. **共享资源只有一个仓 = `resources`**（priority 8，工程里最高，谁也抢不走 → 归属钉死）。
-   跨包依赖只许指向它。
-2. **用到的每个 `db://internal` 资源，在 `assets/resources/internal-pin.prefab` 里挂一个节点
-   「钉」一次**。仓的优先级最高，归属被它吸走 —— **工程各处照常引用 `db://internal`，一行都不用改**，
-   也不产生副本字节。加新内置图 = 往钉子里加一个节点。
-3. 它们跟 AOT 同寿命 —— AOT 能热更之后这意味着「加一张内置图要热更整个 base 并重启」，不再是发 APK。
+1. **一个包能当共享仓，条件是它的 priority 严格高于所有引用者** —— 同级会被抢（上表第二行：两个
+   马甲的地基皮包同为 2，Creator 挑了 base 那个）。所以**共享仓可以有多个**：跨模块共用的图集 /
+   字体放地基皮包（2 > 模块皮包 1）合法，`shared`(5) 对业务包也合法。
+2. **不属于工程任何包的外部资源（`db://internal` —— 工程里没有对应 `.meta`）没有天然归属**，谁引用
+   就判给优先级最高的那个引用者 → 会漂进 `main`（上表第一行）。这类**必须钉**：用到的每个都在
+   `assets/resources/internal-pin.prefab` 里挂一个节点引一次。`resources` priority 8 是工程里最高
+   的，归属被它吸走后谁也抢不动 —— **工程各处照常引用 `db://internal`，一行都不用改**，也不产生
+   副本字节。加新内置图 = 往钉子里加一个节点。
+3. **产物闸认的是共享仓白名单**，默认只有 `resources` —— demo 眼下也确实只有这一个（`assets/shared/`
+   里目前只有一个 json，没有共享美术）。多开一个仓就得声明：`--allow-deps skin-base-foundation`，
+   否则 `skin-base-lobby deps:["skin-base-foundation"]` 会被当成漂移拒发。
+4. 钉进 `resources` 的那些跟 AOT 同寿命 —— AOT 能热更之后这意味着「加一张内置图要热更整个 base
+   并重启」，不再是发 APK。
 
 **两道闸**（判据与分工见 [[bundle-deps]]）—— 都只管**资源**边；跨包 `import` 归另一条规则，
 见 [`bundle-layout.md`](bundle-layout.md#依赖拓扑与防环)：
@@ -158,7 +165,7 @@ demo 的 2026-08-20 产物里两种漂法都出过：
 
 钉上之后的产物：`resources` 自有 7 项，`native/` 下是**原 internal uuid** 的两张 png
 （`20835ba4-….90cf4.png` / `7d8f9b89-….cea68.png`）；`main` 自有从 8 项降到 3 项；
-**所有跨包依赖统一指向 `resources`**，跨马甲依赖清零。
+**所有跨包资源依赖都指向 `resources`**（demo 眼下只有这一个共享仓），跨马甲依赖清零。
 
 ⚠️ **app 戳 `assets/resources/cck-app-compat.json` 随 AOT 一起热更**，因此它描述的是「当前跑的
 这套代码的身份」，不是「这个 APK 的身份」。这是**必须**的：热更换掉 `chunks/bundle.js` 就是换掉了
