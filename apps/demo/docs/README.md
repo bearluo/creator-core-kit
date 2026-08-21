@@ -16,6 +16,7 @@ demo 是 **kit 的接入方样例**：它不实现框架能力，它演示「拿
 | 你的任务 | 打开 |
 |---|---|
 | **往 `assets/` 加目录 / 加一个功能模块** | [`bundle-layout.md`](bundle-layout.md) — 分层 × 分包总图、bundle 全表、优先级阶梯、归位判据 |
+| **加一条跨包 `import` / `check:graph` 报了倒挂** | [`bundle-layout.md`](bundle-layout.md#依赖拓扑与防环) — 实况拓扑图、`priority` 递增判据、防环 |
 | **加一个马甲 / 给一个界面加换皮** | [`vest-and-skin.md`](vest-and-skin.md) — 马甲接缝、皮包边界、加一个马甲的清单 |
 | **发一次热更 / 排查更新没生效** | [`hotupdate-pipeline.md`](hotupdate-pipeline.md) — 架构图、启动时序、发版流程、三档更新代价 |
 | **出包时要改 VEST / 服务器地址 / 版本号** | [`build-plugin.md`](build-plugin.md) — `extensions/cck-build` 注入的六个打包期常量 |

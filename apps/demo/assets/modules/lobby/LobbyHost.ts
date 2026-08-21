@@ -133,14 +133,13 @@ class LobbyNav {
     // 从**大厅自己那个皮包**取这两份，而不是 `@property(Prefab)` 序列化绑定 —— 后者绑的是
     // lobby bundle 内的固定资源，换皮换不掉（这正是它以前的样子）。
     //
-    // 皮包由**本模块自己装**（不在 `APP_CONFIG.shared` 里）：大厅的脸只有进了大厅才用得上，
-    // 塞进启动期的地基皮包就是让每个马甲的首包都背着它。装了不卸 —— 大厅是常驻场景，
-    // 从 game 场景返回还要重建一次 UI。
+    // 皮包**已经在内存里**：它是 `lobby` 在依赖表里的一条 `needs`（`foundation/bundles.ts`），
+    // 随 lobby 一起装、一起卸。大厅的脸只有进了大厅才用得上，塞进启动期的地基皮包就是让
+    // 每个马甲的首包都背着它。
     const bundle = currentSkinBundle('lobby');
     let panelPrefab: Prefab;
     let itemPrefab: Prefab;
     try {
-      await getBundleManager().load(bundle);
       [panelPrefab, itemPrefab] = await Promise.all([
         getAssetLoader().load<Prefab>(P_PANEL, { type: 'prefab', bundle }),
         getAssetLoader().load<Prefab>(P_ITEM, { type: 'prefab', bundle }),
@@ -190,11 +189,10 @@ class LobbyNav {
       console.warn(`${TAG} 已有模块打开，忽略 openModule('${entry.id}')`);
       return;
     }
-    const skin = this.skinOf(entry);
-    console.log(`${TAG} openModule('${entry.id}') kind=${entry.kind} → load('${entry.bundle}')${skin ? ` + 皮包 '${skin}'` : ''}`);
-    // 两个包并行装：脚本在模块包、脸在皮包，缺一个界面就起不来
-    const packs = skin ? [entry.bundle, skin] : [entry.bundle];
-    await Promise.all(packs.map((b) => getBundleManager().load(b)));
+    console.log(`${TAG} openModule('${entry.id}') kind=${entry.kind} → load('${entry.bundle}')`);
+    // 换皮模块的脸在皮包里，但**这里不用管** —— 皮包是它在依赖表里的一条 `needs`，
+    // `load` 会先把它装上并各加一次引用，`release` 时对称减掉。
+    await getBundleManager().load(entry.bundle);
     if (entry.kind === 'game') {
       this.pendingGame = entry;
       this.flow!.push('game'); // → 'game'.onEnter → enterGameScene
@@ -208,16 +206,15 @@ class LobbyNav {
     const container = getRootContainer().createScope(`module:${entry.id}`);
     const scope = createBundleScope(entry.bundle);
     scope.add(() => container.dispose()); // DI 子作用域也挂进同一条回收链，别让调用点记两笔账
-    // 皮包也挂进同一条链，**必须在 container 之后 add**：teardown 逆序执行 → 皮包这条先跑。
+    // 皮包的界面回收也挂进同一条链，**必须在 container 之后 add**：teardown 逆序执行 → 这条先跑。
     //
     // ⚠️ 界面实例是被**这条**销毁的，不是被 `scope.dispose()` 的第一步：那一步
     // `closeByBundle(entry.bundle)` 按**解析后**的 bundle 比对，而换皮界面解析出来的是皮包名
     // → 对 skinned 模块是 no-op。少了这条就只 release 包不销毁界面，留下一堆孤儿组件。
+    // 这里**只关界面、不 release 皮包** —— 皮包的引用是 `load(模块包)` 按依赖表加上的，
+    // 由 `scope.dispose()` 里的 `release(模块包)` 对称减掉，再减一次就是负债。
     const skin = this.skinOf(entry);
-    if (skin) {
-      const skinScope = createBundleScope(skin);
-      scope.add(() => skinScope.dispose());
-    }
+    if (skin) scope.add(() => getUIManager().closeByBundle(skin));
     const ctx: ModuleContext = {
       container,
       bundle: entry.bundle,
@@ -269,11 +266,9 @@ class LobbyNav {
     this.pendingGame = undefined;
     await loadScene(LOBBY_SCENE, { bundle: LOBBY_BUNDLE }); // 重进主场景（LobbyHost.start → enterLobby 重建大厅 UI）
     if (e) {
-      // 场景换完才卸 bundle（它自带的场景还在跑时不能卸）。皮包跟模块包一起卸 ——
-      // openModule 是一起装的，这里漏一个就是泄漏。
+      // 场景换完才卸 bundle（它自带的场景还在跑时不能卸）。皮包不用单列 ——
+      // 它是模块包的一条 `needs`，引用计数会跟着一起归零。
       getBundleManager().release(e.bundle);
-      const skin = this.skinOf(e);
-      if (skin) getBundleManager().release(skin);
     }
     console.log(`${TAG} 返回大厅：loadScene('${LOBBY_SCENE}') + release('${e?.bundle}')`);
   }

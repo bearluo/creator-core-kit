@@ -143,7 +143,8 @@ demo 的 2026-08-20 产物里两种漂法都出过：
    也不产生副本字节。加新内置图 = 往钉子里加一个节点。
 3. 它们跟 AOT 同寿命 —— AOT 能热更之后这意味着「加一张内置图要热更整个 base 并重启」，不再是发 APK。
 
-**两道闸**（判据与分工见 [[bundle-deps]]）：
+**两道闸**（判据与分工见 [[bundle-deps]]）—— 都只管**资源**边；跨包 `import` 归另一条规则，
+见 [`bundle-layout.md`](bundle-layout.md#依赖拓扑与防环)：
 
 - **源码期** `pnpm check:pins`（= `cck-manifest check-pins --assets apps/demo/assets`）——
   不用构建。`assets/` 下任何资产引用的 uuid，只要不属于本工程（没有对应 `.meta`），就必须也被

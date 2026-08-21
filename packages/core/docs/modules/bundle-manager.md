@@ -2,8 +2,8 @@
 模块: bundle-manager
 所在包: packages/core（`BundleManager` + `BundleScope` + `IBundleSource`/`IBundleReloader` 接缝 + 内存 fake，零 cc）；`cc.assetManager` 适配与脚本缓存失效在 packages/engine（见文末「engine 半适配」）
 状态: 已实现          # 草案 → 评审中 → 已定稿 → 已实现
-摘要: 按需分包三件套——`BundleManager`（load/release 带引用计数 + 并发去重 + 版本表）、`BundleScope`（一个 bundle 注册的一切都能一行回收，顺序有语义）、`IBundleReloader`（让 bundle 脚本真正失效，免重启换代码）。core 定义接缝 + 内存 fake，engine 落到 `cc.assetManager` 与 SystemJS。
-何时读: 要按需加载 / 释放一个功能 bundle 时；要接 web 版本化热更（md5）时；要让「换了 bundle 代码而不重启应用」在正确性上成立时；排查「资源换了但代码还是旧的」时。
+摘要: 按需分包四件套——`BundleManager`（load/release 带引用计数 + 并发去重 + 版本表）、`BundleGraph`（依赖表：依赖跟着装卸 + 资源边界白名单）、`BundleScope`（一个 bundle 注册的一切都能一行回收，顺序有语义）、`IBundleReloader`（让 bundle 脚本真正失效，免重启换代码）。core 定义接缝 + 内存 fake，engine 落到 `cc.assetManager` 与 SystemJS。
+何时读: 要按需加载 / 释放一个功能 bundle 时；要声明「这个包依赖哪些包」时；要接 web 版本化热更（md5）时；要让「换了 bundle 代码而不重启应用」在正确性上成立时；排查「资源换了但代码还是旧的」时。
 日期: 2026-07-31
 依赖: [[di-container]]（`BUNDLE_SOURCE`/`BUNDLE_MANAGER`/`BUNDLE_RELOADER` token）、[[asset-manager]]（在某 bundle 内加载资源）、[[ui-manager]]（`closeByBundle`）、[[i18n]]/[[config-table]]（scope 的对称回收）、[[logger]]。跨 bundle 单例 / AOT 约束见 [[adr-0001]]；免重启换 bundle 的机制与契约见 [[adr-0010]]；包分层判据见 [[adr-0009]]。横评见 `docs/research/2026-07-27-asset-and-bundle-survey.md`。
 ---
@@ -15,8 +15,9 @@
 三层，从下往上：
 
 1. **`BundleManager`** —— `load(nameOrUrl, opts?)` 以 bundle 为粒度加载（本地 name 或远程 url，可带 `version`），**引用计数**（同名重复 load 只真加载一次）+ **并发去重**（共享 inflight）+ **失败回滚**；`release(name)` 计数归零才真释放。`setVersions(map)` 存一张 `bundle → 版本(md5)` 表，之后**所有** load 自动带上版本——包括 UIManager 打开界面时内部那次。
-2. **`BundleScope`** —— `createBundleScope(bundle)` 让该 bundle 的 i18n / 配表 / 资源 / 任意 teardown 都登记一条对称回收，卸载只需 `await scope.dispose()`。**顺序有语义**：先 `closeByBundle` 销毁界面实例，再逆序回收，最后才 `release(bundle)`。
-3. **`IBundleReloader`** —— `invalidate(bundle)` 让下一次 load 真正重新求值该 bundle 的脚本。**换代码 ≠ 换资源**，这是「免重启换 bundle」成立的另一半。
+2. **`BundleGraph`** —— `setGraph(createBundleGraph(specs))` 装上一张**依赖表**，此后 `load(A)` 先按拓扑层把 A 的 `needs` 装上（层内并行）、各加一次引用，`release(A)` 对称各减一次 —— **依赖跟着装卸，调用点不必复述**。同一张表还是**资源边界白名单**（`mayUse`）：跨包动态取资源在构建期看不见，只能声明。
+3. **`BundleScope`** —— `createBundleScope(bundle)` 让该 bundle 的 i18n / 配表 / 资源 / 任意 teardown 都登记一条对称回收，卸载只需 `await scope.dispose()`。**顺序有语义**：先 `closeByBundle` 销毁界面实例，再逆序回收，最后才 `release(bundle)`。
+4. **`IBundleReloader`** —— `invalidate(bundle)` 让下一次 load 真正重新求值该 bundle 的脚本。**换代码 ≠ 换资源**，这是「免重启换 bundle」成立的另一半。
 
 **core 零 cc**：`IBundleSource`（`loadBundle`/`releaseBundle`/`hasBundle` 三原子操作）+ `createMemoryBundleSource()` fake；engine 注册 `cc.assetManager` 适配到 `BUNDLE_SOURCE`、SystemJS 缓存失效到 `BUNDLE_RELOADER`。
 
@@ -26,7 +27,8 @@
 - **与 [[asset-manager]] 的分工**：**BundleManager 管 bundle 粒度**（整包 load/release、远程版本），**AssetManager 管资源粒度**（在某 bundle 内 load/release 单个资源）。
 - **为何引用计数到 bundle 级**：同一 feature bundle 可能被多个界面 / 系统同时依赖，先 load 的不该被后 release 的误卸。
 - **为何要有 BundleScope**：i18n 表与配表是把数据**拷进 core 全局注册表**的——只 release bundle 的 JSON 资源撤不掉已注册的表。没有对称回收，「卸了 bundle 但翻译还在」是必然而非偶然。
-- **YAGNI（本版砍）**：bundle 间依赖图（Cocos 自身处理）；LRU / 空闲自动卸载；预下载优先级队列；灰度 / 分渠道版本表。
+- **YAGNI（仍不做）**：LRU / 空闲自动卸载；预下载优先级队列；灰度 / 分渠道版本表；可选依赖与懒加载依赖的区分。
+- **依赖图归 `BundleGraph`**：Cocos 只处理**资源**依赖（`cc.config.deps`），脚本 `import` 与动态取资源它一条都不记 —— 加载顺序、装卸跟随、资源边界都得有人声明。
 
 ## Public API（TypeScript 精确签名）
 
@@ -66,10 +68,27 @@ export interface BundleManager {
   list(): BundleInfo[];                               // name 升序快照
   /** bundle → 版本（web 出包 md5）。**整体替换不是合并**；见下「版本来源优先级」。 */
   setVersions(map: Readonly<Record<string, string>>): void;
+  /** 装上依赖表：依赖从此跟着装卸；`strict`（默认 true）时表外的包一 load 就抛。 */
+  setGraph(graph: BundleGraph, opts?: { strict?: boolean }): void;
 }
 export function createBundleManager(opts?: BundleManagerOptions): BundleManager;
 export const BUNDLE_MANAGER: Token<BundleManager>;
 export function getBundleManager(): BundleManager;    // tryResolve ?? 进程默认
+
+// —— ②b BundleGraph（依赖表：加载跟随 + 资源边界）——
+export type BundleRef = string | (() => string);      // 皮包名依赖当前马甲 → 运行时才定
+export interface BundleSpec { readonly name: string; readonly needs?: readonly BundleRef[] }
+export interface BundleGraph {
+  has(name: string): boolean;                         // 登记过没有
+  names(): readonly string[];                         // 升序
+  needsOf(name: string): readonly string[];           // 直接依赖（resolver 已求值、去重）
+  /** 装 name 要按顺序装的层，**最后一层是 name 自己**；层内可并行。成环（含自依赖）抛。 */
+  layersFor(name: string): readonly (readonly string[])[];
+  mayUse(user: string, target: string): boolean;      // 自己 / 常驻豁免 / 依赖闭包内
+}
+export interface BundleGraphOptions { alwaysAllowed?: readonly string[]; logger?: ILogger }
+export const DEFAULT_ALWAYS_ALLOWED: readonly string[];  // ['main','resources','internal','start-scene']
+export function createBundleGraph(specs: readonly BundleSpec[], opts?: BundleGraphOptions): BundleGraph;
 
 // —— ③ BundleScope（对称回收契约）——
 export interface BundleScope {
@@ -127,6 +146,26 @@ export const BUNDLE_RELOADER: Token<IBundleReloader>;
   写死的是出包那天的值，拿它去取会 404 后**静默回落包内旧代码**——热更报成功、代码没生效、
   还不报错。见 [[hotupdate-service]] 与 `docs/design/2026-08-20-native-md5-content-addressing-proposal.md`。
 - **`BundleHandle` 为何不透明**：core 不持真 `cc.AssetManager.Bundle`。句柄只带 `name`/`version`；engine 要真 Bundle 时 `assetManager.getBundle(name)` 按名反解。
+
+### BundleGraph（依赖表）
+
+**为什么必须有人声明**：静态分析只看得见 `import`。跨包引用里最容易出事的那一半是**动态**的
+——`assets.load(path, { bundle })`、`loadScene(scene, { bundle })`、`registerUI` 里那个运行时才
+求值的 bundle resolver、`js.getClassByName` —— 构建期**一条记录都不产生**。看不见就只能声明。
+
+**一表两用**：`needs` 同时是「装它之前先装好这些」与「它能碰哪些包的资源」。拆成两张表必然
+对不上，而对不上时没有任何信号。
+
+**装卸对称**：`load(A)` 给 A 的每个（传递）依赖各加一次引用，`release(A)` 各减一次 ——
+复用现成的引用计数，不引第二套生命周期。所以「同一个依赖被两个模块用着」不会被误卸，
+「同一个模块开两次」也不会少减。任一步失败就把这一趟已装的依赖原样松开，不留半截状态。
+
+**strict**：表外的包被 `load` 时，`strict`（默认）抛、否则告警后照常装。开发期不抛等于没有门；
+发布版一条漏声明不该让玩家白屏，接入方按 `env` 传值。
+
+**表住在哪**：它是**接入方**的东西（换个工程整张表重写），且该跟着热更走，所以放在接入方的
+地基包里 —— 而地基自己是被启动序列装上来的，**`AppConfig.shared` 那一段因此不被取代**：
+表接管的是「地基起来之后」的一切。demo 的表见 `apps/demo/assets/foundation/bundles.ts`。
 
 ### BundleScope 的回收顺序（有语义，不是随手排的）
 
@@ -188,6 +227,14 @@ await bundles.load('shop');            // 版本变了 → loadBundle 自动清�
 | 13 | 失效失败时 | 返回 `false` 而非抛 | 踩的是 SystemJS / CCClass 的私有内部结构，跨引擎版本可能失效 → 逐层 feature-detect，取不到就退化成「需重启」 |
 | 14 | i18n 回收粒度 | 按**顶层键**精确 `removeTable` | 不误伤同 locale 其它模块；代价是表必须扁平（非字符串值会 warn，见「坑」） |
 
+新增三条（依赖表）：
+
+| 决策 | 为什么 |
+|---|---|
+| 依赖表**一表两用**（加载跟随 + 资源边界），不拆两张 | 两张表描述同一件事，改一处漏一处**不会有任何信号**。「装它之前要有 B」与「它能碰 B 的资源」本来就是同一句话 |
+| 依赖走**现成的引用计数**，不新建生命周期 | `load` 已经有计数与 inflight 合流；依赖只是「多按几次引用」，不是新概念。装卸对称因此是白送的 |
+| `needs` 允许 **resolver**（`() => string`） | 皮包名 `skin-<马甲>-<跟随者>` 依赖启动后才定的马甲值。写死就得一个马甲一张表 |
+
 ## Platform considerations（全平台 / 小游戏兼容）
 
 - core 三件套纯 TS，全平台无差异。
@@ -228,6 +275,19 @@ await bundles.load('shop');            // 版本变了 → loadBundle 自动清�
 - **类表撞 uuid**（复制 prefab / 脚本忘改 meta）时，后加载的会**无声覆盖**先加载的，没有任何警告。
 - **i18n 表必须扁平**：scope 只按顶层键回收，嵌套表被 `addTable` 拍平成 `a.b` 后顶层键删不掉它们 → 显式 warn（`ponytail:`，别静默泄漏）。真要支持嵌套得复刻 i18n 的拍平逻辑。
 - **`dispose()` 是 async 的**：因为要 await UI 关闭与可能异步的 teardown。功能模块的 `onHide` 由 `closeByBundle` 调起，**别在 `onHide` 里反手 `dispose`**（会自递归）——回收由 host 统一发起。
+
+### 依赖表的坑
+
+- **表外的包默认抛**。加了新 bundle 忘了登记 → 开发期第一次 `load` 就炸（这是有意的）。
+  发布版传 `strict: false` 降级成告警。
+- **`release` 按调用那一刻的表解算依赖**。运行中换马甲（resolver 解出另一套皮包）会让
+  `release` 去减一个没加过的包 —— 那时会打「未加载，忽略」告警。demo 的马甲是打包期常量，
+  运行中不变，不触发。
+- **动态引用只有运行期查得到**。`mayUse` 给出判据，但 core 不知道调用方是谁（栈里拿不到干净的
+  bundle 归属）—— 目前守住的是「表外的包一律不许 load」，按主体的越界校验留给调用方用
+  `BundleScope.bundle` 自己比。
+- **静态边与声明的对账在接入方的测试里**，不在 kit：kit 拿不到工程的 `assets/` 目录。
+  demo 的那份见 `apps/demo/test/foundation/bundles.test.ts`。
 
 ### 验证记录
 

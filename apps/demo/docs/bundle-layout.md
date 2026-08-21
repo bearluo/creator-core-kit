@@ -1,6 +1,6 @@
 ---
 状态: 活文档
-摘要: demo 的 `assets/` 怎么切成 bundle —— 纵向按「改它要付什么代价」分三层，横向按马甲收进 `skins/`；两个维度不许混层。含 bundle 全表、优先级阶梯、依赖方向与归位判据。
+摘要: demo 的 `assets/` 怎么切成 bundle —— 纵向按「改它要付什么代价」分三层，横向按马甲收进 `skins/`；两个维度不许混层。含 bundle 全表、优先级阶梯、依赖拓扑（含防环判据与生成命令）与归位判据。
 何时读: 往 `assets/` 加目录、加一个功能模块、决定某段代码放哪一层、改 bundle 优先级之前。
 依赖: [[adr-0009]] 分层判据 · [[adr-0014]] 地基 bundle 与优先级共享 · [[bundle-manager]] · [`vest-and-skin.md`](vest-and-skin.md)
 ---
@@ -38,6 +38,83 @@ flowchart TB
 2. **模块可以正常 `import` 地基的函数与常量** —— `foundation` 优先级（6）高于所有业务包，
    被多包引用的资源归属优先级最高者，同级才各复制一份。不必为了怕复制而全走 DI。
    改优先级前先读 [[adr-0014]]。
+
+## 依赖拓扑与防环
+
+上面那张是**概念图**（谁在哪一层）。下面这张是**实况图** —— 由 `assets/` 的目录 `.meta` 与
+`.ts` 里的 `import` 现扫现画，`pnpm check:graph -- --mermaid` 重出一份，不手工维护：
+
+```mermaid
+graph BT
+  resources["resources · 8"]
+  main["main · 7"]
+  foundation["foundation · 6"]
+  shared["shared · 5"]
+  lobby["lobby · 3"]
+  skin_base_foundation["skin-base-foundation · 2"]
+  skin_vest_foundation["skin-vest-foundation · 2"]
+  mail["mail · 1"]
+  mini_clicker["mini-clicker · 1"]
+  mini_dodge["mini-dodge · 1"]
+  shop["shop · 1"]
+  skin_base_lobby["skin-base-lobby · 1"]
+  skin_base_mail["skin-base-mail · 1"]
+  skin_vest_lobby["skin-vest-lobby · 1"]
+  skin_vest_mail["skin-vest-mail · 1"]
+  lobby --> foundation
+  mail --> foundation
+  mini_clicker --> foundation
+  mini_dodge --> foundation
+```
+
+**判据一句话：边 `A → B` 合法 ⟺ `priority(B) > priority(A)`。**
+箭头只许向上（指向优先级更高、更底层的包）。严格递增意味着拓扑序天然存在 ——
+**循环依赖不可能出现**，不需要另跑环检测。排名不另立一张表，就用 Creator 的 bundle 优先级：
+那个数字本来就在裁决资源归属，语义就是「谁更底层」，改它时两件事本来就该一起想清楚。
+
+一条规则同时守住三件事：
+
+| | 例 | 不守会怎样 |
+|---|---|---|
+| **倒挂** | `main`(7) → `foundation`(6) | 就是上面第 1 条铁律。地基那段代码被判给主包 → 地基进 AOT → 热更失效 |
+| **同级互引** | `shop`(1) ↔ `mail`(1) · 两个马甲的皮包互借 | 两个包彼此拽住，谁都卸不干净；马甲隔离也一起破 |
+| **循环** | 任意长的环 | 卸载顺序无解，且哪个先加载都缺东西 |
+
+两个必须知道的边界：
+
+- **`import type` 不算边** —— 编译期擦除，不是运行时依赖。主包拿地基的唯一合法缝
+  （`boot/foundation-api.ts`）正是靠它，写成值 `import` 当场被拦。
+- **动态加载不产生边**：`bundle.load()` + `js.getClassByName` 这条路是**故意**绕开静态依赖的。
+  拓扑闸保证的是「静态依赖无环」；运行时的加载顺序归 `MODULE_CATALOG` 与 App 的启动阶段管。
+
+### 加载编排与资源边界：`foundation/bundles.ts`
+
+上面那条规则只管「合不合法」。**什么时候装、谁跟着谁装卸、能碰谁的资源**，由地基里的
+`BUNDLE_GRAPH` 声明（`Foundation.boot` 第一件事就是 `setGraph` 装上它）：
+
+```ts
+{ name: 'mail', needs: ['foundation', () => currentSkinBundle('mail')] }
+```
+
+- **装卸跟随**：`load('mail')` 先把地基与这个马甲的邮件皮包装上、各加一次引用，
+  `release('mail')` 各减一次。大厅不再手写「两个包一起装、一起卸」。
+- **资源边界**：`mayUse(a, b)` = b 在 a 的依赖闭包里。没声明就是越界 ——
+  这是**动态引用**（`assets.load(path, { bundle })` / `loadScene` / `registerUI` 的 resolver）
+  唯一守得住的方式，那些在构建期一条记录都不产生。
+- **表外的包一 `load` 就抛**（`env !== 'prod'` 时）。加了 bundle 忘登记，开发期当场炸。
+
+**加一个模块仍然只改 `catalog.ts` 一行**：模块段按 `MODULE_CATALOG` 现推（模块包 + 登记了换皮的话
+它那个皮包），手写的只有启动段那几行。
+
+**启动那一段不归它管**：表住在地基包里，而地基自己是被启动序列装上来的 ——
+`shared` / 地基皮包 / `foundation` 仍由 `APP_CONFIG.shared` 装。表接管的是「地基起来之后」。
+
+对账在 `apps/demo/test/foundation/bundles.test.ts`（随 `pnpm test` 跑）：needs 不许指向没登记的包、
+不许成环、每个模块与它的皮包都在表里、**源码里每条跨包 `import` 都要在表里有对应的 needs**。
+
+**资源边是另一套规则**：跨包**资源**共享一律经共享仓 `resources`（钉子机制），
+不适用优先级递增那条 —— 判据、两道资源闸与「归属会漂」的实况见
+[`hotupdate-pipeline.md`](hotupdate-pipeline.md#资源归属一个共享仓别的都不许借) 与 [[bundle-deps]]。
 
 ## bundle 全表
 

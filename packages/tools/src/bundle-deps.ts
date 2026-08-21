@@ -18,12 +18,16 @@
  * 要共用一张 Creator 内置图，就在共享仓里放一个**钉子 prefab** 引用它一次 —— 仓的优先级最高，
  * 归属被它吸走后谁也抢不动，而工程各处照常引用 `db://internal`、一行都不用改。
  *
- * 本模块管**两道闸**，缺一不可：
+ * 本模块管**三道闸**，各拦一类：
  * - **产物侧** {@link collectBundleDeps} + {@link findDepViolations}：出 manifest 前扫 `cc.config`，
  *   已经漂了的一律拒发。
  * - **源码侧** {@link scanAssetRefs} + {@link findUnpinnedRefs}：扫 `assets/`，引用了外部资源却没钉
  *   的直接报。产物侧漏得掉这一类 —— 一个外部资源**只被一个包**引用时不产生 `deps`，当场看不出问题，
  *   等哪天第二个包也用它才漂。源码侧不用构建就能查，适合挂进提交前的门控。
+ * - **拓扑侧** {@link scanCodeEdges} + {@link findEdgeViolations}：扫 `assets/` 的 `import`，
+ *   跨包代码边只许指向**优先级更高**的包。上面两道都只看**资源** —— Creator 的 `cc.config.deps`
+ *   压根不记脚本依赖（demo 实测：`modules/lobby` import 了 4 处地基，产物里 `deps: []`），
+ *   循环依赖与「主包 import 地基」这类倒挂在那两道闸下面是隐形的。
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -200,4 +204,178 @@ export function findUnpinnedRefs(scan: AssetRefs, pinPrefix = 'resources/'): Unp
   return Array.from(byUuid.entries())
     .map(([uuid, files]) => ({ uuid, files: Array.from(files).sort() }))
     .sort((a, b) => a.uuid.localeCompare(b.uuid));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 第三道闸：跨包**代码**边的拓扑单调
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 一个 bundle 在拓扑里的位置。`priority` 直接用 Creator 的 bundle 优先级 ——
+ * 不另立一套排名，免得同一件事有两个真相源。
+ */
+export interface BundleNode {
+  /** bundle 名（目录 meta 里 `bundleName` 覆盖过就用覆盖的）。 */
+  name: string;
+  /** 相对 `assets/` 的 POSIX 目录路径。主包是 `''`：没被任何 bundle 目录圈住的都归它。 */
+  dir: string;
+  /** Creator 的 bundle 优先级，越大越底层。 */
+  priority: number;
+}
+
+/** 一条跨包代码边：`file` 里的 `import` 落在了别的包。 */
+export interface CodeEdge {
+  from: string;
+  to: string;
+  /** 引用发生在哪个文件（相对 `assets/`）。 */
+  file: string;
+  /** 被引到的路径（相对 `assets/`，不带扩展名）。 */
+  target: string;
+}
+
+/** 违反拓扑单调的一条边。 */
+export interface EdgeViolation extends CodeEdge {
+  fromPriority: number;
+  toPriority: number;
+}
+
+/**
+ * 主包。`assets/` 下没被任何 bundle 目录圈住的脚本（demo 的 `boot/`）都归它，
+ * priority 7 是 Creator 给内置 `main` 的固定值。
+ */
+export const MAIN_BUNDLE: BundleNode = { name: 'main', dir: '', priority: 7 };
+
+/** 扫 `assets/` 的目录 meta，读出整张拓扑。永远含主包，按优先级从高到低排。 */
+export function readBundles(assetsRoot: string): BundleNode[] {
+  const out: BundleNode[] = [MAIN_BUNDLE];
+  if (!existsSync(assetsRoot)) return out;
+  const files: string[] = [];
+  walk(assetsRoot, assetsRoot, files);
+  for (const f of files) {
+    if (!f.endsWith('.meta')) continue;
+    let m: { userData?: Record<string, unknown> };
+    try {
+      m = JSON.parse(readFileSync(join(assetsRoot, f), 'utf8')) as typeof m;
+    } catch {
+      continue;
+    }
+    const u = m.userData;
+    if (u?.isBundle !== true) continue;
+    const dir = f.slice(0, -'.meta'.length);
+    const named = typeof u.bundleName === 'string' && u.bundleName !== '' ? u.bundleName : undefined;
+    out.push({
+      name: named ?? (dir.split('/').pop() as string),
+      dir,
+      priority: typeof u.priority === 'number' ? u.priority : 1,
+    });
+  }
+  return out.sort((a, b) => b.priority - a.priority || a.name.localeCompare(b.name));
+}
+
+/** 一个文件归哪个包 —— 最长目录前缀说了算（`skins/base/mail` 赢过 `skins/base`）。 */
+export function bundleOf(file: string, bundles: readonly BundleNode[]): BundleNode {
+  let best = MAIN_BUNDLE;
+  for (const b of bundles)
+    if (b.dir !== '' && file.startsWith(`${b.dir}/`) && b.dir.length > best.dir.length) best = b;
+  return best;
+}
+
+/**
+ * `import x from '…'` / `export … from '…'` / `import '…'`，跳过纯类型的那两种。
+ *
+ * `[^;]*?` 让多行 import 也能匹配，同时挡住「本条没有 from、扫进下一条」。
+ * `import { type A } from` 仍算值引用 —— 判不准的一律当真边，宁可多报。
+ */
+const IMPORT_FROM = /(?:^|\n)[ \t]*(?:import|export)[ \t]+(?!type[ \t{])[^;]*?from[ \t]*['"]([^'"]+)['"]/g;
+const IMPORT_BARE = /(?:^|\n)[ \t]*import[ \t]*['"]([^'"]+)['"]/g;
+
+/** 把相对 specifier 解成相对 `assets/` 的路径；爬出 `assets/` 的返回 undefined。 */
+function resolveRel(fromFile: string, spec: string): string | undefined {
+  const out: string[] = [];
+  for (const p of fromFile.split('/').slice(0, -1).concat(spec.split('/'))) {
+    if (p === '' || p === '.') continue;
+    if (p === '..') {
+      if (out.pop() === undefined) return undefined;
+      continue;
+    }
+    out.push(p);
+  }
+  return out.join('/');
+}
+
+/**
+ * 扫 `assets/` 下的 `.ts`，收出所有**跨包**代码边。
+ *
+ * 只认相对路径的 import：`cc` / `@cck/*` / npm 包都在 AOT 里，不构成包间边。
+ * 纯类型 import 编译期就擦掉了，不是运行时依赖，跳过 —— demo 主包拿地基正是靠这个缝
+ * （`boot/foundation-api.ts`）。
+ */
+export function scanCodeEdges(
+  assetsRoot: string,
+  bundles: readonly BundleNode[] = readBundles(assetsRoot),
+): CodeEdge[] {
+  if (!existsSync(assetsRoot)) return [];
+  const files: string[] = [];
+  walk(assetsRoot, assetsRoot, files);
+  const out: CodeEdge[] = [];
+  for (const f of files) {
+    if (!f.endsWith('.ts') || f.endsWith('.d.ts')) continue;
+    let text: string;
+    try {
+      text = readFileSync(join(assetsRoot, f), 'utf8');
+    } catch {
+      continue;
+    }
+    const from = bundleOf(f, bundles);
+    const specs = Array.from(text.matchAll(IMPORT_FROM), (m) => m[1]).concat(
+      Array.from(text.matchAll(IMPORT_BARE), (m) => m[1]),
+    );
+    for (const spec of specs) {
+      if (!spec.startsWith('.')) continue;
+      const target = resolveRel(f, spec);
+      if (target === undefined) continue;
+      const to = bundleOf(target, bundles);
+      if (to.name === from.name) continue;
+      out.push({ from: from.name, to: to.name, file: f, target });
+    }
+  }
+  return out.sort((a, b) => a.file.localeCompare(b.file) || a.target.localeCompare(b.target));
+}
+
+/**
+ * 挑出违反拓扑单调的边：**依赖只许指向优先级更高的包**。
+ *
+ * 严格递增就意味着拓扑序天然存在 —— **循环依赖不可能成立**，不需要另跑环检测。
+ * 顺带拦住两类已经踩过的：同级互引（两个马甲 / 两个模块彼此拽住，一起卸不掉），
+ * 以及倒挂（主包 import 地基的值 → 地基被判给 AOT，热更当场失效）。
+ * 认不出的包按主包算 —— 拓扑外的东西不该被默默放行。
+ */
+export function findEdgeViolations(
+  edges: readonly CodeEdge[],
+  bundles: readonly BundleNode[],
+): EdgeViolation[] {
+  const rank = new Map(bundles.map((b) => [b.name, b.priority]));
+  const out: EdgeViolation[] = [];
+  for (const e of edges) {
+    const fromPriority = rank.get(e.from) ?? MAIN_BUNDLE.priority;
+    const toPriority = rank.get(e.to) ?? MAIN_BUNDLE.priority;
+    if (toPriority > fromPriority) continue;
+    out.push({ ...e, fromPriority, toPriority });
+  }
+  return out;
+}
+
+/** 把拓扑画成 mermaid —— 图由源码生成，不手工维护，也就不会过期。 */
+export function toMermaid(bundles: readonly BundleNode[], edges: readonly CodeEdge[]): string {
+  const id = (n: string): string => n.replace(/[^A-Za-z0-9_]/g, '_');
+  const lines = ['graph BT'];
+  for (const b of bundles) lines.push(`  ${id(b.name)}["${b.name} · ${b.priority}"]`);
+  const seen = new Set<string>();
+  for (const e of edges) {
+    const key = `${e.from}>${e.to}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(`  ${id(e.from)} --> ${id(e.to)}`);
+  }
+  return lines.join('\n');
 }

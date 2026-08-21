@@ -73,6 +73,7 @@
 
 - [x] **热更翻马甲后新皮包自愈：种子 manifest + 正式路径补注册 `BUNDLE_UPDATER`**（2026-08-17 · 真机 e2e PASS · [ADR-0013 补充](adr/0013-native-per-bundle-hotupdate-layout.md)）— 上一条实证「配置能热更」之后暴露出来的场景：base 热更把 `settings.cck.vest` 翻成另一个马甲、重启回来，而**新马甲的皮包玩家本地根本没有**（它是发版之后才加的）。`skin-<马甲>-foundation` 在 `APP_CONFIG.shared` 里、`shared` 步没有 try/catch → 直接启动失败，且**重试与重装都好不了**（base 已 apply 并落盘，重装还会再更新成同一个坏状态），只有回滚 CDN 能救。查下来是**两个独立的洞**：① **正式启动路径从来没注册过 `BUNDLE_UPDATER`** —— 它只在 `probes/DemoBoot.ts` 里注册过，于是 `Bootstrap.ts` 那条路上**加载前更新整条链是关的**，任何 bundle 都不会更新（和上一条修的 `ccHotUpdateModule` 是同一类漏装）；现在挂在 `dispatch` 阶段的项目步骤里——那里 `APP_INFO`（版本闸要的 app 戳）已由 `platform` 步备好，且早于最早的 `load()`。② 补上注册也还差一口气：**`<bundle>.manifest` 躺在构建产物 `data/` 根，而 manifest 只遍历 `src|assets|jsb-adapter`** → **它自己不进任何 asset 表、永远不会被热更下发**，一个从没随包发过的 bundle 包内没有它的 manifest、base 热更也带不来，`AssetsManagerEx` 连去哪查更新都不知道（`ERROR_NO_LOCAL_MANIFEST`）。补法是**内存造种子 local manifest**（不落盘：`new native.Manifest(content, root)` 与 `am.loadLocalManifest(obj, storagePath)` 两个重载 SWIG 都绑了；配套 `create('', storagePath)` 跳过文件加载让状态停在 `UNINITED`，正好过对象重载那道门），`packageUrl` **取 dispatcher 握手下发的 `cdn_url`**（2026-08-18 定：内容托管在哪是**运营期决定**，换 CDN / 灰度 / 挪域名只该改服务端配置；包里烘的 `packageUrl` 是出包那刻的快照，内容挪了就得发新包，正是热更要消灭的事——`cdn_url` 本就是握手协议为此留的字段，此前一直只打日志没人消费），**服务端没下发才回落 base local manifest 的 `packageUrl`**（分包与 base 同根，地址对得上；兜底而非「配错也能跑」）。**`version` 恒 `0.0.0` 是硬约束不是随手取的**：`loadLocalManifest` 拿 local 与缓存 manifest 比版本，local 更新时会 `removeDirectory(storagePath)` 整个清掉 → 种子恒最旧，缓存那份才能接管、第二次起自动变增量。**随包发过的 bundle 仍用包内那份**（增量基准），别为省几 KB 把 manifest 排除出包。**真机 e2e**（真 x86_64 模拟器，干净安装，**APK 里不含 `skin-vest-*`**，CDN 上 base 1.0.1 只改了 `settings.json`）：`skin='base'` → 热更 25→100% → restart → `skin='vest'` → `shared` 步 `load('skin-vest-foundation')` → 包内无 manifest → 种子 → **3/3 文件下载完成**；`force-stop` 冷启动**只发 4 个 `*.version.manifest` 探测、一个资源文件都没重下**（正是 `0.0.0` 那条约束的判据）。顺带两处：启动界面的下载进度条从「只认 `hotupdate` 阶段」改成**任何带 ratio 的阶段都在本段内插值**（分包下载不再表现为静止的「加载公共资源…」）；`Bootstrap` 的失败日志摊平成一行字符串——Cocos native 转发 JS console 到 logcat 时对象参数一律打成 `[object Object]`，真机上唯一的失败信息不能是这个（正是靠它才定位到下面那条）。**⚠️ 这一程没跑到大厅**：`demo-foundation` 步长连接 `10s 未就绪（停在 reconnecting）：ws://172.25.50.20:9101/ws`；同一失败在 `skin='base'` 下同样复现（与皮包、与本次改动无关），网关从宿主机 `/healthz` 200、WS 升级 101 都正常，模拟器到 9101 的 TCP 也通 —— **模拟器侧 WS 握手/重连的独立问题，另查**。全仓 **645 全绿**（新增 4 例），五门齐过。**⚠️ 遗留：`cdn_url` 链路已接通、服务端配置未就位**——客户端实测日志 `种子 manifest 基址：http://172.25.50.135:8081/cdn/（服务端下发）`，消费侧没问题；但 dispatcher 配的那个值**不是可下载的基址**：filebrowser 只在 `/api/public/dl/<hash>/` 下发文件，`/cdn/` 是它自己的 SPA 路由、**任何路径都回 200 + `text/html`** → 「下载成功」拿到一坨 HTML → 炸在 `readFile failed!`。**配 CDN 基址时 200 不等于拿到文件，要看 `Content-Type`**。热更内容已按 skill `filebrowser-cdn` 的规矩传到固定分享 `http://172.25.50.135:8081/api/public/dl/shCo8WNE/`（`/creator-core-kit/cdn`，104 个文件 2.7 MB；base 热更用同一基址已在模拟器上跑通），**待 server-core-kit 把 `dispatcher.json` 的 `cdnUrl` 改成这个值后复验**——改那个文件属别的仓，本仓不动
 
+- [x] **bundle 依赖表：加载编排 + 资源边界**（2026-08-21 · 已实施 · 822 全绿 · [proposal](design/2026-08-21-bundle-dependency-table-proposal.md)）— `check:graph` 的优先级单调只答「谁能依赖谁」（合法 + 防环），不答「什么时候装、按什么序、谁跟着谁装卸」，更管不到**动态加载**（`assets.load(path,{bundle})` / `loadScene` / `registerUI` 的 resolver / `js.getClassByName` —— 构建期一条记录都不产生）。今天加载顺序散在四处（`AppConfig.shared` 串行数组、`lobby.bundle`、`MODULE_CATALOG[].bundle`、`LobbyHost` 里 `skinned` 的硬编码特例），包一多就压不住。提案立**一张业务层的依赖表**，`needs` 一表两用（加载跟随 + 资源白名单）。**落地**：core 新增 `BundleGraph`（`layersFor` 按拓扑分层、成环即抛；`mayUse` 判边界）+ `BundleManager.setGraph` —— `load(A)` 先按层把 A 的 needs 装上并各加一次引用，`release(A)` 各减一次，**装卸对称白送**（共享依赖不误卸、开两次不少减）；表外的包 `strict`（默认）直接抛，发布版降级告警。demo 的表在 `foundation/bundles.ts`，**模块段按 `MODULE_CATALOG` 现推**，`LobbyHost` 里 `packs=[bundle, skin]` 的并行装 + 两次 `release` + 那个只为 `closeByBundle` 存在的第二个 `BundleScope` 一并删掉（皮包的引用现在由依赖表加、由模块包的 release 对称减，再 release 一次就是负债）。**与提案的偏差**：`AppConfig.shared` **不被取代** —— 表住在地基包里，而地基自己是被启动序列装上来的，取代不了；`stage:'boot'`/`bootLayers()` 因此砍掉。对账落在 `apps/demo/test/foundation/bundles.test.ts`（8 条，随 `pnpm test` 跑）而不是 CLI：kit 的 CLI 拿不到工程那张 TS 表。core 覆盖率 99.46/97.41/98.68/99.46（门 99/97/98/99）
 
 ### 2026-08-18 · 热更内容基址一律听服务端（base 与分包统一）
 
@@ -433,6 +434,37 @@ seed，那是常态**。而 base 与分包共用同一个 `--version`，于是�
 skip/clear/proceed 含**分包一律 proceed**、`manifestVersion` 的坏输入）；
 `resetCcHotUpdateOnAppChange` 与 backend 的 `check()` 本体依赖 `native.fileUtils` /
 `sys.localStorage`，按 [[adr-0002]] 不进 cc mock，由真机 e2e 兜底。六门全绿（全仓 **772 passed**）。
+
+### 2026-08-21 · 跨包**代码**边的拓扑闸（循环依赖从此不可能出现）
+
+已有的两道闸只看**资源**。Creator 的 `cc.config.deps` **不记脚本依赖** —— demo 实测：
+`modules/lobby` 有 4 处 `import '../../foundation/…'`，产物里 `lobby` 的 `deps` 是 `[]`。
+于是「地基反过来 import 某个模块」「主包 import 地基的值」这类倒挂、以及任意长的环，
+在产物侧那道闸下面**完全隐形**：构建全绿、manifest 正常，等模块被 `release` 掉才炸。
+[[adr-0014]] 那条「主包不得 import 地基的任何值」此前也**没有任何门在守**，只靠人记。
+
+**规则：边 `A → B` 合法 ⟺ `priority(B) > priority(A)`。** 排名不另立表，直接用 Creator 的
+bundle 优先级（目录 `.meta` 的 `userData.priority`）—— 那个数字本来就在裁决资源归属，
+语义就是「谁更底层」，两件事本来就该是同一个旋钮。严格递增 ⇒ 拓扑序天然存在 ⇒
+**环不可能出现**，不需要另跑环检测；顺带把「同级互引」（两个模块 / 两个马甲的皮包彼此拽住）
+一起拦了 —— 那正是跨马甲资源漂的代码版。
+
+- **新闸 `pnpm check:graph`**（`cck-manifest check-graph --assets`，不用构建）。加 `--mermaid`
+  现扫现画拓扑图，图由源码生成、不手工维护，也就不会过期。
+- **只认相对 `import`**：`cc` / `@cck/*` / npm 都在 AOT 里，不构成包间边。
+  **`import type` 不算边**（编译期擦除）—— 主包拿地基的唯一合法缝 `boot/foundation-api.ts`
+  正是靠它，写成值 `import` 当场被拦。动态 `bundle.load()` + `js.getClassByName` 同样不算边，
+  它本来就是**故意**绕开静态依赖的。
+- **demo 实况**：15 个包、7 条跨包代码边（去重 4 条），全是 `modules/* → foundation`，全绿。
+- **二值验证**：往 `assets/` 扔一个 `import { MODULE_CATALOG } from './foundation/catalog'` 的文件
+  → `✗ main(7) → foundation(6)` + 退出码 1；删掉 → `✅ 15 个包、7 条跨包代码边`。
+- 单测 `bundle-deps.test.ts` 21 → **35 条**（新增拓扑侧 14：`bundleName` 覆盖目录名、最长前缀归属、
+  同名前缀不误伤、多行 `import`、`import type` 不算边、倒挂 / 同级 / 未知包、`toMermaid` 去重）。
+
+顺带修掉两处文档失真：**①** `CLAUDE.md` 的「跨包依赖不许指向别处」本意只管**资源**边，
+字面上却把合法的 `modules → foundation` 代码边也一起禁了（那条是 [[adr-0014]] 明确允许的）——
+已改成「跨包资源依赖」，代码边另立一条拓扑规则；**②** 「钉住的资源随 APK 走、要发版」在
+[[adr-0017]] 解开 AOT 热更之后已不成立，改为「跟 AOT 同寿命 = 热更整个 base 并重启」。
 
 ## 模块状态
 

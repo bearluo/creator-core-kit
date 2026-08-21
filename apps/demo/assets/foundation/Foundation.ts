@@ -1,5 +1,6 @@
 import { _decorator } from 'cc';
-import type { LaunchContext } from '@cck/core';
+import { createBundleGraph, getBundleManager, type LaunchContext } from '@cck/core';
+import { BUNDLE_GRAPH } from './bundles';
 import { registerCatalogUIs } from './catalog';
 import { authenticate } from './net/auth';
 import { connectNetwork } from './net/connect';
@@ -43,9 +44,14 @@ export class DemoFoundation {
    * 业务 cmd 之前（网关在认证前只放行 `AuthRequest` / `Ping`）。
    */
   async boot(ctx: LaunchContext): Promise<void> {
+    // 依赖表**第一个装**：此后任何 load 都按它跟随装卸（模块带着自己的皮包一起进出），
+    // 表外的包在非 prod 直接抛 —— 漏登记要在开发期炸，不能等到玩家点开那个功能。
+    getBundleManager().setGraph(createBundleGraph(BUNDLE_GRAPH), {
+      strict: ctx.config.env !== 'prod',
+    });
     registerCatalogUIs(); // 模块清单 → UIManager 注册表（加一个模块 = 改 catalog.ts 一行）
     await connectNetwork(ctx); // 协议注册表 + 长连接 + 网关搬家器 → DI
     await authenticate(ACCOUNT_LOGIN_URL); // 登录 + 首帧 AuthRequest；重连后自动重认
-    console.log('[CCK-FOUNDATION] 地基就绪：协议 / 连接 / 认证 / 模块清单');
+    console.log('[CCK-FOUNDATION] 地基就绪：依赖表 / 协议 / 连接 / 认证 / 模块清单');
   }
 }

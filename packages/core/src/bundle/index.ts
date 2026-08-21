@@ -15,3 +15,11 @@ export { createBundleScope } from './bundle-scope';
 export type { BundleScope, BundleScopeDeps } from './bundle-scope';
 export { BUNDLE_RELOADER } from './bundle-reloader';
 export type { IBundleReloader } from './bundle-reloader';
+export {
+  createBundleGraph,
+  DEFAULT_ALWAYS_ALLOWED,
+  type BundleGraph,
+  type BundleGraphOptions,
+  type BundleRef,
+  type BundleSpec,
+} from './bundle-graph';

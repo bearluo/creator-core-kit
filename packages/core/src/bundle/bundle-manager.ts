@@ -1,4 +1,5 @@
 import { createToken, getRootContainer, type Token } from '../di';
+import type { BundleGraph } from './bundle-graph';
 import { BUNDLE_UPDATER, type BundleUpdater } from '../hotupdate';
 import { getLogger, type ILogger } from '../logging';
 import {
@@ -59,6 +60,18 @@ export interface BundleManager {
    * 版本表放上层就会漏掉那条路径。放这里则所有调用点零改自动带上版本。
    */
   setVersions(map: Readonly<Record<string, string>>): void;
+  /**
+   * 装上 bundle 依赖表 —— **依赖从此跟着装卸**：`load(A)` 先按拓扑层把 A 的 `needs` 装上
+   * （层内并行）、每个各加一次引用，`release(A)` 对称地各减一次。复用现成的引用计数，
+   * 不引第二套生命周期。
+   *
+   * `strict`（默认 true）：表外的包被 `load` 时抛。发布版传 `false` 降级成告警 ——
+   * 漏声明一条不该让玩家白屏，但开发期不抛就等于没有门。
+   *
+   * 表本身住在接入方的**地基包**里（它是跨模块契约、要能热更），而地基自己是被启动序列装上来的
+   * —— 所以启动那一段（`AppConfig.shared`）仍由 App 管，本表接管的是**地基起来之后**的一切。
+   */
+  setGraph(graph: BundleGraph, opts?: { strict?: boolean }): void;
 }
 
 interface Entry {
@@ -77,14 +90,17 @@ export function createBundleManager(opts?: BundleManagerOptions): BundleManager 
     opts?.updater ?? getRootContainer().tryResolve(BUNDLE_UPDATER);
   const table = new Map<string, Entry>();
   let versions: Readonly<Record<string, string>> = {};
+  let graph: BundleGraph | undefined;
+  let strictGraph = true;
 
   const handleOf = (name: string, e: Entry): BundleHandle => ({ name, version: e.version });
 
-  return {
-    async load(nameOrUrl, loadOpts): Promise<BundleHandle> {
-      const name = loadOpts?.name ?? nameOrUrl;
-      const url = loadOpts?.name !== undefined ? nameOrUrl : undefined;
-
+  /** 装一个包本身，**不看依赖表** —— 依赖的展开在公开的 `load` 里，避免递归重复计数。 */
+  const loadOne = async (
+    name: string,
+    loadOpts?: BundleLoadOptions & { name?: string },
+    url?: string,
+  ): Promise<BundleHandle> => {
       const existing = table.get(name);
       if (existing) {
         existing.refCount++;
@@ -123,19 +139,64 @@ export function createBundleManager(opts?: BundleManagerOptions): BundleManager 
         table.delete(name);
         throw e;
       }
+  };
+
+  const releaseOne = (name: string): void => {
+    const e = table.get(name);
+    if (!e) {
+      logger.warn(`release: bundle '${name}' 未加载，忽略`);
+      return;
+    }
+    e.refCount--;
+    if (e.refCount <= 0) {
+      table.delete(name);
+      source.releaseBundle(name);
+    }
+  };
+
+  return {
+    async load(nameOrUrl, loadOpts): Promise<BundleHandle> {
+      const name = loadOpts?.name ?? nameOrUrl;
+      const url = loadOpts?.name !== undefined ? nameOrUrl : undefined;
+      // 远程 url 加载不在依赖表的管辖内（表描述的是本工程的包）。
+      if (!graph || url !== undefined) return loadOne(name, loadOpts, url);
+
+      if (!graph.has(name)) {
+        const msg = `bundle '${name}' 没登记在依赖表里 —— 加一行，或改用已登记的包`;
+        if (strictGraph) throw new Error(msg);
+        logger.warn(msg);
+        return loadOne(name, loadOpts, url);
+      }
+
+      // 依赖跟随：按拓扑层装，层内并行；最后一层是 name 自己，留给下面单独装
+      // （它要带 loadOpts 的 version/onProgress）。任一步失败就把已装的依赖原样松开。
+      const layers = graph.layersFor(name);
+      const held: string[] = [];
+      try {
+        for (const layer of layers) {
+          const deps = layer.filter((n) => n !== name);
+          if (deps.length === 0) continue;
+          await Promise.all(
+            deps.map(async (n) => {
+              await loadOne(n);
+              held.push(n);
+            }),
+          );
+        }
+        return await loadOne(name, loadOpts, url);
+      } catch (e) {
+        for (const n of held) releaseOne(n);
+        throw e;
+      }
     },
 
     release(name): void {
-      const e = table.get(name);
-      if (!e) {
-        logger.warn(`release: bundle '${name}' 未加载，忽略`);
-        return;
-      }
-      e.refCount--;
-      if (e.refCount <= 0) {
-        table.delete(name);
-        source.releaseBundle(name);
-      }
+      releaseOne(name);
+      if (!graph?.has(name)) return;
+      // 逆拓扑序松开依赖：一次 load 给每个依赖加了一次引用，这里各减一次。
+      const layers = graph.layersFor(name);
+      for (let i = layers.length - 1; i >= 0; i--)
+        for (const n of layers[i]) if (n !== name) releaseOne(n);
     },
 
     isLoaded(name): boolean {
@@ -156,6 +217,11 @@ export function createBundleManager(opts?: BundleManagerOptions): BundleManager 
 
     setVersions(map): void {
       versions = { ...map };
+    },
+
+    setGraph(g, graphOpts): void {
+      graph = g;
+      strictGraph = graphOpts?.strict ?? true;
     },
   };
 }

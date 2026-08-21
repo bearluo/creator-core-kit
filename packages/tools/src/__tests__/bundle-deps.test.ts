@@ -3,10 +3,16 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  bundleOf,
   collectBundleDeps,
   findDepViolations,
+  findEdgeViolations,
   findUnpinnedRefs,
+  MAIN_BUNDLE,
+  readBundles,
   scanAssetRefs,
+  scanCodeEdges,
+  toMermaid,
   type BundleDeps,
 } from '../bundle-deps';
 
@@ -231,5 +237,142 @@ describe('scanAssetRefs / findUnpinnedRefs（源码期）', () => {
     expect(findUnpinnedRefs(scanAssetRefs(src)).map((u) => u.uuid)).toContain('INTERNAL-X@f9941');
     rmSync(f);
     rmSync(`${f}.meta`);
+  });
+});
+
+describe('拓扑单调（代码边）', () => {
+  let src: string;
+
+  /** 造一个 bundle 目录 + 它的 meta。`name` 省略则用目录名。 */
+  const bundleDir = (rel: string, priority: number, name?: string): void => {
+    mkdirSync(join(src, rel), { recursive: true });
+    writeFileSync(
+      join(src, `${rel}.meta`),
+      JSON.stringify({ userData: { isBundle: true, priority, ...(name ? { bundleName: name } : {}) } }),
+    );
+  };
+
+  const ts = (rel: string, body: string): void => {
+    mkdirSync(dirname(join(src, rel)), { recursive: true });
+    writeFileSync(join(src, rel), body);
+  };
+
+  beforeAll(() => {
+    src = mkdtempSync(join(tmpdir(), 'cck-graph-'));
+    bundleDir('resources', 8);
+    bundleDir('foundation', 6);
+    bundleDir('modules/lobby', 3);
+    bundleDir('modules/shop', 1);
+    bundleDir('skins/base/foundation', 2, 'skin-base-foundation');
+    bundleDir('skins/base/mail', 1, 'skin-base-mail');
+    mkdirSync(join(src, 'skins/base'), { recursive: true }); // skins/ 与 skins/base/ 不是 bundle
+    // 合法：模块(3/1) → 地基(6)
+    ts(
+      'modules/lobby/LobbyHost.ts',
+      "import { cc } from 'cc';\nimport { MODULE_CATALOG } from '../../foundation/catalog';\nimport {\n  LOBBY_EVENTS,\n} from '../../foundation/events';\nimport './LobbyVM';\n",
+    );
+    // 合法：类型引用被擦除，不算运行时依赖
+    ts('boot/foundation-api.ts', "import type { DemoFoundation } from '../foundation/Foundation';\n");
+    ts('foundation/catalog.ts', "import { x } from './events';\n");
+  });
+
+  afterAll(() => rmSync(src, { recursive: true, force: true }));
+
+  describe('readBundles', () => {
+    it('永远含主包，按优先级从高到低排', () => {
+      expect(readBundles(src).map((b) => `${b.name}:${b.priority}`)).toEqual([
+        'resources:8',
+        'main:7',
+        'foundation:6',
+        'lobby:3',
+        'skin-base-foundation:2',
+        'shop:1',
+        'skin-base-mail:1',
+      ]);
+    });
+
+    it('bundleName 覆盖目录名（皮包目录叫 mail、包名叫 skin-base-mail）', () => {
+      expect(readBundles(src).find((b) => b.dir === 'skins/base/mail')?.name).toBe('skin-base-mail');
+    });
+
+    it('assets 目录不存在 → 只剩主包，不抛', () => {
+      expect(readBundles(join(src, 'nope'))).toEqual([MAIN_BUNDLE]);
+    });
+  });
+
+  describe('bundleOf', () => {
+    const bundles = (): ReturnType<typeof readBundles> => readBundles(src);
+
+    it('最长目录前缀说了算', () => {
+      expect(bundleOf('skins/base/mail/Mail.prefab', bundles()).name).toBe('skin-base-mail');
+    });
+
+    it('没被任何 bundle 圈住的归主包', () => {
+      expect(bundleOf('boot/Bootstrap.ts', bundles())).toEqual(MAIN_BUNDLE);
+    });
+
+    it('同名前缀不误伤（`foundation-x` 不算 `foundation` 里的）', () => {
+      expect(bundleOf('foundation-x/a.ts', bundles())).toEqual(MAIN_BUNDLE);
+    });
+  });
+
+  describe('scanCodeEdges', () => {
+    it('只收跨包的相对 import；`cc` / 同包 / 类型 import 都不算边', () => {
+      expect(scanCodeEdges(src)).toEqual([
+        { from: 'lobby', to: 'foundation', file: 'modules/lobby/LobbyHost.ts', target: 'foundation/catalog' },
+        { from: 'lobby', to: 'foundation', file: 'modules/lobby/LobbyHost.ts', target: 'foundation/events' },
+      ]);
+    });
+
+    it('多行 import 也认（`[^;]*?` 跨行）', () => {
+      expect(scanCodeEdges(src).some((e) => e.target === 'foundation/events')).toBe(true);
+    });
+
+    it('`import type` 不产生边 —— 主包拿地基的唯一合法缝', () => {
+      expect(scanCodeEdges(src).some((e) => e.from === 'main')).toBe(false);
+    });
+  });
+
+  describe('findEdgeViolations', () => {
+    const bundles = [
+      { name: 'resources', dir: 'resources', priority: 8 },
+      MAIN_BUNDLE,
+      { name: 'foundation', dir: 'foundation', priority: 6 },
+      { name: 'lobby', dir: 'modules/lobby', priority: 3 },
+      { name: 'shop', dir: 'modules/shop', priority: 1 },
+      { name: 'mail', dir: 'modules/mail', priority: 1 },
+    ];
+    const edge = (from: string, to: string): { from: string; to: string; file: string; target: string } => ({
+      from,
+      to,
+      file: `${from}/x.ts`,
+      target: `${to}/y`,
+    });
+
+    it('指向更高优先级 = 合法（模块 → 地基）', () => {
+      expect(findEdgeViolations([edge('shop', 'foundation')], bundles)).toEqual([]);
+    });
+
+    it('倒挂违规：主包 import 地基的值 → 地基被判进 AOT，热更当场失效', () => {
+      expect(findEdgeViolations([edge('main', 'foundation')], bundles)).toEqual([
+        { ...edge('main', 'foundation'), fromPriority: 7, toPriority: 6 },
+      ]);
+    });
+
+    it('同级互引违规 —— 严格递增才保证无环', () => {
+      expect(findEdgeViolations([edge('shop', 'mail'), edge('mail', 'shop')], bundles)).toHaveLength(2);
+    });
+
+    it('认不出的包按主包算，不默默放行', () => {
+      expect(findEdgeViolations([edge('ghost', 'lobby')], bundles)).toHaveLength(1);
+    });
+  });
+
+  it('toMermaid 画出节点与去重后的边', () => {
+    const g = toMermaid(readBundles(src), scanCodeEdges(src));
+    expect(g.startsWith('graph BT')).toBe(true);
+    expect(g).toContain('foundation["foundation · 6"]');
+    expect(g).toContain('skin_base_mail["skin-base-mail · 1"]');
+    expect(g.match(/lobby --> foundation/g)).toHaveLength(1); // 两条 import 合成一条边
   });
 });

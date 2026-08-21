@@ -4,6 +4,7 @@ import {
   getBundleManager,
   BUNDLE_MANAGER,
 } from '../bundle-manager';
+import { createBundleGraph, type BundleGraph } from '../bundle-graph';
 import {
   createMemoryBundleSource,
   BUNDLE_SOURCE,
@@ -425,5 +426,139 @@ describe('createMemoryBundleSource', () => {
     const src = createMemoryBundleSource({ present: ['builtin'] });
     expect(src.hasBundle('builtin')).toBe(true);
     expect(src.hasBundle('other')).toBe(false);
+  });
+});
+
+describe('BundleManager × 依赖表', () => {
+  afterEach(() => {
+    const root = getRootContainer();
+    root.unregister(BUNDLE_SOURCE);
+    root.unregister(BUNDLE_MANAGER);
+  });
+
+  /** foundation ← mail、foundation ← lobby，mail 另带一个皮包。 */
+  const graph = (): BundleGraph =>
+    createBundleGraph([
+      { name: 'foundation' },
+      { name: 'skin-mail' },
+      { name: 'mail', needs: ['foundation', () => 'skin-mail'] },
+      { name: 'lobby', needs: ['foundation'] },
+    ]);
+
+  const refOf = (bm: ReturnType<typeof createBundleManager>, name: string): number | undefined =>
+    bm.list().find((b) => b.name === name)?.refCount;
+
+  it('load 先按拓扑序装依赖，自己最后 —— 依赖不用调用点复述', async () => {
+    const s = makeSource();
+    const bm = createBundleManager({ source: s.source });
+    bm.setGraph(graph());
+    await bm.load('mail');
+    expect(s.loadCalls).toEqual(['foundation', 'skin-mail', 'mail']);
+  });
+
+  it('装卸对称：一次 load 给每个依赖加一次引用，一次 release 各减一次', async () => {
+    const s = makeSource();
+    const bm = createBundleManager({ source: s.source });
+    bm.setGraph(graph());
+    await bm.load('mail');
+    expect(refOf(bm, 'foundation')).toBe(1);
+    bm.release('mail');
+    expect(s.releaseCalls.sort()).toEqual(['foundation', 'mail', 'skin-mail']);
+    expect(bm.list()).toEqual([]);
+  });
+
+  it('load 两次 → 依赖也是 2；release 两次才真卸（引用计数是唯一的生命周期）', async () => {
+    const s = makeSource();
+    const bm = createBundleManager({ source: s.source });
+    bm.setGraph(graph());
+    await bm.load('mail');
+    await bm.load('mail');
+    expect(refOf(bm, 'foundation')).toBe(2);
+    bm.release('mail');
+    expect(bm.isLoaded('foundation')).toBe(true);
+    bm.release('mail');
+    expect(bm.isLoaded('foundation')).toBe(false);
+  });
+
+  it('共享依赖不被误卸：关了 mail，lobby 还在用 foundation', async () => {
+    const s = makeSource();
+    const bm = createBundleManager({ source: s.source });
+    bm.setGraph(graph());
+    await bm.load('lobby');
+    await bm.load('mail');
+    expect(refOf(bm, 'foundation')).toBe(2);
+    bm.release('mail');
+    expect(s.releaseCalls).not.toContain('foundation');
+    expect(bm.isLoaded('foundation')).toBe(true);
+  });
+
+  it('依赖装失败 → 自己不装，已装的依赖原样松开（不留半截状态）', async () => {
+    const failing: IBundleSource = {
+      loadBundle: (name: string) =>
+        name === 'skin-mail' ? Promise.reject(new Error('皮包 404')) : Promise.resolve(),
+      releaseBundle: () => {},
+      hasBundle: () => true,
+    };
+    const bm = createBundleManager({ source: failing });
+    bm.setGraph(graph());
+    await expect(bm.load('mail')).rejects.toThrow('皮包 404');
+    expect(bm.list()).toEqual([]);
+  });
+
+  it('自己装失败 → 依赖也一并松开', async () => {
+    const failing: IBundleSource = {
+      loadBundle: (name: string) =>
+        name === 'mail' ? Promise.reject(new Error('模块 404')) : Promise.resolve(),
+      releaseBundle: () => {},
+      hasBundle: () => true,
+    };
+    const bm = createBundleManager({ source: failing });
+    bm.setGraph(graph());
+    await expect(bm.load('mail')).rejects.toThrow('模块 404');
+    expect(bm.list()).toEqual([]);
+  });
+
+  it('表外的包：strict（默认）直接抛 —— 开发期漏登记当场炸', async () => {
+    const s = makeSource();
+    const bm = createBundleManager({ source: s.source });
+    bm.setGraph(graph());
+    await expect(bm.load('ghost')).rejects.toThrow(/没登记在依赖表里/);
+    expect(s.loadCalls).toEqual([]);
+  });
+
+  it('表外的包：strict=false 降级成告警并照常装 —— 上线不为一条漏声明白屏', async () => {
+    const s = makeSource();
+    const { logger, warns } = fakeLogger();
+    const bm = createBundleManager({ source: s.source, logger });
+    bm.setGraph(graph(), { strict: false });
+    await bm.load('ghost');
+    expect(s.loadCalls).toEqual(['ghost']);
+    expect(warns).toHaveLength(1);
+  });
+
+  it('远程 url 加载不受表管（表描述的是本工程的包）', async () => {
+    const s = makeSource();
+    const bm = createBundleManager({ source: s.source });
+    bm.setGraph(graph());
+    await bm.load('https://cdn/x', { name: 'remote' });
+    expect(s.loadCalls).toEqual(['remote']);
+  });
+
+  it('没设表 → 行为一个字不变（接入方不用表也能跑）', async () => {
+    const s = makeSource();
+    const bm = createBundleManager({ source: s.source });
+    await bm.load('mail');
+    expect(s.loadCalls).toEqual(['mail']);
+    bm.release('mail');
+    expect(s.releaseCalls).toEqual(['mail']);
+  });
+
+  it('release 表外的包 → 只松开自己，不去查依赖', async () => {
+    const s = makeSource();
+    const bm = createBundleManager({ source: s.source });
+    bm.setGraph(graph(), { strict: false });
+    await bm.load('ghost');
+    bm.release('ghost');
+    expect(s.releaseCalls).toEqual(['ghost']);
   });
 });

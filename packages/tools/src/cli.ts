@@ -11,6 +11,8 @@
  *   兼容校验:      cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <path>) [--min-app-version <v>]
  *   钉子门控:      cck-manifest check-pins --assets <工程 assets 目录> [--pin-dir resources/]
  *                  工程引用到的外部资源（Creator 内置库）必须都被共享仓钉住，否则归属会漂
+ *   拓扑门控:      cck-manifest check-graph --assets <工程 assets 目录> [--mermaid]
+ *                  跨包 import 只许指向优先级更高的包（严格递增 ⇒ 不可能成环）；--mermaid 打印拓扑图
  *   web 版本表:    cck-manifest web-versions --root <web构建产物根> --version <v> [--core <dist>] [--min-app-version <v>] --out <path>
  *   归档:          cck-manifest archive --cdn <CDN根> --version <v>        （落 releases/<v>/，出包流程自动调）
  *   回滚:          cck-manifest rollback --cdn <CDN根> --release <旧版本> --version <新版本号，必须更大>
@@ -21,8 +23,12 @@ import { computeCoreApiHash, readEngineHash, readStamp, verifyCompat, writeStamp
 import {
   collectBundleDeps,
   findDepViolations,
+  findEdgeViolations,
   findUnpinnedRefs,
+  readBundles,
   scanAssetRefs,
+  scanCodeEdges,
+  toMermaid,
 } from './bundle-deps';
 import {
   archiveManifests,
@@ -68,6 +74,7 @@ function main(): void {
       'allow-deps': { type: 'string' },
       assets: { type: 'string' },
       'pin-dir': { type: 'string' },
+      mermaid: { type: 'boolean' },
     },
   });
 
@@ -164,6 +171,31 @@ function main(): void {
       `${unpinned.length} 个外部资源没被共享仓钉住 —— 归属会随引用关系漂（漂进 AOT 就热更不了，` +
         '漂到别的马甲就破了隔离）。修法：在共享仓的钉子 prefab 里给每个资源挂一个节点引用一次，' +
         '工程各处的引用不用改',
+    );
+  }
+
+  if (sub === 'check-graph') {
+    // 跨包**代码**边的门控。Creator 的 `cc.config.deps` 只记资源依赖 —— 模块 import 地基的函数
+    // 在产物里一条边都看不见，那道闸对循环依赖是瞎的。规则：依赖只许指向优先级更高的包，
+    // 严格递增 ⇒ 拓扑序天然存在 ⇒ 成不了环。
+    const assets = values.assets ?? die('check-graph 需要 --assets（工程的 assets 目录）');
+    const bundles = readBundles(assets);
+    const edges = scanCodeEdges(assets, bundles);
+    if (values.mermaid === true) {
+      console.log(toMermaid(bundles, edges));
+      return;
+    }
+    const bad = findEdgeViolations(edges, bundles);
+    if (bad.length === 0) {
+      console.log(`✅ ${bundles.length} 个包、${edges.length} 条跨包代码边，全部指向更高优先级（无环）`);
+      return;
+    }
+    for (const v of bad)
+      console.error(`  ✗ ${v.from}(${v.fromPriority}) → ${v.to}(${v.toPriority})  ${v.file} → ${v.target}`);
+    die(
+      `${bad.length} 条跨包依赖倒挂或同级 —— 依赖只许指向优先级更高的包。` +
+        '倒挂会把被依赖的包判给上层（地基进 AOT = 热更失效），同级互引则两个包彼此拽住、一起卸不掉。' +
+        '修法：把共用的东西下沉到更高优先级的包，或改走事件/接口而不是直接 import',
     );
   }
 
