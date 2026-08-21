@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  aotQuarantined,
+  aotQuarantineVerdict,
   aotStamp,
   bundleManifestName,
   bundleStoragePath,
   bundleVersionName,
   manifestAssetKeys,
+  manifestVersion,
   normalizeSearchPaths,
   packagedAotEntry,
   rebaseManifest,
@@ -248,6 +251,32 @@ describe('aotStamp（APK 换没换的判据 = 包内 AOT 入口的 md5）', () =
   });
 });
 
+describe('aotQuarantined（main.js 的启动看门狗判定）', () => {
+  const g = globalThis as { __cckAotQuarantined?: unknown };
+  afterEach(() => {
+    delete g.__cckAotQuarantined;
+  });
+
+  it('没挂全局（老模板 / web）→ false，看门狗休眠', () => {
+    expect(aotQuarantined()).toBe(false);
+  });
+
+  it('main.js 判定隔离 → true', () => {
+    g.__cckAotQuarantined = true;
+    expect(aotQuarantined()).toBe(true);
+  });
+
+  it('main.js 判定没隔离 → false', () => {
+    g.__cckAotQuarantined = false;
+    expect(aotQuarantined()).toBe(false);
+  });
+
+  it('只认布尔 true —— truthy 的字符串不算（别让脏值把缓存删了）', () => {
+    g.__cckAotQuarantined = 'true';
+    expect(aotQuarantined()).toBe(false);
+  });
+});
+
 describe('packagedAotEntry（main.js 挂上来的包内入口名）', () => {
   const g = globalThis as { __cckAotEntry?: unknown };
   afterEach(() => delete g.__cckAotEntry);
@@ -323,5 +352,39 @@ describe('engineHash（走 SystemJS 的 import map，不碰文件系统）', () 
   it('resolve 抛（没 warmup）→ undefined 而不是炸掉启动', () => {
     g.System = { resolve: () => { throw new Error('no such module'); } };
     expect(engineHash()).toBeUndefined();
+  });
+});
+
+describe('manifestVersion', () => {
+  it('取 version', () => {
+    expect(manifestVersion('{"version":"1.2.1","assets":{}}')).toBe('1.2.1');
+  });
+
+  it('不是合法 JSON / 没有 version / 空串 → undefined（读不出来只退化成拦不住，不抛）', () => {
+    expect(manifestVersion('')).toBeUndefined();
+    expect(manifestVersion('<html>404</html>')).toBeUndefined();
+    expect(manifestVersion('{"assets":{}}')).toBeUndefined();
+    expect(manifestVersion('{"version":""}')).toBeUndefined();
+    expect(manifestVersion('{"version":121}')).toBeUndefined();
+  });
+});
+
+describe('aotQuarantineVerdict（隔离过的版本要不要拦）', () => {
+  it('没有隔离标记 → proceed', () => {
+    expect(aotQuarantineVerdict(true, '1.2.1', null)).toBe('proceed');
+    expect(aotQuarantineVerdict(true, '1.2.1', '')).toBe('proceed');
+  });
+
+  it('base + 同号 → skip（不再下载起不来的那一版）', () => {
+    expect(aotQuarantineVerdict(true, '1.2.1', '1.2.1')).toBe('skip');
+  });
+
+  it('base + 别的号 → clear（发布方翻篇了，标记作废）', () => {
+    expect(aotQuarantineVerdict(true, '1.2.2', '1.2.1')).toBe('clear');
+  });
+
+  it('**分包一律 proceed** —— 分包与 base 共用同一个版本号，拿 base 的隔离结论挡分包会误伤一批', () => {
+    expect(aotQuarantineVerdict(false, '1.2.1', '1.2.1')).toBe('proceed');
+    expect(aotQuarantineVerdict(false, '1.2.2', '1.2.1')).toBe('proceed');
   });
 });

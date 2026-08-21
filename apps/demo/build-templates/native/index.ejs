@@ -10,6 +10,39 @@
 // 升级 Creator 后与内置模板 diff 一次（内置模板在
 // <Creator>/resources/resources/3d/engine/templates/native/index.ejs）。
 
+// ==== AOT 启动看门狗（必须先于搜索路径还原）====
+// AOT 可热更之后多出一种**玩家自己救不回来**的失败：下发的 AOT 起不来（引用了这个引擎没有的
+// 符号、文件半损、某类机型上崩），`System.import` 抛在下面那个 catch 里 —— 而作废缓存的代码
+// 在 Bootstrap 里，永远轮不到。实测：连续冷启动逐次相同，**覆盖装另一个 APK 也救不了**，
+// 只有清应用数据。见 ADR-0018。
+//
+// 判据「起来了没有」由 engine 的 `resetCcHotUpdateOnAppChange()` 给：它跑在 Bootstrap 早期，
+// 跑到那儿就证明这套 AOT 能加载、cc 能初始化、场景能起 —— 它会清掉这个计数。所以计数只在
+// 「用了热更 AOT、却没跑到 Bootstrap」时才累加。之后的失败（网络、登录）不算 AOT 的账。
+// ⚠️ 这个键在 engine 的 hotupdate-backend.ts 里还写了一份（`AOT_TRY_KEY`）——本文件跑在 SystemJS
+// 之前，import 不到那边的常量。改一处必须改两处，build.mjs 有闸盯着字面量一致。
+var __cckAotTryKey = 'cck.aotTry';
+(function () {
+    var MAX_TRY = 2; // 给一次重试：半写入 / OOM 这类偶发不该直接判死
+    try {
+        if (typeof window.jsb !== 'object') return;
+        // `|| 0` 兜的是 NaN：存档被写坏时宁可多试一次，也别把好好的一版误判成起不来。
+        var n = +(localStorage.getItem(__cckAotTryKey) || 0) || 0;
+        if (n < MAX_TRY) return;
+        // 隔离态下连搜索路径都不还原（缓存目录里的模块资源也一并不用）；Bootstrap 里的
+        // `resetCcHotUpdateOnAppChange()` 看见这个全局，就把「哪一版起不来」记下来、
+        // 再把两个缓存根整个删掉，回到全新安装的一致状态。
+        //
+        // **计数不在这里清**：清了就等于承认「包内这一版起来了」，而此刻它还一行没跑。
+        // 清它的是 reset() —— 跑到那儿才算真起来了。包内版本要是也起不来，计数停在上限、
+        // 一直隔离，那正是想要的。
+        window.__cckAotQuarantined = true;
+        console.error('[cck] 热更 AOT 连续 ' + n + ' 次没能起来 → 这次跑包内版本，缓存交给 Bootstrap 作废');
+    } catch (e) {
+        console.error('[cck] AOT 看门狗判定失败，按未隔离处理: ' + e);
+    }
+})();
+
 // ==== 热更搜索路径还原（必须先于任何 require）====
 // 此刻可用：jsb.fileUtils / localStorage / XMLHttpRequest（jsb-adapter/web-adapter.js 已在
 // C++ BaseGame::init 里先于 main.js 跑完）；不可用：cc、SystemJS。
@@ -19,6 +52,7 @@
 // 保持与官方一致，没自作主张改。
 (function () {
     try {
+        if (window.__cckAotQuarantined) return;
         if (typeof window.jsb === 'object') {
             var hotUpdateSearchPaths = localStorage.getItem('HotUpdateSearchPaths'); // 须与 backend 的 searchPathsKey 一致
             if (hotUpdateSearchPaths) {
@@ -89,6 +123,7 @@ var applicationJs = '<%= applicationJs %>';
 window.__cckAotEntry = applicationJs;
 (function () {
     try {
+        if (window.__cckAotQuarantined) return;
         var raw = jsb.fileUtils.getStringFromFile('src/cck-aot.json');
         if (!raw) return;
         var name = JSON.parse(raw).application;
@@ -99,6 +134,10 @@ window.__cckAotEntry = applicationJs;
             console.error('[cck] AOT 指针指向的文件不存在，回退包内版本: ' + name);
             return;
         }
+        // 计数在**用之前**就落盘：下面 System.import 一抛（或直接崩），这一笔已经记上了。
+        // 起得来的话 Bootstrap 里 resetCcHotUpdateOnAppChange() 会把它清掉。
+        // 顺序不能反 —— setItem 万一抛了要落进 catch 跑包内版本，不能「用了却没记上」。
+        localStorage.setItem(__cckAotTryKey, String((+(localStorage.getItem(__cckAotTryKey) || 0) || 0) + 1));
         applicationJs = name;
         console.log('[cck] AOT 入口取热更版本: ' + name);
     } catch (e) {

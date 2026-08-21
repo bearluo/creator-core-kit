@@ -14,6 +14,20 @@
 
 `createHotUpdateService({ backend?, gate?, app?, logger? })` 返回 `HotUpdateService`：`check()` 拉远程版本头比版本 → 过**版本兼容闸** → `up-to-date | update-available | rejected(needFullUpdate) | error`；`update(onProgress?)` 下载差量 + 应用 → `ready(待 restart) | failed(retryable) | skipped`；`restart()` 重启生效。三平台（native/Web/小游戏）一个 API，平台差异经 `IHotUpdateBackend`（`check/download/apply/restart`）下沉 engine。**版本闸 = 钩子 + 安全默认**（用户定 2026-07-28）：core 定 `VersionGate` 接缝 + 默认 `createSemverVersionGate`（`minAppVersion` + 可选 `coreApiHash` 比对，承 ADR-0001 防 AOT 缺代码崩），零配置即安全，可注入自定义 gate 做灰度/强更。**core 零 cc**：状态机 + 版本策略 + 内存 fake 全可 node 单测。
 
+## 这份文档管什么（与接入方装配文档的分工）
+
+热更这件事横跨 kit 与接入方工程，两边各有一份文档，**判据是「换一个接入方工程，它要不要改」**：
+
+| | 本文档（随 `@cck/core` 发布） | 接入方工程的装配文档 |
+|---|---|---|
+| 回答 | 这个服务**是什么、怎么用、平台上受什么硬约束** | **这个工程**怎么把它装起来 |
+| 内容 | API 签名 · 状态机 · 闸策略 · `IHotUpdateBackend` 契约 · 各平台机制与坑 · 接入方必做项 | 具体 bundle 名与目录 · 出包脚本 · 发版与回滚命令 · CDN 选型 · 该工程的真机实证 |
+| 判据 | **换一个工程，这里一个字都不用改** | 换一个工程，这里基本要重写 |
+| 举例 | 一律用占位（`<bundle>` / `<你的工程>/…`），真样例只给指针 | 用真名真路径 |
+
+本仓的样例接入方是 demo，装配细节见 `apps/demo/docs/hotupdate-pipeline.md`；
+逐次真机 e2e 的**实录属编年史**，在 `docs/progress.md`，两份现状文档都不留流水账。
+
 ## Purpose（目标与定位）
 
 - **做什么**：把 CLAUDE.md「三种热」的**线上热更(hotfix)** 收敛为一个带**统一状态机 + 版本兼容闸 + 进度/重试**的入口。（另两热：运行时按需分包归 [[bundle-manager]]；开发期热重载走 vitest watch，非本模块。）
@@ -81,7 +95,7 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
 - **update(onProgress?)**：前置 state 须 `update-available` 或 `failed`（重试），否则告警返回 `skipped`；state=downloading → `backend.download(onProgress)` → state=applying → `backend.apply()` → state=ready；抛错 → state=failed、`retryable:true`。
 - **restart()**：委托 `backend.restart()`（native game.restart / web reload）。
 - **默认解析**：`backend = opts.backend ?? tryResolve(HOTUPDATE_BACKEND) ?? 空后端(恒 up-to-date)`；`gate = opts.gate ?? createSemverVersionGate()`；`app = opts.app ?? {appVersion:'0.0.0'}`。
-- **与 cc 边界**：状态机/闸/内存 fake 全在 core（零 cc）。engine 实现 `IHotUpdateBackend`：native 用 `jsb.AssetsManager`（构造 manifestUrl+缓存路径、checkUpdate→CheckResult、update→事件转 HotUpdateProgress、setSearchPaths、game.restart）；Web/小游戏用远程 bundle 版本化。属**有状态引擎行为**，ADR-0002 不进 cc mock，走 apps/demo 集成验证。
+- **与 cc 边界**：状态机/闸/内存 fake 全在 core（零 cc）。engine 实现 `IHotUpdateBackend`：native 用 `jsb.AssetsManager`（构造 manifestUrl+缓存路径、checkUpdate→CheckResult、update→事件转 HotUpdateProgress、setSearchPaths、game.restart）；Web/小游戏用远程 bundle 版本化。属**有状态引擎行为**，ADR-0002 不进 cc mock，走接入方工程的真机集成验证（本仓样例是 demo）。
 
 ## Key design decisions（决策表）
 
@@ -102,32 +116,41 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
 
 - core（状态机/闸/内存 fake）纯 TS，全平台无差异。
 - **native**：`jsb.AssetsManager` 差量下载脚本+资源 → 写 `writablePath` → `setSearchPaths` 置顶 → `game.restart` 生效。
-- **native 的更新边界（两条线切死：还原时机 + 谁的名字带 md5；2026-08-05 查证边界，2026-08-20 按真实产物细分）**：C++ `BaseGame::init()` 依次 `runScript("jsb-adapter/web-adapter.js")` → `runScript("main.js")`，两者都用**默认搜索路径**解析，而还原逻辑就写在 `main.js` 里。还原之后仍有东西换不了，但**理由各不相同** —— 按「拦住它的是什么」分：
+- **native 的更新边界（两条线切死：还原时机 + 谁的名字带 md5；2026-08-05 查证边界，2026-08-20 按真实产物细分）**：C++ `BaseGame::init()` 依次 `runScript("jsb-adapter/web-adapter.js")` → `runScript("main.js")`，两者都用**默认搜索路径**解析，而还原逻辑就写在 `main.js` 里。还原之后仍有东西换不了。落到发版上只有三档代价：
 
-  | 层 | 内容 | 拦住它的是什么 |
+  | 代价 | 改到了什么 | 怎么下去 |
   |---|---|---|
-  | L0 还原之前 | `libcocos.so`（引擎 C++ + jsb 绑定）、`jsb-adapter/web-adapter.js`、**`main.js` 自身** | 跑在搜索路径还原**之前**，而 `main.js` 就是还原本身 → 只能发版 |
-  | L1-E 引擎那一半 | `src/cocos-js/cc.<md5>.js`、`jsb-adapter/engine-adapter.js`、`src/effect.bin` | 与 `.so` 是同一次引擎构建的两半，换 JS 不换 `.so` 崩在绑定层 → **只能发 APK**；由**引擎指纹闸**识别（`engineHash`，按 `cc.<md5>.js` 取，见下）。`effect.bin` 另有一层：**固定名无 md5**，下发会破坏内容寻址 |
-  | L1-N 被 `main.js` 写死名字 | `src/system.bundle.<md5>.js`、`src/polyfills.<md5>.js`、`src/import-map.<md5>.json` | 纯 JS、与 `.so` 无关，但 `main.js` 里 `require` 的是字面量旧 md5 名，新文件下下来没人念。`import-map` 还兼任引擎身份凭据（`imports.cc`），**故意不解** |
-  | L1-A 内容驱动的 AOT | `application.<md5>.js` → `settings.<md5>.json` → `src/chunks/bundle.<md5>.js`、`assets/{main,resources,internal}` | **无 —— 能热更，重启生效**（[[adr-0017]]）。曾经的障碍是入口没有固定名；现在 `main.js` 改读固定名指针 `src/cck-aot.json`，而那段跑在搜索路径还原**之后** |
-  | L2 模块 bundle | 各功能模块 Asset Bundle | 无 —— 能热更，且**不用重启**（[[adr-0010]]），按需分包更新（[[adr-0013]]，见下） |
+  | **只能发 APK** | 见下表三类 | **发不出去**：`cck-manifest` 的 `isEngineBound` 把它们剔出 base manifest；万一从别的路子混进来，客户端的**引擎指纹闸**（`engineHash`，按 `cc.<md5>.js` 取，见下）也拒收 |
+  | **热更下发，重启生效**（AOT） | `application.<md5>.js` → `settings.<md5>.json` → `src/chunks/bundle.<md5>.js`、`assets/{main,resources,internal}` | `project.manifest` 一份，`game.restart()` 生效（[[adr-0017]]）。曾经的障碍是入口没有固定名；现在 `main.js` 改读固定名指针 `src/cck-aot.json`，而那段跑在搜索路径还原**之后** |
+  | **热更下发，不用重启** | 各功能模块 Asset Bundle | 各自 `<bundle>.manifest`（[[adr-0010]]），加载前按需更新（[[adr-0013]]，见下） |
 
-  **AOT 入口指针**（L1-A 解锁的全部机关）：`main.js` 里 `System.import(applicationJs)` 的那个名字不再是构建期插值，而是运行时读 `src/cck-aot.json` 的 `application` 字段得来 —— 热更目录里有新的就命中新的，读不到 / 坏了 / 指向的文件不存在就退回包内那份（黑屏是最坏结果，退回还能起来）。同一段模板还把包内烘的名字挂成 `window.__cckAotEntry`，那是 `packagedAotEntry()` / `aotStamp()` 判「APK 换没换」的唯一不可伪造来源。
+  「只能发 APK」那一档里有三类，理由各不相同：
+
+  | 这一类 | 具体是谁 | 为什么解不开 |
+  |---|---|---|
+  | **引擎的另一半** | `src/cocos-js/cc.<md5>.js`、`jsb-adapter/engine-adapter.js`、`src/effect.bin` | 与 `.so` 是同一次引擎构建的两半，换 JS 不换 `.so` 崩在绑定层。`effect.bin` 另有一层：**固定名无 md5**，下发会破坏内容寻址 |
+  | **启动器自己，和跑在它之前的** | `libcocos.so`（引擎 C++ + jsb 绑定）、`jsb-adapter/web-adapter.js`、**`main.js` 自身** | 跑在搜索路径还原**之前**，而 `main.js` 就是那段还原 —— 下下来没人读 |
+  | **名字烘死在启动器里的** | `src/system.bundle.<md5>.js`、`src/polyfills.<md5>.js`、`src/import-map.<md5>.json` | 纯 JS、与 `.so` 无关，但 `main.js` 里 `require` 的是字面量旧 md5 名，新文件下下来没人念。`import-map` 还兼任引擎身份凭据（`imports.cc`），**故意不解** |
+
+  > 2026-08-20 之前的文档与 ADR 把这几档记作 `L0` / `L1-E` / `L1-N` / `L1-A` / `L2`：
+  > `L0` + `L1-E` + `L1-N` = 只能发 APK，`L1-A` = AOT，`L2` = 模块 bundle。
+
+  **AOT 入口指针**（AOT 能热更的全部机关）：`main.js` 里 `System.import(applicationJs)` 的那个名字不再是构建期插值，而是运行时读 `src/cck-aot.json` 的 `application` 字段得来 —— 热更目录里有新的就命中新的，读不到 / 坏了 / 指向的文件不存在就退回包内那份（黑屏是最坏结果，退回还能起来）。同一段模板还把包内烘的名字挂成 `window.__cckAotEntry`，那是 `packagedAotEntry()` / `aotStamp()` 判「APK 换没换」的唯一不可伪造来源。
 
   `web-adapter.js` 是 `platforms/native/builtin/index.js` 的打包产物：jsb 命名空间与 native 引用管理、DOM/BOM 垫片、`XMLHttpRequest`/`WebSocket`、**`localStorage`**、`setTimeout`/rAF、Promise polyfill、`jsb.fileUtils` 单例。落到实处的影响：
   - 定时器 / Promise polyfill / DOM 垫片 / 音频 / 输入 / `jsb.WebSocket`（本仓 net 层就架在它上面）出问题，**热更修不了**。
-  - **循环依赖**：`apply()` 靠 `localStorage` 存搜索路径，而 `localStorage` 实现本身在 L0 —— 存档机制自己不可热更。
-  - **`main.js` 在 L0**：热更包里放新 `main.js` 无效（下了也不会被加载）。`cck-manifest` 默认只遍历 `src`/`assets`/`jsb-adapter` 三个子目录，根级文件要靠 `--files` 显式点名（AOT 入口 `application.<md5>.js` 就是这么进去的）—— **`main.js` 永远不许出现在那份名单里**。`jsb-adapter/` 整目录则由 `--md5` 排除：`web-adapter.js`（~170KB）属 L0、下了不会被用是死重量；`engine-adapter.js` 属 L1-E，读得到，但换它不换 `.so` 会崩在绑定层。
-  - `cc.js` 属 L1-E：机制上**能**被换，但它与 L0 的 `.so` 是配套的（jsb 绑定签名要对齐）→ **热更包必须由与线上包同一 Creator 版本、同一引擎裁剪配置构建产出**，跨版本换 `cc.js` 会崩在绑定层。这比 `coreApiHash` 闸挡的东西更底层 —— 现由**引擎指纹闸**覆盖（`UpdateInfo.engineHash` vs `AppInfo.engineHash`，见下），且 `cc.js` 本身已被 `--md5` 排除出 base manifest、结构上也换不成了。
-  - **`assets/internal` 结构上属 L1-A，实践上跟引擎走**（2026-08-20 按 android 产物实测，两半都取到样本）：① 它的资源集合与 `settings.engine.builtinAssets` **双向完全相等**（各 20 项），由 Creator 的**引擎模块开关**决定而不是场景用了什么 —— demo 从没用过 spine，但 `spine`/`dragon-bones` 模块开着，`builtin-spine` + `default-spine-material` 照样进包；`3d` 关着，`builtin-standard` 就不在。② **工程引用的 `db://internal` 资源不进 internal**，走普通 bundle 归属规则（判给优先级最高的引用者）—— 那条规则会漂，见下一条。⇒ **internal 变 ⟺ 引擎模块变 ⟺ `cc.<md5>.js` 变 ⟺ 引擎指纹闸拦成整包更新**。它仍在 base manifest 里，但**成本为零**：引擎没变时它逐字节相同、不产生 diff；引擎变了整个更新已被闸拒成「发 APK」。留着它是为了让 `settings.bundleVers.internal` 指向的目录一定在本地。
-  - **资源归属会漂，且漂了是静默的**：Creator 把被多包引用的资源判给**优先级最高**的引用者，其余包降级成 `cc.config` 的 `deps` + `redirect`。demo 产物里两种漂法都出过 —— 共用图漂进 `main`（AOT，只随 APK 换 → 热更下去的包引用旧 APK 没有的 uuid，运行时炸），以及两个马甲的地基皮包同优先级抢同一张图，Creator 挑了 base 那个 → vest 的皮包依赖 base 马甲的包。**规则**：① 工程各处照常引用 `db://internal`，**不改引用**；② 用到的每个内置资源在 `assets/resources/internal-pin.prefab` 里挂一个节点「钉」一次 —— `resources` priority 8 是工程内最高的，归属被它吸走后谁也抢不动；③ 它们跟 AOT 同寿命 —— AOT 解锁后这意味着「加一张内置图要热更整个 base 并重启」，而不再是「发 APK」。`cck-manifest --split` 出 manifest 前会扫 `deps`/`redirect` 硬拦，见 [[hot-update-manifest]]。
-  - **`src/effect.bin` 属 L1-E**：5.7 KB zlib 解压出 256 KB，内容是 `cc_matView` / `cc_fogColor` 这类**引擎 UBO / descriptor 布局**，不含任何 effect 名、与工程内容无关，跟引擎构建走。它由 `settings.rendering.effectSettingsPath` 按**固定名**引用（唯一一个不带 md5 的 `src/` 文件）—— L1-A 解开之后它也**不下发**：跟引擎走是一条理由，同名文件覆盖会破坏内容寻址的 immutable 缓存是另一条。`isEngineBound` 里单列了它。
-  - 逃生口（**未验证**）：`native/engine/common/Classes/Game.cpp` 是项目文件且在 `BaseGame::init()` 之前跑，理论上可在那里先 `FileUtils::setSearchPaths` 把 L0 也纳入热更；但要先确认 `CocosApplication::init()` 会不会重置搜索路径，且引入它本身仍需发一次版。
+  - **循环依赖**：`apply()` 靠 `localStorage` 存搜索路径，而 `localStorage` 实现本身跑在还原之前 —— 存档机制自己不可热更。
+  - **`main.js` 换不了**：热更包里放新 `main.js` 无效（下了也不会被加载）。`cck-manifest` 默认只遍历 `src`/`assets`/`jsb-adapter` 三个子目录，根级文件要靠 `--files` 显式点名（AOT 入口 `application.<md5>.js` 就是这么进去的）—— **`main.js` 永远不许出现在那份名单里**。`jsb-adapter/` 整目录则由 `--md5` 排除：`web-adapter.js`（~170KB）跑在还原之前、下了不会被用是死重量；`engine-adapter.js` 属引擎那一半，读得到，但换它不换 `.so` 会崩在绑定层。
+  - `cc.js` 属引擎那一半：机制上**能**被换，但它与 `.so` 是配套的（jsb 绑定签名要对齐）→ **热更包必须由与线上包同一 Creator 版本、同一引擎裁剪配置构建产出**，跨版本换 `cc.js` 会崩在绑定层。这比 `coreApiHash` 闸挡的东西更底层 —— 现由**引擎指纹闸**覆盖（`UpdateInfo.engineHash` vs `AppInfo.engineHash`，见下），且 `cc.js` 本身已被 `--md5` 排除出 base manifest、结构上也换不成了。
+  - **`assets/internal` 结构上在 AOT 这一档，实践上跟引擎走**（2026-08-20 按 android 产物实测，两半都取到样本）：① 它的资源集合与 `settings.engine.builtinAssets` **双向完全相等**（各 20 项），由 Creator 的**引擎模块开关**决定而不是场景用了什么 —— demo 从没用过 spine，但 `spine`/`dragon-bones` 模块开着，`builtin-spine` + `default-spine-material` 照样进包；`3d` 关着，`builtin-standard` 就不在。② **工程引用的 `db://internal` 资源不进 internal**，走普通 bundle 归属规则（判给优先级最高的引用者）—— 那条规则会漂，见下一条。⇒ **internal 变 ⟺ 引擎模块变 ⟺ `cc.<md5>.js` 变 ⟺ 引擎指纹闸拦成整包更新**。它仍在 base manifest 里，但**成本为零**：引擎没变时它逐字节相同、不产生 diff；引擎变了整个更新已被闸拒成「发 APK」。留着它是为了让 `settings.bundleVers.internal` 指向的目录一定在本地。
+  - **资源归属会漂，且漂了是静默的**：Creator 把被多包引用的资源判给**优先级最高**的引用者，其余包降级成 `cc.config` 的 `deps` + `redirect`。实测两种漂法都出过（2026-08-20，demo 产物）—— 共用图漂进 `main`（AOT，只随 APK 换 → 热更下去的包引用旧 APK 没有的 uuid，运行时炸），以及两个马甲的地基皮包同优先级抢同一张图，Creator 挑了 base 那个 → vest 的皮包依赖 base 马甲的包。**规则**：① 工程各处照常引用 `db://internal`，**不改引用**；② 在 `resources` 里放一份「钉子」资产，把用到的每个内置资源挂一个节点钉一次 —— `resources` 的 priority 8 是工程里最高的，归属被它吸走后谁也抢不动（样例与两道闸的用法见接入方装配文档）；③ 它们跟 AOT 同寿命 —— AOT 解锁后这意味着「加一张内置图要热更整个 base 并重启」，而不再是「发 APK」。`cck-manifest --split` 出 manifest 前会扫 `deps`/`redirect` 硬拦，见 [[hot-update-manifest]]。
+  - **`src/effect.bin` 属引擎那一半**：5.7 KB zlib 解压出 256 KB，内容是 `cc_matView` / `cc_fogColor` 这类**引擎 UBO / descriptor 布局**，不含任何 effect 名、与工程内容无关，跟引擎构建走。它由 `settings.rendering.effectSettingsPath` 按**固定名**引用（唯一一个不带 md5 的 `src/` 文件）—— AOT 能热更之后它也**不下发**：跟引擎走是一条理由，同名文件覆盖会破坏内容寻址的 immutable 缓存是另一条。`isEngineBound` 里单列了它。
+  - 逃生口（**未验证**）：`native/engine/common/Classes/Game.cpp` 是项目文件且在 `BaseGame::init()` 之前跑，理论上可在那里先 `FileUtils::setSearchPaths` 把启动器那一类也纳入热更；但要先确认 `CocosApplication::init()` 会不会重置搜索路径，且引入它本身仍需发一次版。
 - **native 分包更新（一 bundle 一 manifest，[[adr-0013]]）**：base 与模块是**两个独立更新目标**。
 
   | | base（AOT 层） | 模块 bundle |
   |---|---|---|
-  | manifest | `project.manifest`（内容寻址产物下装 **AOT 整条链**：入口 + 指针 + settings + chunks + `assets/{main,resources,internal}`；L1-E/L1-N 一个都不发，见上表） | `<bundle>.manifest`（该 bundle 一份，`cck-manifest --split` 产出） |
+  | manifest | `project.manifest`（内容寻址产物下装 **AOT 整条链**：入口 + 指针 + settings + chunks + `assets/{main,resources,internal}`；「只能发 APK」那三类一个都不发，见上表） | `<bundle>.manifest`（该 bundle 一份，`cck-manifest --split` 产出） |
   | storagePath | `<writable>cck-remote-asset/` | `<writable>cck-bundle-asset/<bundle>/`（并列不嵌套） |
   | 触发时机 | 启动期 `HotUpdateService.check/update` | `BundleManager.load(name)` 之前，经 `BundleUpdater.ensureLatest` |
   | 生效 | `game.restart()` | **免重启**——模块此刻尚未加载 |
@@ -141,8 +164,10 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
 
   **各 bundle 的版本节奏由内容决定**：`cck-manifest --split --prev <上次发布目录>` 只给内容真变了的包涨版本号，没动的包沿用旧号（见 [[hot-update-manifest]]）。客户端那边没动的包直接 `ALREADY_UP_TO_DATE`，不再空跑一轮「下载 0 个文件」。版本号仍单调递增，因此不碰引擎默认的 `cmpVersion`——它先 `sscanf("%d.%d.%d.%d")` 逐段比，**任一侧解析不出数字才退化成 `strcmp`**。这条排除了「直接拿内容 hash 当版本号」的路：纯 hash 若以数字开头（`03cb…`）会被 sscanf 吃成 `3`、与 `03aa…` 判等而永不更新；即使加前缀强制走 `strcmp`，字典序也不单调，约一半的发版会被判成 up-to-date 而静默丢失。
 
-  **APK 换了就把热更缓存整个作废**（`resetCcHotUpdateOnAppChange()`，**须在 kit 装配之前调**）。引擎自带的那道——`loadLocalManifest` 用 `versionGreater(cached)` 比包内与缓存 manifest、包内更新就 `removeDirectory(storagePath)`（`AssetsManagerEx.cpp:213/287`）——**只在版本号纪律成立时有效**：装了更旧的包（商店回滚 / 手动装历史 apk / 渠道包互换）时包内号更小 → **缓存接管** → 旧 AOT 配着为新 AOT 编译的模块代码跑。而 `coreApiHash` 闸救不了这一场：缓存接管后 `check()` 判 `ALREADY_UP_TO_DATE`（缓存 = 远端），压根不去拉更新戳 sidecar。表现是「装完新包启动报错，清数据才好」。
-  判据用**主包 md5**（`settings.querySettings('assets','bundleVers').main`）而不是 app 戳的 `coreApiHash`：① 这一步必须早于 `AssetsManagerEx.create()`（一 create 就前插搜索路径），而 app 戳在 `resources` bundle 里要异步 load，那时还没到；② 口径更保守——`coreApiHash` 只描述 core 的 API 面，AOT 业务代码改了它不变，而热更下来的模块代码是对着整个 AOT 编译的；③ 只改模块、AOT 没动时它不变，不会让玩家因一次纯业务热更而重下所有包。**没开 `md5Cache` 时 `bundleVers` 是空表 → 判不了 → 原样不动**（当成「换了」会让每次冷启动全量重下）。清理范围含 `<base>_temp/`（断点续传目录与 storagePath **平级**，留着会让下一轮更新从属于旧 APK 的半成品接着续）。
+  **包内 AOT 与缓存对不上就把热更缓存整个作废**（`resetCcHotUpdateOnAppChange()`，**须在 kit 装配之前调**）。两种触发：**APK 换了**（下述）与 **AOT 被启动看门狗隔离**（见下条）。引擎自带的那道——`loadLocalManifest` 用 `versionGreater(cached)` 比包内与缓存 manifest、包内更新就 `removeDirectory(storagePath)`（`AssetsManagerEx.cpp:213/287`）——**只在版本号纪律成立时有效**：装了更旧的包（商店回滚 / 手动装历史 apk / 渠道包互换）时包内号更小 → **缓存接管** → 旧 AOT 配着为新 AOT 编译的模块代码跑。而 `coreApiHash` 闸救不了这一场：缓存接管后 `check()` 判 `ALREADY_UP_TO_DATE`（缓存 = 远端），压根不去拉更新戳 sidecar。表现是「装完新包启动报错，清数据才好」。
+  判据用**包内 AOT 入口的 md5**（`main.js` 挂上来的 `window.__cckAotEntry` → `packagedAotEntry()` → `aotStamp()`）而不是 app 戳的 `coreApiHash`：① 这一步必须早于 `AssetsManagerEx.create()`（一 create 就前插搜索路径），而 app 戳在 `resources` bundle 里要异步 load，那时还没到；② 口径更保守——`coreApiHash` 只描述 core 的 API 面，AOT 业务代码改了它不变，而热更下来的模块代码是对着整个 AOT 编译的。**不能用运行时 `settings.bundleVers`**：AOT 现在可热更，那个每更新一次就翻一次，会把刚下好的缓存当成「上一版 APK 的」删掉，死循环（[[adr-0017]] 决策 6）。**没开 `md5Cache` 时入口就叫 `application.js`、抠不出 md5 → 判不了 → 原样不动**（当成「换了」会让每次冷启动全量重下）。清理范围含 `<base>_temp/`（断点续传目录与 storagePath **平级**，留着会让下一轮更新从属于旧 APK 的半成品接着续）。
+
+  **AOT 启动看门狗**（[[adr-0018]]）。三道指针兜底管的是「指针指不到东西」，管不了「指到了、文件也在、**但那份 AOT 起不来**」—— 那时 `System.import` 抛在 `main.js` 的 catch 里，而作废缓存的代码在 Bootstrap 里、**永远轮不到**。实测：连续冷启动逐字相同，**覆盖装另一个 APK 也救不了**，只有清应用数据。所以 `main.js` 每次「决定用热更 AOT」就把 `cck.aotTry` +1（**落盘在 `System.import` 之前**），`resetCcHotUpdateOnAppChange()` 跑到就清 0 —— 那是「这套 AOT 确实起得来」的握手；连续 2 次没清就**隔离**：不还原搜索路径、不认指针、跑包内 AOT，缓存由 `resetCcHotUpdateOnAppChange()` 真删（`AssetsManagerEx.create()` 会把 storagePath 前插回来，不删就是包内 AOT 配缓存里的新模块），它**删之前**先把那份缓存 manifest 的版本号记进 `cck.aotBadVersion` —— 读这一步只能在 engine 侧做，版本号所在的目录是可配的 `storagePath`，`main.js` 只够得着硬编码的键。之后 **base 的 `check()` 见到同号直接当 up-to-date**，否则「隔离 → 重下同一版 → 又隔离」三步一轮地振荡；见到别的号说明发布方已翻篇，顺手清掉标记。**只挡 base**（判据是 backend 有没有 `persistKey`，不是有没有 `seed` —— 随包发 manifest 的分包同样没有 seed）：base 与分包共用同一个 `--version`，拿它挡分包会把一批分包永久钉死在包内版本，而分包与包内 AOT 兼不兼容自有 `coreApiHash` 闸管。发布方发个新号即自动恢复。⚠️ `cck.aotTry` 的字面量在 `index.ejs` 与 `hotupdate-backend.ts` 里各写一份（`main.js` 跑在 SystemJS 之前），`build.mjs` 出包时对一次。
 
   **已下线模块的目录回收**：`pruneCcBundleStorage(keep)` 启动时对账一次，删掉 `cck-bundle-asset/` 下不在名单里的目录。单个 bundle 内的旧文件由 `AssetsManagerEx::updateSucceed` 按 diff 删，这里只管**整包下线**的残留。`keep` 由 app 给——native 侧没有权威来源可查「远端还发不发」，删错了下次 `load` 只能退回包内旧版本。名单为空会清光整个根。
   真机上存储根里除了 `<bundle>/` 还并排躺着 `<bundle>_temp/`（`_tempStoragePath` = storagePath 去尾斜杠 + `TEMP_PACKAGE_SUFFIX`），它是断点续传状态，归对应 bundle 管、不能单独删。
@@ -155,7 +180,7 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
 
   两端取值路径不同，各自都不可伪造：**app 一端**由 engine 的 `engineHash()` 运行时从 SystemJS import map 取（那份 map 属结构性不可热更的一层，热更改不动）；**更新一端**由 tools 的 `readEngineHash(dataRoot)` 出包期从产物 `src/import-map*.json` 读、写进更新戳 sidecar。app 戳文件里**没有**这个字段 —— 它生成于 Creator 构建之前，那时产物还不存在。
 
-- **三个指纹管三件事，别混用**：`aotStamp`（主包 md5）答「APK 换没换」，业务一改就翻，敏感是特性（`resetCcHotUpdateOnAppChange` 用它）；`coreApiHash` 答「core 的 API 面变没变」；`engineHash` 答「引擎换没换」。
+- **三个指纹管三件事，别混用**：`aotStamp`（包内 AOT 入口 md5）答「APK 换没换」，业务一改就翻，敏感是特性（`resetCcHotUpdateOnAppChange` 用它）；`coreApiHash` 答「core 的 API 面变没变」；`engineHash` 答「引擎换没换」。
 
 - **AOT 缺代码防护**：版本闸 `coreApiHash`/`minAppVersion` 是运行时兜底；配套出包期打戳/校验脚本（tools 层，见 Open Questions）是另一半。跨 bundle 服务走全局 token（[[adr-0001]]）。
 
@@ -179,9 +204,8 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
 
 - **落地文件**：`packages/core/src/hotupdate/version-gate.ts`（`UpdateInfo`/`AppInfo`/`GateResult`/`VersionGate` + `compareVersion` + `createSemverVersionGate`）、`hotupdate-backend.ts`（`CheckResult`/`HotUpdateProgress`/`IHotUpdateBackend` + `HOTUPDATE_BACKEND` + `createMemoryHotUpdateBackend`）、`hotupdate-service.ts`（`createHotUpdateService` + 状态机/`CheckOutcome`/`UpdateOutcome` + `HOTUPDATE_SERVICE` + `getHotUpdateService`）、`index.ts`；core `index.ts` re-export（第 3 批起始 `export * from './hotupdate'`）。
 - **最终 API 与设计偏差**：无偏差，与定稿一致。`compareVersion` 首版按纯数字段（忽略 pre-release/build 元数据，非数字段容错为 0），需要时再引 semver 库。
-- **测试结果 / 覆盖率**：`version-gate.test.ts` 11 + `hotupdate-service.test.ts` 14（含空后端/裸闸兜底补测）= **25 用例全绿**；`version-gate.ts`、`hotupdate-backend.ts`、`hotupdate-service.ts`、`index.ts` 均 **100% Stmts/Branch/Funcs/Lines**（全量 298 passed）。
-- **commit / PR**：待提交。
-- **遗留 Minors**：engine 侧 native 后端已实现（见下）；Web/小游戏远程 bundle backend 随需；**出包期 tools 脚本**（打戳 + 主动校验，见 Open Questions #2）待 tools 包搭建；退避重试/断点续传留后续。
+- **测试结果 / 覆盖率**：`version-gate.test.ts` 11 + `hotupdate-service.test.ts` 14（含空后端/裸闸兜底补测）起步 25 用例；`version-gate.ts`、`hotupdate-backend.ts`、`hotupdate-service.ts`、`index.ts` 至今保持 **100% Stmts/Branch/Funcs/Lines**（core 覆盖率是 CI 硬门槛）。
+- **遗留**：Web / 小游戏的远程 bundle backend 随需再接；退避重试、断点续传留后续。出包期打戳与主动校验已落地（[[compat-stamp]]）。
 
 ### engine 半适配（native.AssetsManager 后端，2026-07-28）
 
@@ -192,209 +216,52 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
   - `apply()` → 新资源搜索路径置顶（`getSearchPaths().unshift(...getLocalManifest().getSearchPaths())`）+ 持久化 `localStorage[searchPathsKey]` + `setSearchPaths`。
   - `restart()` → `game.restart()`。
 - **守门**：`ccHotUpdateModule` 用 `sys.isNative`——**仅原生注册真后端**；web/编辑器预览下 `native.AssetsManager` 为 undefined，故 no-op，core 回退空后端（恒 up-to-date），保证预览不崩。
-- **⚠️ native 集成步骤（本 npm 包管不到、须在原生工程侧手动做）**：
-  1. **启动还原**：放 `apps/<项目>/build-templates/native/index.ejs`（Creator 3.8 官方的原生模板覆盖点，android/ios/windows 共用一份；`data/main.js` 就是它渲染出来的），在**任何 `require` 之前**读 `localStorage[searchPathsKey]`（默认键 `'HotUpdateSearchPaths'`，对齐官方模板）→ `setSearchPaths`。**别改构建产物 `data/main.js`**——每次构建重新渲染，改了必被覆盖。**冷启动（进程被杀）必需**；`game.restart()` 同进程热重启因 `apply()` 已在内存 `setSearchPaths`，不还原也能加载新版本，所以漏了这步很难当场发现。本仓样例：`apps/demo/build-templates/native/index.ejs`（2026-08-05 android 构建实测生效）。
-  2. **manifest 产物**：`project.manifest` / `version.manifest`（远程 URL + 版本 + 文件 md5）由 tools 出包期生成（后置模块）。
+- **接入方要做的那几步**：见下「接入方必做项（native）」——`ccHotUpdateModule` 只负责注册后端，启动还原、入口指针、缓存作废的调用点都在原生工程侧。
 - **类型策略**：官方 `@cocos/creator-types@3.8.7` 的 `native.AssetsManager`/`native.EventAssetsManager`/`native.fileUtils` 真类型（ADR-0005），无 ambient hack。
 - **验证**：四门全绿；**真机 gameView 预览已验证**（web 侧守门 + 回退）：`sys.isNative=false → HOTUPDATE_BACKEND registered=false` + `HotUpdateService.check()={"kind":"up-to-date"}`（守门 no-op 正确、空后端回退正确、web 下触碰 `native.AssetsManager` 不崩）。
 
-### native 真机 e2e 验证（2026-08-05，真 Android APK · PASS）
+### 接入方必做项（native）
 
-**完整热更闭环在真 x86_64 Android 模拟器上跑通**——同一 APK 内 `BUILD_TAG` 从 `v1` 跃迁到 `v2`，且**杀进程冷启动后仍是 v2**，铁证下载来的新代码接管：
+以下几步 **npm 包管不到**，必须在接入方的原生工程里做。漏了任何一步都不会当场报错，
+一律表现为「更新下发成功、玩家跑的还是旧代码」或几个版本之后才发作的崩溃。
+本仓的样例实现在 `apps/demo`（装配细节见它的 `docs/hotupdate-pipeline.md`）。
 
-```
-BUILD_TAG = v1                    ← 首启，APK 内置 v1 代码（PID 6157）
-app 戳读入 → appVersion=1.0.0 coreApiHash=03cb152c725e（闸已激活）
-check() = {"kind":"update-available","info":{"version":"1.0.1","totalBytes":53898,"coreApiHash":"03cb152c725e"}}
-⏳ 下载 → 53898/53898 字节（1 文件：assets/main/index.js）
-update() = {"kind":"ready"}
-BUILD_TAG = v2                    ← game.restart() 同进程热重启（PID 6157 不变）后，v2 代码接管
+1. **启动还原**：放一份 `<你的工程>/build-templates/native/index.ejs`（Creator 3.8 官方的原生模板
+   覆盖点，android/ios/windows 共用一份；`data/main.js` 就是它渲染出来的），在**任何 `require`
+   之前**读 `localStorage[searchPathsKey]`（默认键 `'HotUpdateSearchPaths'`，对齐官方模板）→
+   `setSearchPaths`。**别改构建产物 `data/main.js`**——每次构建重新渲染，改了必被覆盖。
+   **冷启动（进程被杀）必需**；`game.restart()` 同进程热重启因 `apply()` 已在内存 `setSearchPaths`，
+   不还原也能加载新版本，所以漏了这步很难当场发现。
+2. **AOT 入口指针**：同一份模板里，`System.import` 的名字改成运行时读固定名 `src/cck-aot.json`，
+   并把包内烘的名字挂成 `window.__cckAotEntry`（`packagedAotEntry()` 判「APK 换没换」的唯一来源）。
+   出包脚本负责写这份指针，并把产物根上的入口用 `--files` 喂给 manifest（子目录遍历够不着根）。
+   ⚠️ 出包时**硬校验** `project.manifest` 里入口与指针都在，否则「AOT 热更静默失效」。
+3. **`resetCcHotUpdateOnAppChange()` 必须早于 kit 装配**（早于任何 `AssetsManagerEx.create()`
+   ——一 create 就前插搜索路径）。它同时兼三件事：清启动看门狗计数（= 「这套 AOT 起得来」的握手）、
+   认 APK 换没换、执行隔离态的缓存作废。**忘了调 = 每套热更 AOT 跑两次就被隔离**。
+4. **manifest 产物**：`cck-manifest --split` 出 base + 每包一份，`--prev` 指向紧邻的上一次发布。
+   **`--prev` 是必需项不是优化项**：给内容没变的包涨版本号会让客户端在 worker 线程崩（见
+   [[hot-update-manifest]]）。`main.js` 永远不许出现在 `--files` 名单里。
+5. **两枚戳**：app 戳进 `resources`（不可被热更改动，闸的这一端才不可伪造），更新戳跟 manifest
+   一起上 CDN。两端 hash 由同一份 core d.ts 算出，出包期就该校验相等（见 [[compat-stamp]]）。
+6. **看门狗计数键两处一致**：`cck.aotTry` 在 `index.ejs` 与 engine 的 `hotupdate-backend.ts` 里
+   各写一份（`main.js` 跑在 SystemJS 之前，import 不到 TS 侧常量）。漏改一处**静态检查全绿**、
+   只在真机上发作，出包脚本应对一次字面量。
 
-am force-stop → 冷启动（PID 6321，全新进程）
-BUILD_TAG = v2                    ← 只可能来自 main.js 的启动还原（见步骤 2）
-check() = {"kind":"up-to-date"}   ← 本地 manifest 已是 1.0.1，读的是可写路径那份
-断开托管后再冷启动（PID 6551）：BUILD_TAG 仍 = v2，check() 优雅 error 不崩 —— 排除「其实是又下了一遍」
-```
+### 验证
 
-冷启动这段是 `game.restart()` 验不到的：热重启时内存里的 `setSearchPaths` 还在，漏掉启动还原也照样加载新版本。
+kit 半（状态机 / 闸 / 内存 fake）由 vitest 覆盖，见上「Testable seams」。**带 native 的那一半按
+ADR-0002 不进 cc mock，验证一律在接入方工程的真机上做** —— 逐次实录属编年史，在 `docs/progress.md`；
+接入方视角的结论表在 `apps/demo/docs/hotupdate-pipeline.md` 的「现状」。
 
-**已验证的 native 集成步骤（落实上文「⚠️ native 集成步骤」，可复现）**：
-
-1. **manifestUrl 解析**：`ccHotUpdateModule({ manifestUrl: 'project.manifest' })` 传裸文件名即可——把 `project.manifest` 放构建产物 `data/` 根（APK 内 `assets/` 根，是默认搜索路径），`native.AssetsManager.create('project.manifest', …)` 经 fileUtils 直接解析到。**比官方「导入 `.manifest` 资产取 `nativeUrl`」更省**，因 data 根本就是搜索路径。
-2. **main.js 启动还原**：源在 `apps/demo/build-templates/native/index.ejs`，构建时渲染进 `build/android/data/main.js` 顶部——引擎/资源加载前读 `localStorage['HotUpdateSearchPaths']` → `jsb.fileUtils.setSearchPaths(...)` + 官方那段 `_temp/` 断点修复。键须与 backend `searchPathsKey`（默认 `'HotUpdateSearchPaths'`）一致。**冷启动必需**；`game.restart()` 热重启因 apply() 已在内存 `setSearchPaths`，同进程内即便不还原也能加载 v2，但冷启动（进程被杀）只靠这段。
-   > 平台目录是 **`native` 不是 `android`**，也不带 `data/` 那层（原生三平台共用一份模板）。构建实测：渲染出的 `data/main.js` 4112 字节（默认模板 840 字节），注入块在最顶、`<%= systemJsBundleFile %>` 等占位符正常渲染；由该模板打出的 APK 冷启动直接进 v2（上文 PID 6321/6551 两次）。ADR-0006 决策 5 当初写的 `build-templates/android/data/main.js` 路径是错的，见该 ADR 文末修正。
-3. **manifest 产物**：`cck-manifest`（tools 半）对 `build/android/data` 生成 `project.manifest`/`version.manifest`——默认走 `src/assets/jsb-adapter` 三子目录（根级 main.js/manifest 自身不纳入，无自引用）；v1 打 `version 1.0.0` 烘进 APK，v2 改一处代码重构建后打 `1.0.1` + 同 `packageUrl` 托管远端。AssetsManager 按 md5 差量：仅变更的 `assets/main/index.js`（md5 `e815…`→`9c40…`）被下载。
-4. **远端托管**：宿主起 http server，模拟器经 `10.0.2.2:<port>`（user-net 网关映射宿主 loopback）直连，免 CDN/鉴权。Cocos 3.8 android 模板 `AndroidManifest.xml` 默认 `android:usesCleartextTraffic="true"`，HTTP 明文开箱可用。
-5. **原生构建**：Creator 3.8.7 经 builder `add-task` 消息程序化触发（复用运行中的编辑器，无锁冲突），NDK/SDK/JDK 路径直填任务 options（`sdkPath`/`ndkPath`/`javaHome`）绕开偏好设置；ABI 选 **x86_64**（对齐 x86_64 模拟器，原生跑不靠 ARM 转译，Cocos 3.8 支持）；产物 gradle 工程 `gradlew assembleDebug` 编 APK。详见 [[adr-0006]]。
-
-至此「三种热」之**线上热更**在 native 真机端到端闭环验证完成（Web/小游戏远程 bundle backend 仍随需再接）。
-
-### 分包更新 e2e（2026-08-05，真 Android APK · PASS）
-
-干净安装（先 `adb uninstall`），远端 base 停在 1.0.0（与包内 manifest **md5 完全一致**）、只有 `shop.manifest` 提到 1.0.1：
-
-```
-BUILD_TAG = v1                            ← AOT 代码全程没换
-app 戳读入 appVersion=1.0.0 coreApiHash=03cb152c725e
-HOTUPDATE_BACKEND_FACTORY registered = true
-HotUpdateService.check() = up-to-date      ← base 无更新 → 不触发 restart
-bundle 'shop' 更新 1/1 文件 · 271 字节     ← BundleManager.load 前自动更新，只下那一个变更文件
-SHOP_TAG = v2                              ← 免重启读到新内容
-
-am force-stop 冷启动（服务端在）  → SHOP_TAG = v2，base check up-to-date
-断开托管后再冷启动               → SHOP_TAG = v2，check 优雅 error 不崩
-```
-
-最后一次是关键判据：`localStorage` 里**确无** `HotUpdateSearchPaths`（base 从未更新过，模块的 apply 不写），v2 只可能来自 `create()` 时 C++ 的 `prependSearchPaths`。设备落盘形态也与设计一致——`cck-bundle-asset/shop/{project.manifest, assets/shop/import/…}`，与 `cck-remote-asset/` 并列。全程无 FATAL / native signal。
-
-### 逐包版本节奏 + 下线目录回收 e2e（2026-08-05，真 Android APK · PASS）
-
-分包热更遗留的两个口子一并收掉。设备上先手植一个"已下线"包（`cck-bundle-asset/arena/` + `arena_temp/`，chown 成 app uid），远端用 `--prev`（基线 = 从已装 APK 里解出来的那批包内 manifest）重算：
-
-```
-base manifest        22 个资源 → 1.0.1              ← DemoBoot 改了，自动涨
-fixtures-bundle/lobby/mini-clicker/mini-dodge/shared → 1.0.0（内容未变，沿用旧版本）
-shop                 6 个资源 → 1.0.1              ← 只有它真变了
-```
-
-5/6 个模块包与包内 manifest **逐字节一致**，顺带证明 Creator 构建对未改内容是可复现的——`--prev` 这条路成立的前提。
-
-⚠️ **`--prev` 是必需项而非优化项：内容没变的包涨了版本号，客户端会 native 崩溃。**
-`AssetsManagerEx::prepareUpdateAsync` 把耗时的 diff 计算扔进 `AsyncTaskPool` 的 **worker 线程**，
-而任务体里有一条近路——
-
-```cpp
-// AssetsManagerEx.cpp:702  enqueue(TASK_OTHER, prepareFinished, nullptr, [this]() {
-auto diffMap = _localManifest->genDiff(_remoteManifest);
-if (diffMap.empty()) { updateSucceed(); return; }   // ← 就地调用，没走 prepareFinished
-```
-
-`prepareFinished` 那条正路会经 `performFunctionInCocosThread` 弹回主线程，这条近路不会：
-`updateSucceed()` 末尾的 `dispatchUpdateEvent(UPDATE_FINISHED)` 于是在 worker 线程上进 JS VM，
-`se::AutoHandleScope` 构造即 `SIGSEGV`（`signal 11 SEGV_MAPERR`）。触发条件是**资产表一致、
-只有版本号不同**——正是「无差别给所有包盖同一个新版本号」的产物。已做进 `apps/demo/scripts/build.mjs`
-（`--prev` 指向同步目录），单测见 `packages/tools` 的 `prevDir：内容没动的包沿用旧版本号`。
-
-因此 `sameContent` 的口径**必须与 `genDiff` 一致：只比资产表**。`packageUrl` / `searchPaths` 曾被
-算作改动（理由是「旧 URL 会留在客户端缓存 manifest 里」），那会让「只换 CDN 域名、内容一个字节没动」
-给所有包涨版本 → 资产表一致 → 踩中同一条近路；而那个理由本身也不成立：客户端查更新用的是**本地
-manifest 里烘的**地址（`AssetsManagerEx.cpp:580/623`），老地址死了涨版本救不回来，老地址活着新
-`packageUrl` 本来就随 remote manifest 生效。何况本框架的客户端一律经 dispatcher 下发的 `cdn_url`
-自取 remote manifest 并改写基址，包内烘的那个地址根本没人读。**换址只改服务端配置，不发版。**
-
-设备端（base 1.0.0 → 1.0.1 只下 2/22 个文件，`game.restart()` 后新 JS 生效）：
-
-```
-🧹 回收已下线 bundle 目录 2 个：…/cck-bundle-asset/arena/, …/cck-bundle-asset/arena_temp/
-HotUpdateService.check() = up-to-date      ← 重启后
-SHOP_TAG = v2                              ← shop/ 与 shop_temp/ 未被误删
-再 force-stop 冷启动 → 回收 0 个，SHOP_TAG = v2   ← 幂等
-```
-
-`shop_temp/` 在 up-to-date 后消失，是 `AssetsManagerEx::loadRemoteManifest` 自己 `removeDirectory(_tempStoragePath)` 清的，不是回收删的。全程无 FATAL / native signal。
-
-### 热更新增 bundle 的自愈：种子 manifest（2026-08-17，真 Android APK · PASS）
-
-分包热更此前有个只在「**热更改了配置、指向一个从没随包发过的 bundle**」时才暴露的缺口。demo 的真实
-触发路径：base 热更把 `settings.cck.vest` 翻成另一个马甲 → 重启 → 启动预载列表变成
-`['shared', 'skin-vest-foundation']`，而这个皮包是发版之后才加的。
-
-病根不在配置，在**引导**：`<bundle>.manifest` 躺在构建产物 `data/` 根，而 manifest 只遍历
-`src|assets|jsb-adapter` → **它自己不进任何 asset 表、永远不会被热更下发**。包内没有 + 热更带不来
-= `AssetsManagerEx` 连去哪查更新都不知道。补法见 [[adr-0013]] 补充（内存种子，`version` 恒 `0.0.0`）。
-
-同时补上的还有**注册**：`BUNDLE_UPDATER` 此前只在 `probes/DemoBoot.ts` 里注册过，正式启动路径
-（`boot/Bootstrap.ts`）从未注册 → **加载前更新整条链在正式路径上是关的**，任何 bundle 都不会更新。
-现在挂在 `dispatch` 阶段的项目步骤里（那里 `APP_INFO` 与握手结果都已就位，且早于最早的 `load()`）。
-
-**实证**（真 x86_64 模拟器，干净安装，APK 里不含 `skin-vest-*`）：
-
-```
-skin='base'  → hotupdate 25→100% → restart
-skin='vest'  → shared 步 load('skin-vest-foundation')
-             ⏳ 更新 0/3 → 1/3 → 2/3 → 3/3 文件      ← 包内无 manifest，走种子全量下
-             启动阶段 → shared 0% → 100%              ← 启动界面按段插值，不再是静止的「加载公共资源…」
-force-stop 冷启动 → 只发 4 个 *.version.manifest 探测，**一个资源文件都没重下**
-```
-
-最后一行是 `version: '0.0.0'` 那条约束的判据：种子恒最旧 → `loadLocalManifest` 让
-`<storagePath>/project.manifest`（上次下载落的真 manifest）接管 → 第二次起是增量而不是每次全量重下。
-
-**内容基址由服务端下发**：所有更新目标（base 与每个分包）`check()` 时都**自己把 remote manifest
-拉下来、改掉三个地址字段、经 `loadRemoteManifest()` 灌回引擎**，基址取 dispatcher 握手的 `cdn_url`
-（`CcHotUpdateOptions.cdnUrl`）。于是换 CDN / 灰度分流 / 把内容挪去另一个域名，都只改服务端配置、
-不必发新包。拉不到、拉回来不是 JSON、引擎不收（状态已越过 `UNCHECKED`）——任一情形都退回
-`checkUpdate()` 老路，用包内烘的地址试一次，并打一行 warn（两条路的产物一模一样，不打日志就无从
-判断走的是哪条）。「为什么灌 remote 不灌 local」见 [[adr-0013]] 补充。
-
-⚠️ **配 CDN 基址时 `200` 不等于拿到文件，要看 `Content-Type`。** 本机 filebrowser 只在
-`/api/public/dl/<hash>/` 下发文件，其它路径一律回 SPA 首页 + `200 text/html` → 客户端「下载成功」
-拿到一坨 HTML，直到解析才炸。**判据是 `Content-Type: application/octet-stream`，不是 200。**
-本机 dispatcher 下发的是固定分享 `http://172.25.50.135:8081/api/public/dl/shCo8WNE/`（曾配错成
-`…:8081/cdn/` 这个形态，[server-core-kit#1](https://hlgit.5518game.com/luohao/server-core-kit/-/issues/1)，
-服务端已修）。
-
-**实证 PASS**（2026-08-18，真 x86_64 模拟器，干净安装）。判据做成二值的：**APK 与 CDN 上所有 manifest 的
-`packageUrl` 全烘成死地址 `http://127.0.0.1:9/dead/`**，全局唯一的活地址是握手下发的 `cdn_url` ——
-能下载成功就只可能来自运行时改写。
-
-```
-dispatcher 放行：cdn=http://172.25.50.135:8081/api/public/dl/shCo8WNE/
-[cck] project.manifest 基址取服务端下发：…/shCo8WNE/     ← base 走注入路
-启动阶段 → hotupdate 37% → 100% → restart
-马甲皮 → skin='vest'                                     ← 热更下来的 settings 接管
-[cck] shared.manifest / skin-vest-foundation.manifest / foundation.manifest 基址取服务端下发：…
-【force-stop 冷启动】skin='vest'，四个包全走注入路，零重下
-```
-
-对照组同样明确：**同一份死地址内容 + 改动前的 engine** → `热更检查失败:
-java.net.ConnectException: Failed to connect to /127.0.0.1:9`。该轮 `cdn_url` 由本机假 dispatcher 下发——当时真的那台还配着错形态的值。
-
-**2026-08-18 服务端改好后已用真 dispatcher 复验**：握手下发 `cdn_url=…/shCo8WNE/`，base 与
-`shared` / `skin-base-foundation` / `foundation` 三个分包全部 `基址取服务端下发：…/shCo8WNE/`。
-包内与 CDN 同为 1.0.0 故走 `ALREADY_UP_TO_DATE` —— 这一程验的是**注入路在真链路上通**，
-不是又下了一遍。
-
-> 那一程卡在 `demo-foundation` 步的长连接（`10s 未就绪`），后查明与热更无关、是两个独立的坑：
-> 引擎功能裁剪把 native-only 的 `websocket` 模块关了（`typeof WebSocket === 'undefined'`，连 SYN
-> 都发不出去），以及心跳间隔吃 core 默认值 15s 恰好撞上网关 15s 空闲超时。均已修，2026-08-18 起
-> 启动链路能一路跑到长连接就绪。
->
-> `Bootstrap` 的失败日志摊平成一行是这次查出来的副产品：Cocos native 转发 JS console 到 logcat 时
-> 对象参数一律打成 `[object Object]`，真机上唯一的失败信息不能是这个。
-
-### 真 dispatcher + 真下载 e2e（2026-08-18，真 Android APK · PASS）
-
-补上此前唯一的缺口：真 dispatcher 那程只走到 `ALREADY_UP_TO_DATE`（包内与 CDN 同为 1.0.0），
-真下载的证据还停在假 dispatcher 那轮。这次让**装着 1.0.0 的包**去撞 **1.0.1 的 CDN**。
-
-判据做成二值的：往 `foundation` 包里埋一句包内不存在的日志，能打出来就只可能来自热更。
-
-```
-[cck] foundation.manifest 基址取服务端下发：…/shCo8WNE/
-⏳ bundle 'foundation' 更新 0/1 → 1/1 文件            ← 15 个包里只有它涨了版本
-[CCK-NET] 长连接就绪【热更到 1.0.1】 · RTT 18ms       ← 包内 index.js 里 grep 不到这串
-force-stop 冷启动 → 无任何下载，标记仍在              ← 缓存 manifest 已是 1.0.1，增量成立
-```
-
-反证：`unzip -p demo-debug.apk assets/assets/foundation/index.js | grep -c 热更到` = **0**，
-设备上 `files/cck-bundle-asset/foundation/assets/foundation/index.js` 同 grep = **1**。
-
-**这一程是踩着一次 native 崩溃换来的**：首跑给所有包无差别盖了 1.0.1，base 的资产表其实没变 →
-`diffMap.empty()` → worker 线程 `updateSucceed()` → SIGSEGV（详见上文「逐包版本节奏」的 ⚠️）。
-病根是 `build.mjs` 生成 manifest 时漏了 `--prev`，已修；补上后 15 个包只有 `foundation` 涨到 1.0.1，
-其余 14 个沿用 1.0.0，全程零 `F/libc` / `F/DEBUG`。
-
-### coreApiHash 版本闸激活（戳的运行时读入，2026-07-29 · 真机 e2e PASS）
-
-此前版本闸的 `coreApiHash` 比对**休眠**（`AppInfo`/`UpdateInfo` 都缺该字段 → 单边缺失恒放行）。补齐**读入侧**（详见 [[adr-0007]] + tools [[compat-stamp]]）后，闸首次端到端生效：
-
-- **app 侧**：app 戳 `resources/cck-app-compat.json`（`cck-manifest stamp` 出的 `{version, coreApiHash}`）→ 启动时 `AssetLoader` 读 → `createHotUpdateService({app:{appVersion, coreApiHash}})` 注册覆盖默认（缺戳退回 `0.0.0`、闸休眠不阻断）。
-- **update 侧**：engine native backend `check()` 在发现新版本时经 `am.getRemoteManifest().getPackageUrl() + compatFilename`（`CcHotUpdateOptions.compatFilename` opt-in）拉更新戳 sidecar `cck-update-compat.json` → 把 `coreApiHash`/`minAppVersion` 并进 `UpdateInfo`（`native.AssetsManager` 的 Manifest 绑定不透传自定义字段，故走旁挂 sidecar；拉不到降级放行、不阻断正常热更）。
-
-**同一 v1 APK 二分实证**（真 x86_64 模拟器，远端经 filebrowser 固定链接托管）：
-```
-兼容   远端戳 coreApiHash = app 侧(fc033ce4c4a7) → check()=update-available(info.coreApiHash 已并入) → 下 v2 → restart → BUILD_TAG=v2
-不兼容 远端戳 coreApiHash 改 deadbeefcafe(≠app)   → check()=rejected,reason='core API 不兼容',needFullUpdate=true → 不下载/不重启，停 v1
-```
-闸的放行/拦截仅由远端戳 coreApiHash 决定 → ADR-0001 的 AOT 缺代码防护从「运行时兜底字段」变为**出包期打戳 → 运行时读入 → check 阶段拦截**的完整闭环。
+| 能力 | 验到什么程度 |
+|---|---|
+| base 热更 | 真 Android APK，含 `force-stop` 冷启动仍是新版（热重启验不到启动还原） |
+| AOT 热更（重启生效） | 真机，固定名指针接管 + 冷启动保持 |
+| AOT 启动看门狗 | 真机，坏 AOT 死两次 → 第三次跑包内 + 作废缓存 + 记坏版本号；发新号自愈；只挡 base |
+| 分包热更（免重启） | 真机，只下变更文件；断网冷启动仍是新版（排除「其实又下了一遍」） |
+| 内容基址听服务端下发 | 真机，判据二值化：所有包内与 CDN 的 `packageUrl` 全烘死地址 |
+| 新增 bundle 自愈（种子 manifest） | 真机，首次全量、冷启动零重下 |
+| 版本闸（`coreApiHash` / `engineHash`） | 真机二分：改 hash 即 `rejected(needFullUpdate)`、恢复即放行 |
+| web 远程 bundle 版本化 | 浏览器 e2e：旧页面加载新 bundle 代码、整页未重载 |
+| 小游戏 | ❌ 未验 |

@@ -52,6 +52,9 @@ export {
   engineHash,
   packagedAotEntry,
   aotStamp,
+  aotQuarantined,
+  aotQuarantineVerdict,
+  manifestVersion,
 } from './hotupdate-paths';
 
 // —— 第 3 批 · 进阶（Network engine 半：ISocket 的 WebSocket 实现）——

@@ -133,7 +133,7 @@ demo 实测：47 条全表 → base 22 条（`src/` 6 + `jsb-adapter/` 2 + `asse
 
 ## Behavior & data flow（行为与数据流）
 
--1. `--prev` 的版本沿用（`buildSplitManifests` 内）：每份 manifest 落定前读 `<prevDir>/<同名文件>`，比对 **version 之外的一切**——资产表（key + md5 + size + compressed）、`packageUrl`、`searchPaths`；全等就把 `version` 换成上一版的。读不到 / 坏 JSON 一律当"没有上一版"，用新版本号（宁可多发一次，不可少发）。`packageUrl` 也算内容：它变了不涨版本的话，客户端缓存 manifest 里留着旧 URL，后续增量下载还去老地址。
+-1. `--prev` 的版本沿用（`buildSplitManifests` 内）：每份 manifest 落定前读 `<prevDir>/<同名文件>`，**只比资产表**（key + md5 + size + compressed），`packageUrl` / `searchPaths` 一概不看；一致就把 `version` 换成上一版的。读不到 / 坏 JSON 一律当"没有上一版"，用新版本号（宁可多发一次，不可少发）。**口径必须与引擎 `Manifest::genDiff` 一致，这是硬约束不是取舍**：凡是我们判「改了」而引擎判「没改」的字段，产出的都是「版本号涨了、diff 却是空表」—— 而客户端在那个状态下会 SIGSEGV（见上）。换 CDN 地址因此不涨版本，也不需要：客户端查更新用的是本地 manifest 里烘的地址（`AssetsManagerEx.cpp:580/623`），老地址死了涨版本救不回来；而本框架一律经 dispatcher 下发的 `cdn_url` 自取 remote manifest 并改写基址，包内烘的那个根本没人读。
 
 2. `contentHashed`（`--md5`，Creator 开了 `md5Cache` 时）：base manifest **只丢 `isEngineBound` 那几类，AOT 整条链照发**（入口 `application.<md5>.js` + 指针 `src/cck-aot.json` + `src/settings.<md5>.json` + `src/chunks/**` + `assets/{main,resources,internal}`）。AOT 发得出去是因为 `main.js` 改读固定名指针拿入口名，而那段跑在搜索路径还原之后（[[adr-0017]]）。丢掉的两类各有理由：
 

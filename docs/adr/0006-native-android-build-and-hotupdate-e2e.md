@@ -31,7 +31,7 @@ HotUpdateService（core 半）+ `ccHotUpdateModule`（engine 半 `native.AssetsM
 
 ## 后果
 
-- **正面**：native 热更端到端闭环验证建立，「三种热」之线上热更在真机跑通；本 ADR + hotupdate 模块文档「native 真机 e2e 验证」节构成可复现 runbook；证明 `cck-manifest` 的 manifest 格式与 `native.AssetsManager` 差量下载兼容。
+- **正面**：native 热更端到端闭环验证建立，「三种热」之线上热更在真机跑通；本 ADR + 接入方装配文档（`apps/demo/docs/hotupdate-pipeline.md`）构成可复现 runbook；证明 `cck-manifest` 的 manifest 格式与 `native.AssetsManager` 差量下载兼容。
 - **代价 / 约束**：
   - demo 的 main.js 还原改在**生成物**（`build/android/data/main.js`），Creator 重构建会覆盖——验证便宜但非持久；生产迁 `build-templates`（本 ADR 决策 5 已注明）。
   - 出的是 **x86_64 debug APK，只对模拟器**；上真机（arm64）须 `appABIs` 加 `arm64-v8a` 重打。

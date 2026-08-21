@@ -9,11 +9,14 @@ import type {
   UpdateInfo,
 } from '@cck/core';
 import {
+  aotQuarantined,
+  aotQuarantineVerdict,
   aotStamp,
   bundleManifestName,
   bundleStoragePath,
   bundleVersionName,
   manifestAssetKeys,
+  manifestVersion,
   normalizeSearchPaths,
   packagedAotEntry,
   rebaseManifest,
@@ -21,6 +24,21 @@ import {
   searchPathsWithout,
   seedBundleManifest,
 } from './hotupdate-paths';
+
+/**
+ * AOT 启动看门狗的两个 localStorage 键 —— **与 `build-templates/native/index.ejs` 里的字面量
+ * 逐字一致**，改一处必须改两处（`main.js` 跑在 SystemJS 之前，import 不到这里的常量）。
+ *
+ * - `AOT_TRY_KEY`：`main.js` 每次「决定用热更 AOT」就 +1，本文件的
+ *   {@link resetCcHotUpdateOnAppChange} 跑到就清 0 —— 那是「这套 AOT 确实起得来」的握手。
+ * - `AOT_BAD_KEY`：被隔离的那一版内容版本号，由 {@link resetCcHotUpdateOnAppChange} 在删缓存**之前**
+ *   从那份缓存 manifest 里读出来写入（`main.js` 里做不了：storagePath 是可配项，那边只够得着硬编码键）。
+ *   base 的 `check()` 见到同号直接当 up-to-date，否则「隔离 → 重下同一版 → 又隔离」会三步一轮地振荡；
+ *   见到别的号说明发布方已翻篇，顺手清掉。**只对 base 生效**，判据是 `persistKey` 而不是 `seed` ——
+ *   分包与 base 共用同一个版本号，拿它挡分包会误伤一批（见 {@link aotQuarantineVerdict}）。
+ */
+const AOT_TRY_KEY = 'cck.aotTry';
+const AOT_BAD_KEY = 'cck.aotBadVersion';
 
 /**
  * IHotUpdateBackend 的 native 实现 —— HotUpdateService 的「引擎半」薄壳：包 `native.AssetsManager`
@@ -220,8 +238,23 @@ function createBackend(spec: BackendSpec): IHotUpdateBackend {
               break;
             case E.NEW_VERSION_FOUND: {
               handler = undefined;
+              const version = am.getRemoteManifest().getVersion();
+              // 被看门狗隔离过的那一版：**不再下载**。判「是不是 base」只能看 `persistKey`——
+              // 随包发的分包也没有 `seed`，拿它当判据会把分包一起拦死。见 aotQuarantineVerdict。
+              const verdict = aotQuarantineVerdict(
+                persistKey !== undefined,
+                version,
+                sys.localStorage.getItem(AOT_BAD_KEY),
+              );
+              if (verdict === 'skip') {
+                console.warn(`[cck] ${version} 起不来被隔离过 → 跳过这一版，等发布方发新号`);
+                resolve({ status: 'up-to-date' });
+                break;
+              }
+              // 发布方已经翻篇了 → 隔离结论作废，别让这个标记留一辈子。
+              if (verdict === 'clear') sys.localStorage.removeItem(AOT_BAD_KEY);
               const info: UpdateInfo = {
-                version: am.getRemoteManifest().getVersion(),
+                version,
                 totalBytes: am.getTotalBytes(),
               };
               // 有 compatFilename → 拉更新戳 sidecar 把 coreApiHash/engineHash/minAppVersion 并进 info（激活闸）；
@@ -391,7 +424,11 @@ export function createCcBundleBackendFactory(opts: CcHotUpdateOptions): HotUpdat
 }
 
 /**
- * **APK 换了就把热更缓存整个作废**，返回删掉的目录（没换 / 判不了 / 非原生 → 空数组）。
+ * **包内 AOT 与缓存对不上就把热更缓存整个作废**，返回删掉的目录（不需要作废 / 非原生 → 空数组）。
+ * 两种触发：**APK 换了**（见下）与 **AOT 被启动看门狗隔离**（{@link aotQuarantined}，见文末）。
+ *
+ * 顺带无条件做一件事：**清掉看门狗计数**。跑到这个函数 = 这套 AOT 加载成功、cc 初始化完、
+ * 场景在跑 —— 那正是「起得来」的握手，与作废不作废无关。
  *
  * ## 为什么需要它
  *
@@ -416,6 +453,16 @@ export function createCcBundleBackendFactory(opts: CcHotUpdateOptions): HotUpdat
  *
  * ⚠️ 产物没开 `md5Cache` 时入口就叫 `application.js`、抠不出 md5 → 判不了 → **原样不动**
  * （不是「当作换了」，那会让每次冷启动都全量重下）。
+ *
+ * ## 第二种触发：AOT 被看门狗隔离
+ *
+ * 隔离态下 `main.js` 已经不还原搜索路径、直接跑包内 AOT 了，但缓存目录还躺在磁盘上 ——
+ * 而 `AssetsManagerEx.create()` 会把 storagePath 重新前插回搜索链。所以这里必须**真删**，
+ * 否则就是包内 AOT 配着缓存里的新模块跑，正是本函数要消灭的那种组合。
+ *
+ * 删之前先把那份缓存 manifest 的 `version` 记进 `cck.aotBadVersion`：下一轮 base check() 见到同号
+ * 就不再下，否则「隔离 → 重下同一版 → 又隔离」三步一轮地振荡。APK 换了则相反 —— 一整套新东西，
+ * 旧的隔离结论跟着作废，清掉标记。见 ADR-0018。
  */
 export function resetCcHotUpdateOnAppChange(
   opts?: Pick<CcHotUpdateOptions, 'storagePath' | 'bundleStorageRoot' | 'searchPathsKey'> & {
@@ -424,14 +471,29 @@ export function resetCcHotUpdateOnAppChange(
   },
 ): string[] {
   if (!sys.isNative) return [];
-  const stamp = aotStamp(packagedAotEntry());
-  if (stamp === undefined) return [];
+  // **跑到这一行 = 这套 AOT 确实起得来**（加载成功、cc 初始化完、场景在跑）—— 看门狗要的握手
+  // 就是这个，所以无条件清计数，与下面作废不作废无关。
+  sys.localStorage.removeItem(AOT_TRY_KEY);
   const key = opts?.stampKey ?? 'cck.aotStamp';
-  if (sys.localStorage.getItem(key) === stamp) return [];
+  const stamp = aotStamp(packagedAotEntry());
+  // `stamp === undefined` = 判不了（没开 md5Cache / 老模板）→ 不算「换了」，否则每次冷启动全量重下。
+  const appChanged = stamp !== undefined && sys.localStorage.getItem(key) !== stamp;
+  // 隔离态下 `main.js` 已经不还原搜索路径了，但缓存目录还躺在磁盘上 —— 而 `AssetsManagerEx.create()`
+  // 会把 storagePath 重新前插回去。所以这里必须真删，否则包内 AOT 配着缓存里的新模块跑。
+  const quarantined = aotQuarantined();
+  if (!appChanged && !quarantined) return [];
 
   const base = opts?.storagePath ?? `${native.fileUtils.getWritablePath()}cck-remote-asset/`;
   const root = bundleRoot(opts ?? {});
   const removed: string[] = [];
+  // 记下「哪一版起不来」**必须赶在删目录之前**：版本号就写在那份缓存 manifest 里。
+  // 这一步放这儿而不是 main.js 里，是因为 storagePath 是可配项（`CcHotUpdateOptions.storagePath`），
+  // 而 main.js 只够得着硬编码的键；配了别的路径就会读空 → 拦不住重下 → 三步一轮振荡。
+  if (quarantined) {
+    const bad = manifestVersion(native.fileUtils.getStringFromFile(`${base}project.manifest`));
+    if (bad) sys.localStorage.setItem(AOT_BAD_KEY, bad);
+    else console.warn('[cck] 隔离时读不出缓存 manifest 的版本号 → 拦不住重下，可能反复隔离');
+  }
   // `<dir>_temp` 是 AssetsManagerEx 的断点续传目录，与 storagePath **平级**（不在它下面），
   // 所以要单独删——留着会让下一轮更新从一个属于旧 APK 的半成品接着续。
   for (const d of [base, root, `${base.replace(/\/$/, '')}_temp/`]) {
@@ -439,8 +501,11 @@ export function resetCcHotUpdateOnAppChange(
   }
   native.fileUtils.setSearchPaths(searchPathsWithout(native.fileUtils.getSearchPaths(), [base, root]));
   sys.localStorage.removeItem(opts?.searchPathsKey ?? 'HotUpdateSearchPaths');
-  sys.localStorage.setItem(key, stamp);
-  console.log(`[cck] APK 换了（AOT ${stamp}）→ 热更缓存作废：${removed.join(' ') || '(本来就没有)'}`);
+  if (stamp !== undefined) sys.localStorage.setItem(key, stamp);
+  // 换了 APK = 换了一整套，上一版的隔离结论跟着作废（新包也许正好修好了那一版起不来的原因）。
+  if (appChanged) sys.localStorage.removeItem(AOT_BAD_KEY);
+  const why = appChanged ? `APK 换了（AOT ${stamp}）` : 'AOT 被看门狗隔离';
+  console.log(`[cck] ${why} → 热更缓存作废：${removed.join(' ') || '(本来就没有)'}`);
   return removed;
 }
 

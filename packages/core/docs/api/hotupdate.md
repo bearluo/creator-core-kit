@@ -618,7 +618,7 @@ DI token：项目可 register 自己的 HotUpdateService 覆盖默认。
 
 > **bundleVersionFromAssetKeys**(`bundle`, `keys`): `undefined` \| `string`
 
-Defined in: packages/core/src/hotupdate/bundle-version.ts:26
+Defined in: [packages/core/src/hotupdate/bundle-version.ts:26](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/bundle-version.ts#L26)
 
 从 asset key 列表里认出该 bundle 的内容版本 = `assets/<bundle>/index.<v>.js` 里的 `<v>`。
 

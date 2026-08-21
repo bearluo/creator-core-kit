@@ -162,7 +162,7 @@ if (settingsMtime() === before) {
 }
 console.log(`✓ Creator 构建完成 → ${OUT_REL}`);
 
-// —— AOT 入口指针：解开 L1-A 的那把钥匙 ——
+// —— AOT 入口指针：AOT 能热更的那把钥匙 ——
 //
 // `main.js` 不再写死 `application.<md5>.js`，改读这个固定名文件（见 build-templates/native/index.ejs）。
 // 它跟着 base manifest 热更下发 → AOT 整条链（application → settings → chunks →
@@ -249,6 +249,17 @@ if (flag('manifest')) {
     if (!baseManifest.assets[k])
       throw new Error(`base manifest 里没有 ${k} —— AOT 热更会静默失效，查 --files / --md5 的排除清单`);
   }
+  // 看门狗那个计数键在 main.js 模板与 engine 里各写了一份（模板跑在 SystemJS 之前，import 不到
+  // engine 的常量）。改一处漏另一处 = 握手永远不成立 = 每套热更 AOT 跑两次就被隔离，六道门全绿、
+  // 只在真机上几个版本之后才发作。所以在这里对一次字面量。见 ADR-0018。
+  for (const [f, why] of [
+    [join(DEMO, 'build-templates', 'native', 'index.ejs'), 'main.js 模板'],
+    [join(DEMO, '..', '..', 'packages', 'engine', 'src', 'hotupdate-backend.ts'), 'engine 后端'],
+  ]) {
+    if (!readFileSync(f, 'utf8').includes("'cck.aotTry'"))
+      throw new Error(`${why}里找不到 'cck.aotTry'（${f}）—— AOT 看门狗的握手会静默失效`);
+  }
+
   if (cdnDir) {
     if (cfg.md5Cache) {
       // ⚠️ 内容寻址下**只叠加、绝不清空**（与 web 同理）：文件名带 md5，新旧天然共存，历史各版本的

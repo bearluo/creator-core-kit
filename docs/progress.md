@@ -73,6 +73,7 @@
 
 - [x] **热更翻马甲后新皮包自愈：种子 manifest + 正式路径补注册 `BUNDLE_UPDATER`**（2026-08-17 · 真机 e2e PASS · [ADR-0013 补充](adr/0013-native-per-bundle-hotupdate-layout.md)）— 上一条实证「配置能热更」之后暴露出来的场景：base 热更把 `settings.cck.vest` 翻成另一个马甲、重启回来，而**新马甲的皮包玩家本地根本没有**（它是发版之后才加的）。`skin-<马甲>-foundation` 在 `APP_CONFIG.shared` 里、`shared` 步没有 try/catch → 直接启动失败，且**重试与重装都好不了**（base 已 apply 并落盘，重装还会再更新成同一个坏状态），只有回滚 CDN 能救。查下来是**两个独立的洞**：① **正式启动路径从来没注册过 `BUNDLE_UPDATER`** —— 它只在 `probes/DemoBoot.ts` 里注册过，于是 `Bootstrap.ts` 那条路上**加载前更新整条链是关的**，任何 bundle 都不会更新（和上一条修的 `ccHotUpdateModule` 是同一类漏装）；现在挂在 `dispatch` 阶段的项目步骤里——那里 `APP_INFO`（版本闸要的 app 戳）已由 `platform` 步备好，且早于最早的 `load()`。② 补上注册也还差一口气：**`<bundle>.manifest` 躺在构建产物 `data/` 根，而 manifest 只遍历 `src|assets|jsb-adapter`** → **它自己不进任何 asset 表、永远不会被热更下发**，一个从没随包发过的 bundle 包内没有它的 manifest、base 热更也带不来，`AssetsManagerEx` 连去哪查更新都不知道（`ERROR_NO_LOCAL_MANIFEST`）。补法是**内存造种子 local manifest**（不落盘：`new native.Manifest(content, root)` 与 `am.loadLocalManifest(obj, storagePath)` 两个重载 SWIG 都绑了；配套 `create('', storagePath)` 跳过文件加载让状态停在 `UNINITED`，正好过对象重载那道门），`packageUrl` **取 dispatcher 握手下发的 `cdn_url`**（2026-08-18 定：内容托管在哪是**运营期决定**，换 CDN / 灰度 / 挪域名只该改服务端配置；包里烘的 `packageUrl` 是出包那刻的快照，内容挪了就得发新包，正是热更要消灭的事——`cdn_url` 本就是握手协议为此留的字段，此前一直只打日志没人消费），**服务端没下发才回落 base local manifest 的 `packageUrl`**（分包与 base 同根，地址对得上；兜底而非「配错也能跑」）。**`version` 恒 `0.0.0` 是硬约束不是随手取的**：`loadLocalManifest` 拿 local 与缓存 manifest 比版本，local 更新时会 `removeDirectory(storagePath)` 整个清掉 → 种子恒最旧，缓存那份才能接管、第二次起自动变增量。**随包发过的 bundle 仍用包内那份**（增量基准），别为省几 KB 把 manifest 排除出包。**真机 e2e**（真 x86_64 模拟器，干净安装，**APK 里不含 `skin-vest-*`**，CDN 上 base 1.0.1 只改了 `settings.json`）：`skin='base'` → 热更 25→100% → restart → `skin='vest'` → `shared` 步 `load('skin-vest-foundation')` → 包内无 manifest → 种子 → **3/3 文件下载完成**；`force-stop` 冷启动**只发 4 个 `*.version.manifest` 探测、一个资源文件都没重下**（正是 `0.0.0` 那条约束的判据）。顺带两处：启动界面的下载进度条从「只认 `hotupdate` 阶段」改成**任何带 ratio 的阶段都在本段内插值**（分包下载不再表现为静止的「加载公共资源…」）；`Bootstrap` 的失败日志摊平成一行字符串——Cocos native 转发 JS console 到 logcat 时对象参数一律打成 `[object Object]`，真机上唯一的失败信息不能是这个（正是靠它才定位到下面那条）。**⚠️ 这一程没跑到大厅**：`demo-foundation` 步长连接 `10s 未就绪（停在 reconnecting）：ws://172.25.50.20:9101/ws`；同一失败在 `skin='base'` 下同样复现（与皮包、与本次改动无关），网关从宿主机 `/healthz` 200、WS 升级 101 都正常，模拟器到 9101 的 TCP 也通 —— **模拟器侧 WS 握手/重连的独立问题，另查**。全仓 **645 全绿**（新增 4 例），五门齐过。**⚠️ 遗留：`cdn_url` 链路已接通、服务端配置未就位**——客户端实测日志 `种子 manifest 基址：http://172.25.50.135:8081/cdn/（服务端下发）`，消费侧没问题；但 dispatcher 配的那个值**不是可下载的基址**：filebrowser 只在 `/api/public/dl/<hash>/` 下发文件，`/cdn/` 是它自己的 SPA 路由、**任何路径都回 200 + `text/html`** → 「下载成功」拿到一坨 HTML → 炸在 `readFile failed!`。**配 CDN 基址时 200 不等于拿到文件，要看 `Content-Type`**。热更内容已按 skill `filebrowser-cdn` 的规矩传到固定分享 `http://172.25.50.135:8081/api/public/dl/shCo8WNE/`（`/creator-core-kit/cdn`，104 个文件 2.7 MB；base 热更用同一基址已在模拟器上跑通），**待 server-core-kit 把 `dispatcher.json` 的 `cdnUrl` 改成这个值后复验**——改那个文件属别的仓，本仓不动
 
+
 ### 2026-08-18 · 热更内容基址一律听服务端（base 与分包统一）
 
 上一轮只让「没随包发过的 bundle」用服务端下发的 `cdn_url`，并断言 base 做不到 —— 那个断言错了，
@@ -372,6 +373,67 @@ LoginView + 长连接；② **改 boot 层一行、只传 CDN 不出 APK**（1.0
 六门全绿（全仓 **762 passed**，+12）。提案 `docs/design/2026-08-20-aot-hotupdate-unlock-proposal.md`
 标已实施封存，决策见 [[adr-0017]]。
 
+### 2026-08-20 · AOT 启动看门狗（补 L1-A 的洞）· 真机 e2e 两轮十三条全过
+
+复查 [[adr-0017]] 时发现的、**唯一一种玩家自己救不回来**的失败，并当场测实：热更下发的 AOT
+起不来（引用了这个引擎没有的符号、文件半损、某类机型上崩），`System.import` 抛在 `main.js` 的
+catch 里 —— 而作废缓存的 `resetCcHotUpdateOnAppChange()` 在 Bootstrap 里，**永远轮不到**。
+
+模拟器实测（把缓存里 `application.<md5>.js` 引用的一个引擎成员改成不存在的名字）：进程活着、
+JS 侧什么都没起来（黑屏）；连续 3 次冷启动逐字相同；**覆盖装另一个 APK 也救不了**（坏文件在
+应用数据里，不随 APK 走）；只有清应用数据才恢复。触发条件比「降级安装」宽得多 —— **APK 一行
+没换**，CDN 发了个在某类机型上起不来的 AOT，同样是永久黑屏。0016 时代 AOT 不可热更，这个失败
+模式不存在，它是解锁 L1-A 引进来的。
+
+**同一轮还测清了另一场**（原以为是洞，实为自愈）：降级安装两个都带指针的包，缓存里更新的 AOT
+会接管第一次启动（`AOT 入口取热更版本` + 跑的是缓存那版），但 Bootstrap 起得来 → reset 用包内
+入口名识破 → 删两个缓存根 → **同一次启动里**又重新收敛到 CDN 最新版。代价是一次全量 base 重下，
+结果正确。
+
+**改法**（[[adr-0018]]）：`main.js` 加计数器。每次「决定用热更 AOT」就把 `cck.aotTry` +1，
+**落盘在 `System.import` 之前**；`resetCcHotUpdateOnAppChange()` 跑到就清 0 —— 那是「这套 AOT
+确实起得来」的握手（加载成功 + cc 初始化完 + 场景在跑；再往后的失败不算 AOT 的账，放得更晚会
+让一次断网变成「回滚 AOT」）。连续 2 次没清就**隔离**：不还原搜索路径、不认指针、跑包内 AOT，
+缓存由 reset 真删（`AssetsManagerEx.create()` 会把 storagePath 前插回来，不删就是包内 AOT 配
+缓存里的新模块），并在**删之前**把那份缓存 manifest 的版本号记进 `cck.aotBadVersion`。之后 **base 的 `check()` 见到同号直接当 up-to-date** —— 不记这
+一笔就会「隔离 → 重下同一版 → 又隔离」三步一轮地振荡，玩家每三次启动只能玩一次；见到别的号则
+说明发布方已翻篇，顺手清掉标记。发布方发个新号即自动恢复。
+
+**首版实现有三处经审查改掉，都属「全绿但真机上几个版本后才发作」那一类**：
+① 「是不是 base」原先判 `seed === undefined` —— **随包发 `<bundle>.manifest` 的分包同样没有
+seed，那是常态**。而 base 与分包共用同一个 `--version`，于是隔离一次 base 会把**同号的分包一起
+永久钉死**在包内版本，`coreApiHash` 闸还救不了（它在这个分支之前就 return 了）。判据改成
+`persistKey !== undefined`（只有 base 要把搜索路径写进 localStorage），判定抽成纯函数
+`aotQuarantineVerdict` 单测 —— 这条判据搞错本来就该被这种抽法挡下来。
+② 版本号原先在 `main.js` 里读，路径硬编码 `HotUpdateSearchPaths` + `project.manifest`；而
+`storagePath` 是可配项，接入方改过就读空 → 记不下 → 拦不住重下 → 照样振荡，日志只说一句
+「版本号读不到」。挪进 `resetCcHotUpdateOnAppChange()`（它拿的是配置好的 `storagePath`），
+`main.js` 因此少一个重复的键。
+③ `applicationJs = name` 原先写在计数落盘**之前**，setItem 一抛就成了「用了热更 AOT 却没记上」，
+看门狗对这台机器彻底失效而日志说的是「已回退包内」。顺序调过来。
+另加：计数读取 `|| 0` 兜 NaN（脏值不再当场误隔离）、模板不再往全局漏 4 个名字、`build.mjs` 出包时
+对一次 `cck.aotTry` 两侧字面量（漏改一处 = 握手永不成立 = 每套热更 AOT 跑两次就被隔离，而六门全绿）。
+
+**e2e 两轮**（Android x86_64 模拟器，com.cck.demo）。第一轮验首版六条；改完之后**整条重跑**，
+并补了一条专门打 ① 的：
+
+| # | 场景 | 结果 |
+|---|---|---|
+| ① | 干净装 APK P（包内 1.0.0）→ 热更到 1.3.1（H） | `AOT 入口取热更版本: ./application.eea95.js` → `BUILD_TAG=H` → 进登录页 |
+| ② | 弄坏缓存 AOT → 冷启动 1/2 | 两次都 `TypeError … reading 'add'`，黑屏（计数累加） |
+| ③ | 冷启动 3 | `热更 AOT 连续 2 次没能起来 → 这次跑包内版本` + `BUILD_TAG=P` + `AOT 被看门狗隔离 → 热更缓存作废：…cck-remote-asset/ …cck-bundle-asset/` + `1.3.1 起不来被隔离过 → 跳过这一版` + 进登录页 |
+| ④ | 发布 1.3.2（H2，**同时改了 foundation**）→ 冷启动 | 标记 1.3.1 与新号不符 → 清掉 → 下载 → `BUILD_TAG=H2`。自动恢复 |
+| ⑤ | **弄坏 1.3.2 的 AOT → 隔离**（此时 `base` 与 `foundation` 的 manifest **同为 1.3.2**） | **「起不来被隔离过」只出现 1 次**（只有 base）；`foundation` 照常 check 并重下 —— 这正是 ① 那个 bug 的现场，改前会是 2 次、且 foundation 被永久钉死 |
+| ⑥ | 冷启动 4 | 稳态：不重下、不振荡、无作废日志，1 秒进登录页 |
+| ⑦ | 发布干净的 1.3.3 → 冷启动 | `AOT 入口取热更版本: ./application.7033d.js`，跳过警告 0 次，长连接就绪 + 进登录页 |
+
+全程 FATAL / native signal 0 次。
+
+单测 +10（`aotQuarantined` 逐条边界含「truthy 字符串不算」、`aotQuarantineVerdict` 的
+skip/clear/proceed 含**分包一律 proceed**、`manifestVersion` 的坏输入）；
+`resetCcHotUpdateOnAppChange` 与 backend 的 `check()` 本体依赖 `native.fileUtils` /
+`sys.localStorage`，按 [[adr-0002]] 不进 cc mock，由真机 e2e 兜底。六门全绿（全仓 **772 passed**）。
+
 ## 模块状态
 
 | 批次 | 模块 | 包 | 状态 | 设计文档 | commit |
@@ -393,7 +455,7 @@ LoginView + 长连接；② **改 boot 层一行、只传 CDN 不出 APK**（1.0
 | 2 设施 | AudioService（`IAudioService`） | core/engine | 已实现（core 半，24 测试, 覆盖 100%；BGM 单轨+双音效路径+三档音量/静音实时下发；**engine 半 `IAudioPlayer` cc.AudioSource 实现 + `ccAudioModule`，四门全绿，真机验证 DI 接入（`AUDIO_PLAYER registered`+playOneShot 不抛），真出声待 audioClip 资产**） | `packages/core/docs/modules/audio-service.md` | — |
 | 2 设施 | i18n 多语言 | core/engine | 已实现（core 半，18 测试, 覆盖 100%；**engine 半 `loadLocaleTable`+`setupLocalePersistence`，四门全绿，真机验证真加载翻译表 JSON（拍平+插值）**；字体切换随项目 onChange） | `packages/core/docs/modules/i18n.md` | — |
 | 2 设施 | ConfigTable（Excel→JSON） | core/tools/engine | 已实现（core 半，14 测试, 覆盖 100%；**engine 半 `loadTable`（JSON 经 AssetLoader 加载 → register），四门全绿，真机验证真加载配表数组**；Excel→JSON 走 tools） | `packages/core/docs/modules/config-table.md` | — |
-| 3 进阶 | HotUpdateService（线上热更统一入口） | core/engine | 已实现（**native 走内容寻址**：`md5Cache` + 版本从 bundle 自己的 manifest 反推 + CDN 叠加式发布/归档回滚 + APK 覆盖安装作废旧缓存，见 [[adr-0016]]；**AOT 层经固定名指针 `src/cck-aot.json` 可热更、重启生效，只有引擎指纹变才发 APK，真机 e2e 五条全过，见 [[adr-0017]]**；core 半，25 测试, 覆盖 100%；统一状态机 + 版本兼容闸[钩子+安全默认] + 进度/重试；**engine 半 `native.AssetsManager` 后端 + `sys.isNative` 守门 `ccHotUpdateModule`，四门全绿，真机验证 web 守门 no-op + `check()=up-to-date`；**native 真更新全流程已真机 e2e 验证（真 Android APK：check→download→apply→restart，`BUILD_TAG` v1→v2，见 ADR-0006）**；出包期 manifest 生成/校验已由 tools `hot-update-manifest` 提供） | `packages/core/docs/modules/hotupdate-service.md` | — |
+| 3 进阶 | HotUpdateService（线上热更统一入口） | core/engine | 已实现（**native 走内容寻址**：`md5Cache` + 版本从 bundle 自己的 manifest 反推 + CDN 叠加式发布/归档回滚 + APK 覆盖安装作废旧缓存，见 [[adr-0016]]；**AOT 层经固定名指针 `src/cck-aot.json` 可热更、重启生效，只有引擎指纹变才发 APK，见 [[adr-0017]]；起不来的 AOT 由启动看门狗退回包内并隔离那一版，见 [[adr-0018]]，三轮真机 e2e 十八条全过**；core 半，25 测试, 覆盖 100%；统一状态机 + 版本兼容闸[钩子+安全默认] + 进度/重试；**engine 半 `native.AssetsManager` 后端 + `sys.isNative` 守门 `ccHotUpdateModule`，四门全绿，真机验证 web 守门 no-op + `check()=up-to-date`；**native 真更新全流程已真机 e2e 验证（真 Android APK：check→download→apply→restart，`BUILD_TAG` v1→v2，见 ADR-0006）**；出包期 manifest 生成/校验已由 tools `hot-update-manifest` 提供） | `packages/core/docs/modules/hotupdate-service.md` | — |
 | 3 进阶 | Network / 协议层（`INetwork`） | core/engine | 已实现（core 半，28 测试, 覆盖 100%；连接状态机+请求关联[seq 经 codec]+自动重连[退避]+心跳+推送路由，调度注入 ITimer；**engine 半 `createWebSocketSocket` + `ccNetworkModule`（Web/native WebSocket，重连 identity 卫），四门全绿，真机 gameView 验证 `NETWORK_SOCKET registered=true` + 真 echo 端到端往返 OK（连 jmalloc/echo-server，request/seq 回显闭环）**） | `packages/core/docs/modules/network.md` | — |
 | 3 进阶 | ECS 扩展（bitECS 接入范例，不进 core） | ecs-bitecs | 已实现（pin `bitecs@0.3.40`；`export * from 'bitecs'` 全套 + 薄 kit 胶水 `createEcsWorld`/`createEcsRunner`[秒制 `world.time` + `tick(dt)` 每帧驱动接缝]；6 测试全绿含**ITimer.onFrame 驱动 runner** 的 kit 接入证明；四门全绿[全仓 369]、`dist` 33KB 自包含[tsup noExternal 打进 bitecs]；**demo cc 渲染场景[大量 agent 移动]留后续**——需玩法 + 真机验证，本包纯逻辑已 node 全测不阻塞） | `packages/ecs-bitecs/docs/modules/ecs.md` | — |
 | 3 进阶 | ECS spatial（寻路/碰撞/群体避让 高性能 system 组） | ecs-bitecs | 已实现（5 system + 4 规范组件：`SpatialHash`/`FlowField`/`seek`/`flowFollow`/`separation`/`collision`/`movement`/`spatialIndex`；全 hand-roll 零第三方[不上物理引擎/navmesh/ORCA/yuka]，纯 SoA·node 可测；**ORCA 不做**[单向 swarm 无对穿礼让]；10 测试全绿[结构+系统+集成 pipeline]，四门全绿[全仓 379]；**独立 Cocos Creator 工程渲染验证留下一步**） | `packages/ecs-bitecs/docs/modules/spatial.md` | — |

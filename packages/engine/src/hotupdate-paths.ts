@@ -156,6 +156,44 @@ export function manifestAssetKeys(content: string): readonly string[] {
 }
 
 /**
+ * 从一份 manifest JSON 文本里取 `version` —— 看门狗隔离时用它记下「哪一版起不来」
+ * （{@link aotQuarantineVerdict} 拿这个号拦重下）。
+ *
+ * 读不出来 → `undefined`，**不抛**：拦不住只是退回「隔离 → 重下 → 又隔离」的振荡，
+ * 而此刻正在做的是把玩家从黑屏里捞出来，不该在这里再失败一次。
+ */
+export function manifestVersion(content: string): string | undefined {
+  try {
+    const v = (JSON.parse(content) as { version?: unknown }).version;
+    return typeof v === 'string' && v !== '' ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 远端发现的这一版，要不要因为「被看门狗隔离过」而跳过。
+ *
+ * - `skip` —— 正是起不来的那一版，别再下了；等发布方发个新号即自动恢复。
+ * - `clear` —— 发布方已经翻篇了，隔离结论作废，把标记清掉。
+ * - `proceed` —— 没有隔离标记，或者根本不是 base。
+ *
+ * ⚠️ `isBase` 判据是 **backend 有没有 `persistKey`**（只有 base 要把搜索路径写进 localStorage 供
+ * 冷启动还原），**不是**「有没有 seed」—— 随包发的分包也没有 seed。这条要是搞错，隔离的那个
+ * 版本号会把**分包**一起拦住：base 与分包共用同一个 `--version`（`buildSplitManifests`），
+ * 内容没变的分包在 `--prev` 下还会沿用旧号，于是一次 base 隔离能把一批分包永久钉死在包内版本。
+ * 分包与包内 AOT 兼不兼容自有 `coreApiHash` 闸管，那正是它的活。
+ */
+export function aotQuarantineVerdict(
+  isBase: boolean,
+  version: string,
+  bad: string | null | undefined,
+): 'skip' | 'clear' | 'proceed' {
+  if (!isBase || !bad) return 'proceed';
+  return version === bad ? 'skip' : 'clear';
+}
+
+/**
  * `main.js` 启动时挂上来的**包内 AOT 入口名**（`build-templates/native/index.ejs` 里那句
  * `window.__cckAotEntry = '<%= applicationJs %>'`）—— 构建期插值，**热更改不了**。
  *
@@ -165,6 +203,20 @@ export function manifestAssetKeys(content: string): readonly string[] {
 export function packagedAotEntry(): string | undefined {
   const v = (globalThis as { __cckAotEntry?: unknown }).__cckAotEntry;
   return typeof v === 'string' && v !== '' ? v : undefined;
+}
+
+/**
+ * 本次启动是不是被 **AOT 启动看门狗**隔离了 —— `main.js` 判定后挂上来的
+ * （`build-templates/native/index.ejs` 里那句 `window.__cckAotQuarantined = ...`）。
+ *
+ * 隔离态 =「连续 N 次用热更 AOT 都没跑到 Bootstrap」→ 这一次跑**包内** AOT，连搜索路径都不还原。
+ * 它兜的是 AOT 解锁带来的唯一一种**玩家自己救不回来**的失败：下发的 AOT 起不来，而作废缓存的
+ * 代码在 Bootstrap 里、永远轮不到 —— 实测重启与覆盖装 APK 都无效，只有清应用数据。见 ADR-0018。
+ *
+ * 老模板没挂这个全局 → 恒 `false`（看门狗休眠，行为与 AOT 解锁前一致）。
+ */
+export function aotQuarantined(): boolean {
+  return (globalThis as { __cckAotQuarantined?: unknown }).__cckAotQuarantined === true;
 }
 
 /**
@@ -180,7 +232,7 @@ export function packagedAotEntry(): string | undefined {
  * AOT 解锁之前 `bundleVers` 是安全的：`settings` 只随 APK 换，所以它答的就是「APK 换没换」。
  * 解锁之后 `settings.<md5>.json` 本身也随热更走了，于是 `bundleVers` 答的变成「**跑的是哪一版
  * AOT**」——每成功热更一次 AOT，它就与上一轮存下的指纹不同，缓存被判成「上一版 APK 攒的」而
- * **整个删掉**，下一轮冷启动重下、再删，死循环。而 `main.js` 属 L0（它自己就是搜索路径还原），
+ * **整个删掉**，下一轮冷启动重下、再删，死循环。而 `main.js` 换不了（它自己就是那段搜索路径还原），
  * 热更够不着，烘在里面的入口名因此是唯一不可伪造的 APK 身份。
  *
  * ## 为什么不是 app 戳的 `coreApiHash`

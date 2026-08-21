@@ -17,7 +17,7 @@ demo 是 **kit 的接入方样例**：它不实现框架能力，它演示「拿
 |---|---|
 | **往 `assets/` 加目录 / 加一个功能模块** | [`bundle-layout.md`](bundle-layout.md) — 分层 × 分包总图、bundle 全表、优先级阶梯、归位判据 |
 | **加一个马甲 / 给一个界面加换皮** | [`vest-and-skin.md`](vest-and-skin.md) — 马甲接缝、皮包边界、加一个马甲的清单 |
-| **发一次热更 / 排查更新没生效** | [`hotupdate-pipeline.md`](hotupdate-pipeline.md) — 架构图、启动时序、发版流程、三层更新边界 |
+| **发一次热更 / 排查更新没生效** | [`hotupdate-pipeline.md`](hotupdate-pipeline.md) — 架构图、启动时序、发版流程、三档更新代价 |
 | **出包时要改 VEST / 服务器地址 / 版本号** | [`build-plugin.md`](build-plugin.md) — `extensions/cck-build` 注入的六个打包期常量 |
 | 出 Android 包（命令行） | skill `/demo-build` + [`../build-configs/README.md`](../build-configs/README.md) |
 | 加场景 / 调相机 / 做横竖屏适配 | [`scene-and-camera-architecture.md`](scene-and-camera-architecture.md) |
