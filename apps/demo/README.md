@@ -9,6 +9,7 @@
 | **`assets/scenes/Boot.scene`**（main 包） | 🌱 **一次性启动场**：装配 kit → 跑启动序列（读戳 → 热更 → `shared` → `lobby`）。除 app 重启外不二次进入 | `scenes/Bootstrap.ts` |
 | **`assets/modules/lobby/Lobby.scene`**（`lobby` bundle） | 🏠 **大厅主场**，也是子游戏的返回目标（每次返回都重新加载）。大厅自己就是一个可热更的 bundle | `modules/lobby/LobbyHost.ts` |
 | `assets/modules/mini-dodge/Dodge.scene` | 🎮 子游戏自带场景，在自己的 Asset Bundle 里 | `modules/mini-dodge/DodgeGame.ts` |
+| `assets/modules/mini-plane/Plane.scene` | 🎮 能真玩的那个：贴图也随 bundle 走，玩法全在零 `cc` 的 `PlaneVM` | `modules/mini-plane/PlaneGame.ts` |
 
 **`Boot` / `Lobby` / `Dodge` 都不含相机、不含 Canvas** —— 相机由 kit 的常驻相机组（`cameraRigModule`）在 Boot 阶段建好并跨场景存活。原理与约束见下方设计文档。
 
@@ -47,7 +48,7 @@ prefab 随 Boot.scene 的 `@property` 序列化进 **main 包**，启动第一�
 **③ `LobbyHost.ts` + `module-catalog.ts`（怎么加功能）** —— 大厅是**数据驱动**的：加一个功能 = 新建 `assets/modules/<id>/` 一个 bundle + 在 `MODULE_CATALOG` 加一行，**大厅代码零改**。界面同样是 prefab：`LobbyPanel.prefab`（标题 + 副标题 + `Items` 容器）+ `LobbyItem.prefab`（一个入口按钮的模板），代码只负责按清单克隆模板、填标题、绑点击。两种承载：
 
 - `kind: 'panel'` —— UI 面板，由 UIManager 按注册表加载并挂进常驻层容器；关闭时一行 `await scope.dispose()` 对称回收（关界面 → 撤 i18n / 配表 / 资源 / DI 子作用域 → `release(bundle)`）。样例：`shop`、`mini-clicker`；
-- `kind: 'game'` —— 全屏子游戏，走 `SceneFlow` 切到 bundle 自带的场景；返回不 import 主包，靠 core `EventBus` emit `lobby:back` 解耦（样例：`mini-dodge`）。
+- `kind: 'game'` —— 全屏子游戏，走 `SceneFlow` 切到 bundle 自带的场景；返回不 import 主包，靠 core `EventBus` emit `lobby:back` 解耦（样例：`mini-dodge` 只演示切场景；`mini-plane` 是真能玩的那个 —— 玩法在零 `cc` 的 `PlaneVM`，View 只摆位置）。
 
 **④ 纯逻辑 ViewModel（零 `cc`）** —— 如 `modules/mini-clicker/CounterVM.ts`：状态与行为写在这，可直接 node/vitest 单测、不用开 Creator，再用 `bindText` 单向映射到 cc `Label`。这是铁律「逻辑可脱离引擎」+「数据驱动 UI」的落地。
 
@@ -68,3 +69,12 @@ prefab 随 Boot.scene 的 `@property` 序列化进 **main 包**，启动第一�
 用 Cocos Creator 3.8.7 打开本工程，双击 **`Boot.scene`**，点编辑器顶部 ▶ 预览。
 
 ⚠️ 改了 `packages/engine` 的代码后：先 `pnpm build`，再**切一次 browser 预览**强制 Creator 重打包（它不监视 `node_modules/`），否则预览还在跑旧 dist。详见设计文档 §7 末尾的踩坑一节。
+
+## 第三方美术资源
+
+| 资源 | 来源 | 许可 |
+|---|---|---|
+| `assets/modules/mini-plane/art/*.png`（`sky.png` 除外） | [Kenney](https://www.kenney.nl/) 的 Construct 2 模板 `tappyplane.capx` | **CC0**（公共领域，商用无需署名；这里署名是出于礼貌） |
+
+`sky.png` 是本仓生成的 8×8 纯色小图，取自 `bg.png` 的天空色 `rgb(213,237,247)`：竖屏场地比 480 高的
+背景图高得多，上方拿它铺满，接缝看不出来。玩法参数同样照抄那份模板的事件表（换算表见 `PlaneVM` 的注释）。

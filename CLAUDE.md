@@ -38,7 +38,7 @@ docs/design       设计文档
 boot/        ① AOT：Boot.scene / Bootstrap / app-config(VEST) / 启动界面 / foundation-api → 热更、重启
 foundation/  ② 地基 bundle：协议 / 连接 / 登录与认证 / 网关搬家 / 模块清单 / 模块契约    → 热更，不重启
              一个功能一个目录（net/ login/ …），**只有逻辑、没有脸**
-modules/*/   ③ 功能 bundle：lobby / mail / shop / mini-clicker / mini-dodge            → 按需 load/release
+modules/*/   ③ 功能 bundle：lobby / mail / shop / mini-clicker / mini-dodge / mini-plane → 按需 load/release
 shared/      跨模块共享资源（所有马甲都一样的那些）
 ```
 

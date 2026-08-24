@@ -41,6 +41,7 @@ export const MODULE_CATALOG: readonly CatalogEntry[] = [
   { id: 'mail', title: '邮件', bundle: 'mail', kind: 'panel', prefab: 'Mail', skinned: true },
   { id: 'mini-clicker', title: '点击计数器', bundle: 'mini-clicker', kind: 'panel', prefab: 'Clicker' },
   { id: 'mini-dodge', title: '躲避小游戏', bundle: 'mini-dodge', kind: 'game', scene: 'Dodge' },
+  { id: 'mini-plane', title: '飞机穿岩', bundle: 'mini-plane', kind: 'game', scene: 'Plane' },
 ];
 
 /**
