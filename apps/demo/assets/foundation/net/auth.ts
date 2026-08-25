@@ -44,7 +44,7 @@ const DEVICE_KEY = 'cck.deviceId';
  *
  * 取不到 App（单测直接调这几个函数）就不加前缀 —— 隔离是运行期的事，测试里没有第二个马甲。
  */
-function scoped(key: string): string {
+export function scopedKey(key: string): string {
   const appId = getRootContainer().tryResolve(APP)?.config.appId;
   return appId ? `${appId}.${key}` : key;
 }
@@ -108,10 +108,10 @@ export interface AuthSession {
  */
 export async function deviceId(storage?: IStorage): Promise<string> {
   const st = storage ?? getRootContainer().tryResolve(STORAGE);
-  const got = await st?.get(scoped(DEVICE_KEY));
+  const got = await st?.get(scopedKey(DEVICE_KEY));
   if (got) return got;
   const id = `cck-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  await st?.set(scoped(DEVICE_KEY), id);
+  await st?.set(scopedKey(DEVICE_KEY), id);
   return id;
 }
 
@@ -128,13 +128,13 @@ export function customAccount(name: string, password: string): LoginAccount {
 /** 上次登录的账号名（没有就空串）。只用于预填输入框。 */
 export async function lastLoginName(storage?: IStorage): Promise<string> {
   const st = storage ?? getRootContainer().tryResolve(STORAGE);
-  return (await st?.get(scoped(LAST_NAME_KEY))) ?? '';
+  return (await st?.get(scopedKey(LAST_NAME_KEY))) ?? '';
 }
 
 /** 记住账号名。密码不记 —— 见 {@link LAST_NAME_KEY}。 */
 export async function rememberLoginName(name: string, storage?: IStorage): Promise<void> {
   const st = storage ?? getRootContainer().tryResolve(STORAGE);
-  await st?.set(scoped(LAST_NAME_KEY), name);
+  await st?.set(scopedKey(LAST_NAME_KEY), name);
 }
 
 /**

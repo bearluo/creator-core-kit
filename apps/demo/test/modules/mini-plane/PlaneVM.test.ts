@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { PlaneVM, ROCK_HALF_WIDTH, TILE } from '../../../assets/modules/mini-plane/PlaneVM';
+import {
+  PLANE_ART,
+  PlaneVM,
+  ROCK_HALF_WIDTH,
+  TILE,
+} from '../../../assets/modules/mini-plane/PlaneVM';
 
 /**
  * 玩法的全部判据 —— 全在 node 里跑，没有 `cc`、没有渲染、没有 Creator。
@@ -28,6 +33,25 @@ const hover = (vm: PlaneVM, seconds: number, y: number): void => {
     vm.vy = 0;
     vm.step(1 / 60);
   }
+};
+
+/**
+ * **只跑判定，不推进世界** —— `step(0)` 各项增量都是 0，剩下的只有碰撞检测。
+ * 于是可以把飞机和岩石摆到一个精确的几何位置上问「这样算不算撞」，不被那一帧的位移搅浑。
+ */
+const probe = (vm: PlaneVM): string => {
+  vm.step(0);
+  return vm.phase.value;
+};
+
+/** 摆一局：起飞、按住不动、按需摆一对岩石，返回 `probe` 的结果。 */
+const poseWithRock = (rockDx: number, gapY: number, y?: number): string => {
+  const vm = new PlaneVM();
+  vm.tap();
+  vm.vy = 0;
+  if (y !== undefined) vm.y = y;
+  vm.rocks.push({ x: vm.planeX + rockDx, gapY, passed: false });
+  return probe(vm);
 };
 
 describe('PlaneVM · 阶段', () => {
@@ -120,6 +144,21 @@ describe('PlaneVM · 岩石', () => {
 });
 
 describe('PlaneVM · 坠机', () => {
+  it('机头姿态进判定 —— 同一高度，平飞过得去，俯冲就啃地', () => {
+    const level = new PlaneVM();
+    level.tap();
+    level.vy = 0;
+    level.y = level.groundY + 40;
+    expect(probe(level)).toBe('playing');
+
+    const dive = new PlaneVM();
+    dive.tap();
+    dive.vy = -2250; // 角度夹到下限
+    dive.y = dive.groundY + 40;
+    expect(dive.angle).toBe(-75);
+    expect(probe(dive)).toBe('dead');
+  });
+
   it('掉到地面上沿以下就坠机，并刷新最好成绩', () => {
     const vm = new PlaneVM();
     vm.tap();
@@ -143,6 +182,34 @@ describe('PlaneVM · 坠机', () => {
     vm.rocks.push({ x: vm.planeX, gapY: vm.y, passed: false });
     vm.step(1 / 60);
     expect(vm.phase.value).toBe('playing');
+  });
+
+  it('岩石是根锥子 —— 尖端旁边那片空气飞得过去（矩形模型这里必死）', () => {
+    const vm = new PlaneVM();
+    // 缝上沿切在机身顶下方 20：机身有 20 高**露在缝外**。矩形模型只问「出没出缝」，出了就死。
+    const gapY = vm.y + PLANE_ART.height / 2 - 20 - vm.gapHalf;
+    // 岩石正对机身：锥尖就落在机身覆盖的那几列里 → 真撞。
+    expect(poseWithRock(0, gapY)).toBe('dead');
+    // 岩石往边上挪 70：那个高度上岩石只有十来像素宽，机身翼尖还差一大截 → 过得去。
+    expect(poseWithRock(-70, gapY)).toBe('playing');
+    expect(poseWithRock(70, gapY)).toBe('playing');
+  });
+
+  it('锥尖偏右，致命窗口跟着偏 —— 只有逐像素才看得见这种不对称', () => {
+    const vm = new PlaneVM();
+    const gapY = vm.y + PLANE_ART.height / 2 - 14 - vm.gapHalf;
+    // 贴图里尖端那几行占 x∈[59,71]，图心却在 54 —— 尖端整体右偏约 11px。
+    // 于是同样贴 50 过去，岩石在左边会蹭到、在右边蹭不到。
+    // （矩形模型两边都得死：50 < 半宽 54 + 机身半宽。实测致命窗口是 dx∈[-55, 23]。）
+    expect(poseWithRock(-50, gapY)).toBe('dead');
+    expect(poseWithRock(50, gapY)).toBe('playing');
+  });
+
+  it('岩石被纵向拉伸，判定跟着倍率折算 —— 根部照样是实心的', () => {
+    const vm = new PlaneVM();
+    // 缝抬到最高处：下面那根被拉得最长，机身待在场底附近仍在它体内。
+    const gapY = vm.y + vm.halfHeight * 0.25;
+    expect(poseWithRock(0, gapY, vm.groundY + 100)).toBe('dead');
   });
 
   it('坠机后世界停住，点一下才重开', () => {

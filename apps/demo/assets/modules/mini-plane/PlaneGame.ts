@@ -1,20 +1,16 @@
-import {
-  _decorator,
-  Color,
-  Component,
-  Label,
-  Layers,
-  Node,
-  Sprite,
-  SpriteFrame,
-  UITransform,
-  view,
-  type EventTouch,
-} from 'cc';
-import { getAssetLoader, getEventBus } from '@cck/core';
+import { _decorator, Color, Component, Node, Sprite, SpriteFrame, UITransform } from 'cc';
 import { bindText, BindingScope } from '@cck/engine';
-import { LOBBY_EVENTS, type LobbyEventMap } from '../../foundation/events';
-import { PlaneVM, TILE } from './PlaneVM';
+import { scoreboardFor } from '../../foundation/game/host';
+import {
+  exitButton,
+  fieldByHeight,
+  gameLabel,
+  gameNode,
+  gameSprite,
+  loadGameArt,
+  releaseGameArt,
+} from '../../foundation/game/stage';
+import { PLANE_ART, PlaneVM, ROCK_ART_HEIGHT, ROCK_HALF_WIDTH, TILE } from './PlaneVM';
 
 const { ccclass } = _decorator;
 const TAG = '[CCK-PLANE]';
@@ -49,15 +45,15 @@ const PROPELLER_FRAME_TIME = 0.06;
  */
 const FIELD_HEIGHT = 900;
 
-/** 岩石贴图 108 宽；上下两根都从缝边一直拉到场外 40。 */
-const ROCK_WIDTH = 108;
-const ROCK_ART_HEIGHT = 239;
-const ROCK_OVERSHOOT = 40;
+/**
+ * 岩石画多宽、上下拉到哪，**出处都在 VM**（`ROCK_HALF_WIDTH` / `ROCK_ART_HEIGHT` / `vm.rockEdge`）：
+ * 判定是照这张图的像素掩码做的，这里画大画小就会跟判定脱节。机身尺寸同理走 `PLANE_ART`。
+ */
+const ROCK_WIDTH = ROCK_HALF_WIDTH * 2;
 
-/** 贴图原始尺寸。 */
+/** 只跟画面有关的贴图尺寸（不进判定）。 */
 const BG_HEIGHT = 480;
 const GROUND_HEIGHT = 71;
-const PLANE_SIZE = { width: 88, height: 73 };
 const TAP_SIZE = 59;
 
 /**
@@ -92,19 +88,21 @@ export class PlaneGame extends Component {
   private propellerFrame = 0;
 
   async start(): Promise<void> {
-    const size = view.getVisibleSize();
-    const scale = size.height / FIELD_HEIGHT;
-    const halfWidth = size.width / scale / 2;
+    const metrics = fieldByHeight(FIELD_HEIGHT);
 
-    this.frames = await this.loadArt();
+    this.frames = await loadGameArt(BUNDLE, ART);
     if (!this.node.isValid) return; // 加载期间被切走了
 
-    this.vm = new PlaneVM({ halfWidth, halfHeight: FIELD_HEIGHT / 2 });
-    this.buildField(scale);
-    this.buildHud(size.height / 2);
+    this.vm = new PlaneVM({
+      halfWidth: metrics.halfWidth,
+      halfHeight: metrics.halfHeight,
+      scoreboard: scoreboardFor(BUNDLE),
+    });
+    this.buildField(metrics.scale);
+    this.buildHud(metrics.halfScreenHeight);
     this.node.on(Node.EventType.TOUCH_END, () => this.vm?.tap());
     console.log(
-      `${TAG} Plane.scene 启动（场 ${(halfWidth * 2).toFixed(0)}×${FIELD_HEIGHT}，缩放 ${scale.toFixed(2)}）`,
+      `${TAG} Plane.scene 启动（场 ${(metrics.halfWidth * 2).toFixed(0)}×${FIELD_HEIGHT}，缩放 ${metrics.scale.toFixed(2)}）`,
     );
   }
 
@@ -120,41 +118,25 @@ export class PlaneGame extends Component {
   onDestroy(): void {
     this.binds?.dispose();
     // 贴图随本场景走：切回大厅时连同 bundle 一起卸，这里先把这一组的引用还掉。
-    getAssetLoader().releaseGroup(BUNDLE);
+    releaseGameArt(BUNDLE);
   }
 
   // —— 建场 ————————————————————————————————————————————————
 
-  private async loadArt(): Promise<Record<ArtName, SpriteFrame>> {
-    const assets = getAssetLoader();
-    const loaded = await Promise.all(
-      ART.map((name) =>
-        assets.load<SpriteFrame>(`art/${name}/spriteFrame`, {
-          bundle: BUNDLE,
-          type: 'spriteFrame',
-          group: BUNDLE,
-        }),
-      ),
-    );
-    const table = {} as Record<ArtName, SpriteFrame>;
-    ART.forEach((name, i) => (table[name] = loaded[i]));
-    return table;
-  }
-
   private buildField(scale: number): void {
     const vm = this.vm!;
-    const field = child(this.node, 'Field');
+    const field = gameNode(this.node, 'Field');
     field.setScale(scale, scale, 1);
 
     // 子节点顺序 = 渲染顺序：天 → 背景 → 岩石 → 地面 → 飞机 → 提示。
     this.sprite(field, 'Sky', 'sky', [0.5, 0.5], vm.halfWidth * 2, vm.halfHeight * 2);
     for (let i = 0; i < 2; i++)
       this.backgrounds.push(this.sprite(field, `Bg${i}`, 'bg', [0, 0], TILE.background, BG_HEIGHT));
-    this.rockLayer = child(field, 'Rocks');
+    this.rockLayer = gameNode(field, 'Rocks');
     for (let i = 0; i < 2; i++)
       this.grounds.push(this.sprite(field, `Ground${i}`, 'ground', [0, 1], TILE.ground, GROUND_HEIGHT));
 
-    this.plane = this.sprite(field, 'Plane', 'plane0', [0.5, 0.5], PLANE_SIZE.width, PLANE_SIZE.height);
+    this.plane = this.sprite(field, 'Plane', 'plane0', [0.5, 0.5], PLANE_ART.width, PLANE_ART.height);
     this.tapHint = this.sprite(field, 'TapHint', 'tap', [0.5, 0.5], TAP_SIZE, TAP_SIZE);
     this.tapHint.setPosition(vm.planeX + 150, vm.y, 0);
   }
@@ -163,22 +145,18 @@ export class PlaneGame extends Component {
     const vm = this.vm!;
     this.binds = new BindingScope();
 
-    const score = label(this.node, 'Score', 96, new Color(255, 255, 255), [600, 130]);
+    const score = gameLabel(this.node, 'Score', 96, new Color(255, 255, 255), [600, 130]);
     score.node.setPosition(0, halfScreenHeight - 160, 0);
     this.binds.add(bindText(score, () => `${vm.score.value}`));
 
-    const hint = label(this.node, 'Hint', 52, new Color(70, 85, 95), [760, 280]);
+    const hint = gameLabel(this.node, 'Hint', 52, new Color(70, 85, 95), [760, 280]);
     hint.node.setPosition(0, -180, 0);
     this.binds.add(bindText(hint, () => vm.hint.value));
 
-    const back = label(this.node, 'Back', 44, new Color(50, 105, 85), [300, 90]);
-    back.string = '← 返回大厅';
+    // 「返回大厅」现在走 `foundation/game` 的统一按钮：里头就一句 `getGameHost().exit()`，
+    // 本文件不再认识 EventBus，也不必自己记得「别让这一下顺带被当成拉升」。
+    const back = exitButton(this.node, { color: new Color(50, 105, 85) });
     back.node.setPosition(-330, halfScreenHeight - 90, 0);
-    back.node.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
-      e.propagationStopped = true; // 别让这一下顺带被当成拉升
-      console.log(`${TAG} 点返回 → emit '${LOBBY_EVENTS.back}'（不 import 主包，走 core EventBus）`);
-      getEventBus<LobbyEventMap>().emit(LOBBY_EVENTS.back);
-    });
   }
 
   // —— 每帧照抄 VM ————————————————————————————————————————
@@ -196,13 +174,13 @@ export class PlaneGame extends Component {
   }
 
   private syncRocks(vm: PlaneVM): void {
-    const edge = vm.halfHeight + ROCK_OVERSHOOT;
+    const edge = vm.rockEdge;
     for (let i = 0; i < vm.rocks.length; i++) {
       const rock = vm.rocks[i];
       const node = this.rockNode(i);
       node.active = true;
       node.setPosition(rock.x, 0, 0);
-      // 上下两根从缝边一路拉到场外 —— 于是「没在缝里就是撞」这条判定跟画面对得上。
+      // 上下两根从缝边一路拉到场外 —— VM 判定按同一组数把世界行折算回贴图行，画面即判定。
       const [top, bottom] = [node.children[0], node.children[1]];
       top.setPosition(0, rock.gapY + vm.gapHalf, 0);
       resize(top, edge - (rock.gapY + vm.gapHalf));
@@ -232,13 +210,14 @@ export class PlaneGame extends Component {
   private rockNode(i: number): Node {
     const cached = this.rockNodes[i];
     if (cached) return cached;
-    const node = child(this.rockLayer!, `Rock${i}`);
+    const node = gameNode(this.rockLayer!, `Rock${i}`);
     this.sprite(node, 'Top', 'rock-top', [0.5, 0], ROCK_WIDTH, ROCK_ART_HEIGHT);
     this.sprite(node, 'Bottom', 'rock-bottom', [0.5, 1], ROCK_WIDTH, ROCK_ART_HEIGHT);
     this.rockNodes[i] = node;
     return node;
   }
 
+  /** 建图节点。按名取帧这一下是本模块的事，其余交给 `foundation/game` 的 {@link gameSprite}。 */
   private sprite(
     parent: Node,
     name: string,
@@ -247,44 +226,11 @@ export class PlaneGame extends Component {
     width: number,
     height: number,
   ): Node {
-    const node = child(parent, name);
-    const sprite = node.addComponent(Sprite);
-    sprite.spriteFrame = this.frames![art];
-    // 顺序有讲究：`spriteFrame` 会按 sizeMode 回写 contentSize，所以先改 sizeMode 再定尺寸。
-    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-    const ui = node.getComponent(UITransform)!;
-    ui.setAnchorPoint(anchor[0], anchor[1]);
-    ui.setContentSize(width, height);
-    return node;
+    return gameSprite(parent, name, this.frames![art], anchor, width, height);
   }
-}
-
-function child(parent: Node, name: string): Node {
-  const node = new Node(name);
-  node.layer = Layers.Enum.UI_2D; // 不置层就不归 kit 那台常驻 ui 相机管 → 黑屏
-  parent.addChild(node);
-  return node;
 }
 
 function resize(node: Node, height: number): void {
   const ui = node.getComponent(UITransform)!;
   ui.setContentSize(ui.contentSize.width, Math.max(height, 1));
-}
-
-function label(
-  parent: Node,
-  name: string,
-  fontSize: number,
-  color: Color,
-  size: readonly [number, number],
-): Label {
-  const node = child(parent, name);
-  node.addComponent(UITransform).setContentSize(size[0], size[1]);
-  const text = node.addComponent(Label);
-  text.fontSize = fontSize;
-  text.lineHeight = fontSize + 10;
-  text.color = color;
-  text.horizontalAlign = Label.HorizontalAlign.CENTER;
-  text.verticalAlign = Label.VerticalAlign.CENTER;
-  return text;
 }

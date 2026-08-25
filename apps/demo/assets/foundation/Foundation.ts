@@ -2,6 +2,7 @@ import { _decorator } from 'cc';
 import { createBundleGraph, getBundleManager, type LaunchContext } from '@cck/core';
 import { BUNDLE_GRAPH } from './bundles';
 import { registerCatalogUIs } from './catalog';
+import { installGameHost } from './game/host';
 import { authenticate } from './net/auth';
 import { connectNetwork } from './net/connect';
 import { ACCOUNT_LOGIN_URL } from './server';
@@ -52,6 +53,8 @@ export class DemoFoundation {
     registerCatalogUIs(); // 模块清单 → UIManager 注册表（加一个模块 = 改 catalog.ts 一行）
     await connectNetwork(ctx); // 协议注册表 + 长连接 + 网关搬家器 → DI
     await authenticate(ACCOUNT_LOGIN_URL); // 登录 + 首帧 AuthRequest；重连后自动重认
-    console.log('[CCK-FOUNDATION] 地基就绪：依赖表 / 协议 / 连接 / 认证 / 模块清单');
+    // 排在认证之后：GameHost 的玩家身份取自认证结果；成绩表也在这一下读进内存（此后同步可读）。
+    await installGameHost();
+    console.log('[CCK-FOUNDATION] 地基就绪：依赖表 / 协议 / 连接 / 认证 / 模块清单 / 子游戏契约');
   }
 }

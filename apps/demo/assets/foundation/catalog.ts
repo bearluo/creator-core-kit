@@ -42,6 +42,10 @@ export const MODULE_CATALOG: readonly CatalogEntry[] = [
   { id: 'mini-clicker', title: '点击计数器', bundle: 'mini-clicker', kind: 'panel', prefab: 'Clicker' },
   { id: 'mini-dodge', title: '躲避小游戏', bundle: 'mini-dodge', kind: 'game', scene: 'Dodge' },
   { id: 'mini-plane', title: '飞机穿岩', bundle: 'mini-plane', kind: 'game', scene: 'Plane' },
+  { id: 'mini-brick', title: '打砖块', bundle: 'mini-brick', kind: 'game', scene: 'Brick' },
+  { id: 'mini-shooter', title: '太空射击', bundle: 'mini-shooter', kind: 'game', scene: 'Shooter' },
+  { id: 'mini-hop', title: '平台跳跃', bundle: 'mini-hop', kind: 'game', scene: 'Hop' },
+  { id: 'mini-cards', title: '骰子卡牌', bundle: 'mini-cards', kind: 'game', scene: 'Cards' },
 ];
 
 /**

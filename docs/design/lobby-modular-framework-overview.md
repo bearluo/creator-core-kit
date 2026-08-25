@@ -21,7 +21,8 @@
 `apps/demo` 的大厅样例：**大厅自己是 `lobby` bundle**（[[adr-0009]] 的「启动期换」层），商城 / 点击计数器 / 躲避小游戏各是 `modules/<id>` 一个 bundle，按需加载。
 
 - **panel 类**（商城、点击计数器）= 一个**注册进 UIManager 的界面**：清单 → `registerUI(id, {layer, bundle, prefab})`，host 只写 `open(id, ctx)`；界面脚本继承 `CCKUIView` 挂在自己 bundle 的 prefab 根上。界面被挂进 **kit 常驻相机组的层容器**（跨场景存活），大厅不自建挂载层。
-- **game 类**（躲避小游戏）= 用它 bundle 里**自带的 `.scene`**，经 `SceneFlow` pushdown 栈切过去；返回目标是 **`Lobby.scene`**（重新加载），不是 Boot。
+- **game 类**（五个能玩的子游戏 + 一个只演示切场景的）= 用它 bundle 里**自带的 `.scene`**，经 `SceneFlow` pushdown 栈切过去；返回目标是 **`Lobby.scene`**（重新加载），不是 Boot。
+- **game 类的契约是 `GameHost`**（`foundation/game/`）：panel 的上下文是 host 递进去的，game 是 `loadScene` 切过去的、递不进去，所以它**自己去取**——玩家是谁、历史最好成绩、交成绩、回大厅。回路闭在大厅按钮上的「最好 N」，而大厅不认识任何一个游戏。
 - **模块作用域资源**：模块自带的 i18n / 配表 / 资源全部经 `{bundle}` 从自己 bundle 加载，登记进 kit 的 **`BundleScope`**；关闭时 host 一行 `await scope.dispose()` 全撤（`closeByBundle` → 逆序 teardown → `release(bundle)`）。
 - **数据驱动**：大厅只吃 `module-catalog.ts` 一张清单。**加任何功能 = 新建一个 bundle + 清单加一行，大厅代码零改。**
 
@@ -88,6 +89,46 @@ export interface ModuleContext {
 
 > ⚠️ **界面自己不要 `dispose`**：`dispose` 的第一步就是 `closeByBundle` 关掉本 bundle 的界面——也就是调起 `onHide` 的那一步，界面在 `onHide` 里反手 dispose 会自递归。所有权在 host 手里。
 
+### game 类的契约：`GameHost`
+
+panel 类的上下文是 host **递进去的**（它就是 `open(id, ctx)` 的 `args`）。game 类没有这个机会——它是 `loadScene` 切过去的，场景里的组件由引擎 `new` 出来，**没有任何东西被递进去**。所以 game 类需要一份**自己去取**的契约：
+
+```ts
+// assets/foundation/game/host.ts —— 住在地基包（priority 6），谁都能 import
+export interface GameHost {
+  readonly player: GamePlayer;               // 谁在玩（id / 显示名，取自登录态）
+  exit(): void;                              // 回大厅
+  best(gameId: string): number;              // 这个游戏的历史最好成绩（同步）
+  submit(gameId: string, score: number): boolean;  // 交成绩；破纪录返回 true
+}
+export function getGameHost(): GameHost;                                  // 游戏侧
+export function scoreboardFor(gameId: string, host?: GameHost): GameScoreboard;  // 喂给 VM
+```
+
+**为什么住在地基而不是大厅**：跨包 `import` 只许指向优先级更高的包。模块（1）→ 大厅（3）虽然合法，但方向反了——子游戏不该依赖「大厅」这个具体实现（换一个大厅、或者深链直接进某个游戏就全断）。放地基（6）= 谁都能用，且随地基热更。地基 `boot` 的最后一步 `installGameHost()` 把它装进 DI 根容器（排在认证之后，`playerId` 才有）。
+
+**成绩为什么是同步的**：`IStorage` 是异步的，而游戏第一帧就要把「最好 12」画出来。启动时一次性读进内存，`best()` 同步返回，`submit()` 同步更新内存 + 异步写回。丢一次写盘最多丢掉这一局的纪录，换来游戏侧一个 `await` 都不用写。
+
+**VM 拿到的不是 host，是 `GameScoreboard`**（`best()` / `submit()` 两个方法的零依赖小接口，住在 `foundation/game/scoreboard.ts`）。VM 零 `cc`、node 直跑，不该认识一条挂到 DI 容器和 `IStorage` 的链子；单测塞一份 `memoryScoreboard()` 就能跑：
+
+```ts
+// 运行期（View 里）                          // 单测里
+new BrickVM({ scoreboard: scoreboardFor('mini-brick') })   new BrickVM({ scoreboard: memoryScoreboard(50) })
+```
+
+**回路是闭的、且看得见**：游戏结束 `submit` → 回大厅（`Lobby.scene` 重新加载 → 重建按钮）→ 按钮上多出「最好 N」。**大厅不认识任何一个游戏**，它只按 id 读一个数，不知道那分是打砖块还是吃硬币来的。
+
+配套的建场小工具在 `foundation/game/stage.ts`（`gameNode` / `gameSprite` / `gameLabel` / `loadGameArt` / `exitButton` / `fieldByHeight` / `fieldByWidth`）——六个 game 模块共用的那十几行，不含任何美术资产。
+
+### 接入一个新子游戏要做的事
+
+1. 新建 `assets/modules/<id>/`（目录 meta 置 `isBundle: true, priority: 1`），里头放 `<X>VM.ts`（零 `cc` 的玩法）、`<X>Game.ts`（薄壳 View）、`<X>.scene`、`art/`；
+2. `foundation/catalog.ts` 的 `MODULE_CATALOG` 加一行 `{ id, title, bundle, kind: 'game', scene }`；
+3. View 里三句话接上契约：`scoreboardFor(BUNDLE)` 喂给 VM、`exitButton(this.node)` 放返回键、`releaseGameArt(BUNDLE)` 在 `onDestroy` 里还引用；
+4. `test/modules/<id>/<X>VM.test.ts` 写玩法判据（`pnpm check:vm-tests` 强制）。
+
+**大厅代码零改**，依赖表（`foundation/bundles.ts`）按 catalog 现推也零改。
+
 ## 4. 模块作用域资源
 
 > **bundle 没加载，就不该有它的 i18n / 配表 / 资源；卸载 bundle，就连它们一起下掉。**
@@ -110,20 +151,35 @@ export interface ModuleContext {
 
 ```
 apps/demo/assets/
-├─ scenes/                     main 包（重启层）：只剩启动
+├─ boot/                       main 包（重启层）：只剩启动
 │  ├─ Boot.scene               空引导场景，一个挂 Bootstrap 的节点
-│  └─ Bootstrap.ts             AppConfig + 装配 kit + 插自定义启动步 + app.launch()
+│  ├─ Bootstrap.ts             AppConfig + 装配 kit + 插自定义启动步 + app.launch()
+│  └─ foundation-api.ts        主包够到地基的唯一接缝（import type + js.getClassByName）
+├─ foundation/                 地基 bundle（priority 6）：跨模块契约，可热更、不重启
+│  ├─ Foundation.ts            地基入口（依赖表 → 清单 → 连接 → 认证 → GameHost）
+│  ├─ catalog.ts               模块清单 + registerCatalogUIs() + 换皮解析
+│  ├─ bundles.ts               bundle 依赖表（装卸跟随 + 资源边界）
+│  ├─ events.ts                跨包事件名（零依赖小文件）
+│  ├─ ModuleContext.ts         **panel 类**的运行上下文契约（= open 的 args 形状）
+│  ├─ game/                    **game 类**的契约（见 §3）
+│  │  ├─ host.ts               GameHost：player / exit / best / submit + installGameHost
+│  │  ├─ scoreboard.ts         GameScoreboard（零依赖）：VM 只认这两个方法
+│  │  └─ stage.ts              建场小工具（gameNode / gameSprite / exitButton / fieldBy*）
+│  ├─ net/                     协议 / 连接 / 认证 / 网关搬家
+│  └─ login/                   登录闸门的 VM 与 View（脸在皮包里）
 ├─ shared/                     shared bundle：跨模块公共资源（全局 i18n 基表…）
-├─ modules/                    一切可分包的东西，一个一 bundle 一目录（本身不是 bundle）
-│  ├─ lobby/                   lobby bundle：大厅本体（可热更、可替换）
-│  │  ├─ Lobby.scene           主场景（一个渲染根 + LobbyHost，无相机）
-│  │  ├─ LobbyHost.ts          场景宿主组件 + LobbyNav 导航单例（catalog → load/open/release）
-│  │  ├─ ModuleContext.ts      模块运行上下文契约（type-only；= open 的 args 形状）
-│  │  ├─ module-catalog.ts     清单 + registerCatalogUIs()（清单 → UIManager 注册表）
-│  │  └─ lobby-events.ts       大厅事件（如子游戏请求返回）
-│  ├─ shop/         ShopView.ts + Shop.prefab / Shop_land.prefab / shop-i18n.json   kind:panel
-│  ├─ mini-clicker/ ClickerView.ts + CounterVM.ts + Clicker.prefab                  kind:panel
-│  └─ mini-dodge/   DodgeGame.ts + Dodge.scene                                      kind:game
+├─ skins/<马甲>/               各层的「脸」，一个跟随者一个皮包（本身不是 bundle）
+└─ modules/                    一切可分包的功能，一个一 bundle 一目录（本身不是 bundle）
+   ├─ lobby/       Lobby.scene + LobbyHost.ts（catalog → load/open/release，骨架脸在皮包）
+   ├─ shop/        ShopView.ts + Shop.prefab / Shop_land.prefab / shop-i18n.json   kind:panel
+   ├─ mail/        MailView.ts（换皮：脸在 skin-<马甲>-mail）                      kind:panel
+   ├─ mini-clicker/ClickerView.ts + CounterVM.ts + Clicker.prefab                  kind:panel
+   ├─ mini-dodge/  DodgeGame.ts + Dodge.scene（只演示切场景，没有玩法）            kind:game
+   ├─ mini-plane/  PlaneVM.ts + collision-masks.ts + PlaneGame.ts + Plane.scene    kind:game
+   ├─ mini-brick/  BrickVM.ts + BrickGame.ts + Brick.scene + art/                  kind:game
+   ├─ mini-shooter/ShooterVM.ts + ShooterGame.ts + Shooter.scene + art/            kind:game
+   ├─ mini-hop/    HopVM.ts + level.ts（烘出来的关卡）+ HopGame.ts + Hop.scene     kind:game
+   └─ mini-cards/  CardsVM.ts + CardsGame.ts + Cards.scene + art/（66 张）         kind:game
 ```
 
 > `lobby` 和功能模块**同住 `modules/` 但不同层**：`lobby` 是「启动期换」（启动序列里 load，更新下次启动天然生效），`shop` 等是「运行期换」。目录只表达「是不是一个可独立加载的包」，分层判据在 [[adr-0009]]——**别用目录反推层**。
@@ -131,10 +187,11 @@ apps/demo/assets/
 
 ## 7. 数据驱动 catalog
 
-大厅只吃 `module-catalog.ts` 一张清单：`{ id, title, bundle, kind, prefab?, prefabLand?, layer?, scene? }[]`。
+大厅只吃 `foundation/catalog.ts` 一张清单：`{ id, title, bundle, kind, prefab?, prefabLand?, layer?, scene?, skinned? }[]`。
 
 - `registerCatalogUIs()` 把 panel 项登记进 UIManager；填了 `prefabLand` 的登记成 **resolver**（转屏时 UIManager 只重建这一类界面，其余零成本）。
-- **加任何功能 = 新建一个 `modules/xxx` bundle + 清单加一行，大厅代码零改** → 多人协作零冲突（一模块一 bundle 一目录，专人 own）。
+- **加任何功能 = 新建一个 `modules/xxx` bundle + 清单加一行，大厅代码零改** → 多人协作零冲突（一模块一 bundle 一目录，专人 own）。依赖表（`bundles.ts`）按这张清单**现推**，也不用改。
+- 清单在**地基**而不是大厅包里：它是跨模块契约（大厅按它画按钮、UIManager 按它解析 prefab），且随地基热更——上线一个新模块只要热更地基 + 那个模块，不必发新包、不必动大厅。
 
 ## 8. 验证记录
 
@@ -143,12 +200,13 @@ apps/demo/assets/
 - **转屏真换 view**：`Shop → Shop_land`；未登记横屏变体的界面 `sameInstance=true` 零重建。
 - **web-mobile 真构建 + 浏览器 e2e**：完整启动序列 0 error；`scope.dispose` 卸载链在构建产物里成立；换 `shop` 版本后**免重启换代码**生效（见 [[adr-0010]]）。
 - **自定义 bundle 里的 `.scene` 不进 build「包含场景」列表也能 `bundle.loadScene`**（调研标注项，已坐实）。
+- **`GameHost` 回路 web 真产物 e2e**（2026-08-25）：打砖块打掉 8 块 → 掉球结算「新纪录！」→ 返回大厅按钮变成「🎮 打砖块  最好 8」→ 再玩另外三款，`localStorage` 里 `cck-demo.cck.gameBest={"mini-brick":8,"mini-shooter":4,"mini-hop":90,"mini-plane":1}`（**带 appId 前缀**，两个马甲不串）。平台跳跃自动驾驶跑完整关（`phase=won`、90 分），骰子卡牌桌上写着 `player.name`。控制台除 favicon 404 外零错误。
 
 ## 9. 已知行为与坑
 
 - **直接播放 `Lobby.scene` 会全黑**：预览起始场景取「当前在编辑器里打开的场景」，跳过 Boot 就没有 kit、没有相机组。`LobbyHost` 已对这种情况打一条指路的 `console.error`——验证启动流程前先打开 `Boot.scene`。
-- **导航状态跨场景常驻靠 module-level 单例**：`Lobby.scene` 会被 game 场景顶掉再重新加载，但 JS 模块不随 `loadScene` 重载，所以 `LobbyNav` 单例活着；场景内节点（大厅 UI）则随场景销毁重建。
+- **导航状态跨场景常驻靠 DI 根容器，不是模块级单例**：`Lobby.scene` 会被 game 场景顶掉再重新加载，导航状态不能跟着走 —— 但**也不能写成 `static instance`**（bundle 卸载不卸脚本、编辑器 stop→play 保留 JS 上下文，都会拿到脏的旧实例）。`LobbyNav` 注册在 `getRootContainer()` 的 `LOBBY_NAV` token 上、一个 kit 一份；场景内节点（大厅 UI）则随场景销毁重建。
 - **kit 换了要整套重建导航状态**：编辑器 Game View 重播走 `shutdown → reboot`，上一轮的 EventBus / SceneFlow 已作废，旧订阅永远收不到事件 → `LobbyNav` 记住自己是绑在哪个 `Kit` 上建的，kit 变了就重建订阅。
 - **UI 节点必须置 `Layers.Enum.UI_2D`**，否则 UI 相机 `visibility` 不含它 → 不可见且无日志。prefab 生成器（`apps/demo/scripts/prefab-gen/`）已统一置好；手搭节点或运行时 `new Node` 时要自己注意。
-- **大厅界面是 prefab 不是代码**：`LobbyPanel.prefab`（布局）+ `LobbyItem.prefab`（入口按钮模板），由 `LobbyHost` 的两个 `@property(Prefab)` 在 `Lobby.scene` 里绑；代码只按 `MODULE_CATALOG` 克隆模板、填标题、绑点击。**节点名 `Items` / `Label` 是契约**，改 prefab 时别改，否则代码静默取不到（只打一条 error）。
+- **大厅界面是 prefab 不是代码，且从皮包按路径取**：`LobbyPanel.prefab`（布局）+ `LobbyItem.prefab`（入口按钮模板）住在 `skin-<马甲>-lobby` 里，由 `currentSkinBundle('lobby')` 运行时解析 —— **不是 `@property(Prefab)`**（那是编辑器期绑定，绑死在 `lobby` 包里，马甲换不掉）。代码只按 `MODULE_CATALOG` 克隆模板、填标题、绑点击。**节点名 `Items` / `Label` 是契约**，改 prefab 时别改，否则代码静默取不到（只打一条 error）。
 - **面板打开失败要走同一条回滚链**（`scope.dispose()`），否则 bundle 计数与 DI 子作用域会泄漏。

@@ -15,6 +15,7 @@ import {
   type Token,
 } from '@cck/core';
 import { loadScene } from '@cck/engine';
+import { GAME_HOST } from '../../foundation/game/host';
 import { GATEWAY_MIGRATION } from '../../foundation/net/migration';
 import { currentSkinBundle, MODULE_CATALOG, type CatalogEntry } from '../../foundation/catalog';
 import type { ModuleContext } from '../../foundation/ModuleContext';
@@ -165,7 +166,7 @@ class LobbyNav {
       items.addChild(node);
       node.setPosition(0, -i * ITEM_GAP, 0);
       const label = node.getChildByName(N_ITEM_LABEL)?.getComponent(Label);
-      if (label) label.string = `${entry.kind === 'game' ? '🎮' : '🧩'} ${entry.title}`;
+      if (label) label.string = itemText(entry);
       // 更新失败现在一路抛上来（BundleUpdater 不再退回包内版本）——不接住就只剩「点了没反应」
       node.on(Node.EventType.TOUCH_END, () => {
         this.openModule(entry).catch((e: unknown) =>
@@ -272,6 +273,23 @@ class LobbyNav {
     }
     console.log(`${TAG} 返回大厅：loadScene('${LOBBY_SCENE}') + release('${e?.bundle}')`);
   }
+}
+
+/**
+ * 大厅按钮上写什么。game 类顺带把**历史最好成绩**写上。
+ *
+ * 这是「子游戏 → 大厅」那条回路唯一看得见的地方：游戏结束时 `GameHost.submit(id, score)`，
+ * 回到大厅（`Lobby.scene` 重新加载 → 重建 UI）按钮上就变了。**大厅不认识任何一个游戏** ——
+ * 它只按 id 读一个数，不知道那分是打砖块还是吃硬币来的。
+ *
+ * `tryResolve` 而不是 `getGameHost()`：大厅在编辑器里被单独播放时地基没起来，这里该显示
+ * 「没有成绩」而不是抛异常炸掉整个列表。
+ */
+function itemText(entry: CatalogEntry): string {
+  const icon = entry.kind === 'game' ? '🎮' : '🧩';
+  if (entry.kind !== 'game') return `${icon} ${entry.title}`;
+  const best = getRootContainer().tryResolve(GAME_HOST)?.best(entry.id) ?? 0;
+  return best > 0 ? `${icon} ${entry.title}  最好 ${best}` : `${icon} ${entry.title}`;
 }
 
 /**
