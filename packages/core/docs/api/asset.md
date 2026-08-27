@@ -427,6 +427,30 @@ Defined in: [packages/core/src/asset/asset-source.ts:44](https://hlgit.5518game.
 
 `void`
 
+##### releaseValue()?
+
+> `optional` **releaseValue**(`asset`): `void`
+
+Defined in: [packages/core/src/asset/asset-source.ts:54](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L54)
+
+按**资源本身**释放（可选实现）。手里有资源时 AssetLoader 优先走这条。
+
+`releaseOne` 靠 `bundle` + `path` 反查资源，**bundle 已被卸载时反查不到 → 静默 no-op**；
+而「scope 在加载途中被关、bundle 随后被卸」这条路上迟到的那份资源正好落在这个窗口里。
+顺带也让 remote 资源（压根没有 bundle）能被精确释放。
+engine 实现 = `assetManager.releaseAsset(asset)`，与 `bundle.release(path)` 同语义
+（官方文档：`Bundle.release`「详细信息请参考 `AssetManager.releaseAsset`」）。
+
+###### Parameters
+
+###### asset
+
+`unknown`
+
+###### Returns
+
+`void`
+
 ## Type Aliases
 
 ### AssetTypeToken
@@ -444,7 +468,7 @@ Defined in: [packages/core/src/asset/asset-source.ts:7](https://hlgit.5518game.c
 
 > `const` **ASSET\_LOADER**: [`Token`](di.md#tokent)\<[`IAssetLoader`](asset.md#iassetloader)\>
 
-Defined in: [packages/core/src/asset/asset-loader.ts:205](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L205)
+Defined in: [packages/core/src/asset/asset-loader.ts:241](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L241)
 
 DI token：项目可 register 自己的 AssetLoader 覆盖默认。
 
@@ -454,7 +478,7 @@ DI token：项目可 register 自己的 AssetLoader 覆盖默认。
 
 > `const` **ASSET\_SOURCE**: [`Token`](di.md#tokent)\<[`IAssetSource`](asset.md#iassetsource)\>
 
-Defined in: [packages/core/src/asset/asset-source.ts:48](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L48)
+Defined in: [packages/core/src/asset/asset-source.ts:58](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L58)
 
 DI token：engine 注册 cc 适配，createAssetLoader() 自动拾取。
 
@@ -490,7 +514,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:60](https://hlgit.5518game.
 
 > **createMemoryAssetSource**(`preset`?): [`IAssetSource`](asset.md#iassetsource)
 
-Defined in: [packages/core/src/asset/asset-source.ts:54](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L54)
+Defined in: [packages/core/src/asset/asset-source.ts:64](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L64)
 
 内存 fake（默认 / 测试）：按 path 返回预置资源，缺省合成一个稳定 stub（`{ __asset: path }`）。
 releaseOne 无副作用（真释放交给引擎）。不含真 cc。
@@ -513,7 +537,7 @@ releaseOne 无副作用（真释放交给引擎）。不含真 cc。
 
 > **getAssetLoader**(): [`IAssetLoader`](asset.md#iassetloader)
 
-Defined in: [packages/core/src/asset/asset-loader.ts:210](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L210)
+Defined in: [packages/core/src/asset/asset-loader.ts:246](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L246)
 
 便捷取用：优先 tryResolve(ASSET_LOADER)；未注册则进程级默认（ASSET_SOURCE/内存背书）。
 

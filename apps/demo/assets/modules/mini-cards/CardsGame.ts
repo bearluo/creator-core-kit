@@ -57,7 +57,7 @@ const ART: readonly string[] = Array.from(
 @ccclass('CardsGame')
 export class CardsGame extends Component {
   private vm?: CardsVM;
-  private frames?: Record<string, SpriteFrame>;
+  private frames!: Record<string, SpriteFrame>;
   private binds?: BindingScope;
 
   private pile?: Node;
@@ -68,8 +68,9 @@ export class CardsGame extends Component {
   async start(): Promise<void> {
     const metrics = fieldByWidth(FIELD_WIDTH);
 
-    this.frames = await loadGameArt(BUNDLE, ART);
-    if (!this.node.isValid) return;
+    const frames = await loadGameArt(this.node, BUNDLE, ART);
+    if (!frames) return; // 加载期间被切走了
+    this.frames = frames;
 
     this.vm = new CardsVM();
     this.buildTable(metrics.scale);
@@ -92,7 +93,7 @@ export class CardsGame extends Component {
     this.pile = gameNode(table, 'Pile');
     this.pile.setPosition(PILE_POS.x, PILE_POS.y, 0);
 
-    const deck = gameSprite(table, 'Deck', this.frames!['card-back'], [0.5, 0.5], CARD_SIZE.width, CARD_SIZE.height);
+    const deck = gameSprite(table, 'Deck', this.frames['card-back'], [0.5, 0.5], CARD_SIZE.width, CARD_SIZE.height);
     deck.setPosition(DECK_POS.x, DECK_POS.y, 0);
     deck.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
       e.propagationStopped = true;
@@ -105,7 +106,7 @@ export class CardsGame extends Component {
   }
 
   private dieNode(parent: Node, name: string, pos: { readonly x: number; readonly y: number }): Node {
-    const node = gameSprite(parent, name, this.frames!['die-red0'], [0.5, 0.5], DIE_SIZE.width, DIE_SIZE.height);
+    const node = gameSprite(parent, name, this.frames['die-red0'], [0.5, 0.5], DIE_SIZE.width, DIE_SIZE.height);
     node.setPosition(pos.x, pos.y, 0);
     node.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
       e.propagationStopped = true;
@@ -145,7 +146,7 @@ export class CardsGame extends Component {
     const vm = this.vm!;
     for (let i = this.cardNodes.length; i < vm.dealt.length; i++) {
       // 牌都堆在同一处（原版就是 `cardBack.X + 200` 这一个点），靠各自的歪斜看出是一摞。
-      const node = gameSprite(this.pile!, `Card${i}`, this.frames!['card-back'], [0.5, 0.5], CARD_SIZE.width, CARD_SIZE.height);
+      const node = gameSprite(this.pile!, `Card${i}`, this.frames['card-back'], [0.5, 0.5], CARD_SIZE.width, CARD_SIZE.height);
       this.cardNodes.push(node);
     }
     for (let i = 0; i < this.cardNodes.length; i++) {
@@ -154,9 +155,9 @@ export class CardsGame extends Component {
       if (i >= vm.dealt.length) continue;
       const card = vm.dealt[i];
       node.angle = card.tilt;
-      node.getComponent(Sprite)!.spriteFrame = this.frames![`card${String(card.face).padStart(2, '0')}`];
+      node.getComponent(Sprite)!.spriteFrame = this.frames[`card${String(card.face).padStart(2, '0')}`];
     }
-    this.dieRed!.getComponent(Sprite)!.spriteFrame = this.frames![`die-red${vm.dice[0].value}`];
-    this.dieWhite!.getComponent(Sprite)!.spriteFrame = this.frames![`die-white${vm.dice[1].value}`];
+    this.dieRed!.getComponent(Sprite)!.spriteFrame = this.frames[`die-red${vm.dice[0].value}`];
+    this.dieWhite!.getComponent(Sprite)!.spriteFrame = this.frames[`die-white${vm.dice[1].value}`];
   }
 }

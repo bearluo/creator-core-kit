@@ -125,6 +125,7 @@ new BrickVM({ scoreboard: scoreboardFor('mini-brick') })   new BrickVM({ scorebo
 1. 新建 `assets/modules/<id>/`（目录 meta 置 `isBundle: true, priority: 1`），里头放 `<X>VM.ts`（零 `cc` 的玩法）、`<X>Game.ts`（薄壳 View）、`<X>.scene`、`art/`；
 2. `foundation/catalog.ts` 的 `MODULE_CATALOG` 加一行 `{ id, title, bundle, kind: 'game', scene }`；
 3. View 里三句话接上契约：`scoreboardFor(BUNDLE)` 喂给 VM、`exitButton(this.node)` 放返回键、`releaseGameArt(BUNDLE)` 在 `onDestroy` 里还引用；
+   贴图走 `const frames = await loadGameArt(this.node, BUNDLE, ART); if (!frames) return;` —— 第一个参数是**宿主节点**，加载期间被切走就返回 `undefined`（类型带 `| undefined`，忘了判 `pnpm typecheck` 当场红）；
 4. `test/modules/<id>/<X>VM.test.ts` 写玩法判据（`pnpm check:vm-tests` 强制）。
 
 **大厅代码零改**，依赖表（`foundation/bundles.ts`）按 catalog 现推也零改。

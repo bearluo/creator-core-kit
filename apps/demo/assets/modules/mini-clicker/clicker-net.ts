@@ -1,6 +1,6 @@
 import { getRootContainer, NETWORK, PB_SCHEMA } from '@cck/core';
 import { pbSegment } from '../../foundation/net/schema';
-import { CMD, game, kit } from './clicker-proto';
+import { CMD, game } from './clicker-proto';
 
 /**
  * 本模块的协议接线 —— **协议段随 bundle 走的那一半**。
@@ -48,7 +48,9 @@ export async function clickerPing(count: number): Promise<void> {
     console.log(`${TAG} 模块段往返 OK ← ${res.type} ${JSON.stringify(res.body)}`);
   } catch (e) {
     // 服务端若改成回 Error（cmd 13，基础段）会走这里——同样说明链路是通的。
-    const code = (e as { body?: { code?: kit.v1.ErrorCode } })?.body?.code;
+    // 错误码写成 number 而不是 kit.v1.ErrorCode：clicker-proto.ts 是 protobufjs 生成的
+    // JS（顶上 @ts-nocheck），`kit` 是个普通对象、不是 TS 命名空间，当类型用编译不过。
+    const code = (e as { body?: { code?: number } })?.body?.code;
     console.warn(`${TAG} ClickRequest 未拿到响应（code=${code ?? '?'}）：${String(e)}`);
   }
 }

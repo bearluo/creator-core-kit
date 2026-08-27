@@ -101,7 +101,8 @@ new BrickVM({ scoreboard: memoryScoreboard(50) })          // 单测里
 **大厅代码零改**；bundle 依赖表（`foundation/bundles.ts`）按 catalog 现推，也零改。
 
 建场的十几行公共代码在 `foundation/game/stage.ts`：`gameNode`（**必须置 `UI_2D` 层**，不置就黑屏且无日志）/
-`gameSprite` / `gameLabel` / `loadGameArt`（按 `group=bundle` 统一登记）/ `releaseGameArt` / `exitButton` /
+`gameSprite` / `gameLabel` / `loadGameArt`（按 `group=bundle` 统一登记；**第一个参数是宿主节点**，加载期间被切走返回 `undefined`，
+忘了判类型就红 —— 顺带把「取消」和「失败」分开：宿主已死不抛，宿主还活着的失败照抛）/ `releaseGameArt` / `exitButton` /
 `fieldByHeight`、`fieldByWidth`（场地按高还是按宽定尺 —— 砖墙那种横向摆死的必须按宽，否则竖屏放不下）。
 它**不含任何美术资产**：地基「只有逻辑、没有脸」说的是资产不许住这层，代码工具不在此列。
 

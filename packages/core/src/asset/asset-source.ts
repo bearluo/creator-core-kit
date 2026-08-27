@@ -42,6 +42,16 @@ export interface IAssetSource {
   loadDir<T = unknown>(dir: string, opts?: AssetSourceOptions): Promise<DirAssetItem<T>[]>;
   loadRemote<T = unknown>(url: string, opts?: { type?: AssetTypeToken }): Promise<T>;
   releaseOne(path: string, opts?: { bundle?: string; type?: AssetTypeToken }): void;
+  /**
+   * 按**资源本身**释放（可选实现）。手里有资源时 AssetLoader 优先走这条。
+   *
+   * `releaseOne` 靠 `bundle` + `path` 反查资源，**bundle 已被卸载时反查不到 → 静默 no-op**；
+   * 而「scope 在加载途中被关、bundle 随后被卸」这条路上迟到的那份资源正好落在这个窗口里。
+   * 顺带也让 remote 资源（压根没有 bundle）能被精确释放。
+   * engine 实现 = `assetManager.releaseAsset(asset)`，与 `bundle.release(path)` 同语义
+   * （官方文档：`Bundle.release`「详细信息请参考 `AssetManager.releaseAsset`」）。
+   */
+  releaseValue?(asset: unknown): void;
 }
 
 /** DI token：engine 注册 cc 适配，createAssetLoader() 自动拾取。 */

@@ -22,7 +22,9 @@
     "check:masks": "node apps/demo/scripts/gen-collision-mask.mjs --check",
     "proto:sync": "node scripts/sync-proto.mjs",
     "docs:api": "typedoc",
-    "typecheck": "tsc -b"
+    "typecheck": "pnpm typecheck:pkgs && pnpm typecheck:demo",
+    "typecheck:pkgs": "tsc -b",
+    "typecheck:demo": "tsc -p apps/demo/tsconfig.check.json"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

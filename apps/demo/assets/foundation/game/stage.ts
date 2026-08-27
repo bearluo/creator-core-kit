@@ -106,21 +106,38 @@ export function exitButton(parent: Node, opts: ExitButtonOptions = {}): Label {
  * 场景销毁时一句 {@link releaseGameArt} 全还掉，不必逐张记账。
  *
  * 路径约定 `art/<name>/spriteFrame` —— 每个游戏模块的贴图都放自己 bundle 的 `art/` 下。
+ *
+ * **`owner` 死了就返回 `undefined`**（返回类型带 `| undefined`，忘了判 `typecheck` 当场红）。
+ * 加载要几百毫秒到几秒，这期间玩家可能已经退出/断线回大厅/热更重启把场景切走了：
+ * - 资源的账不用这里管 —— `onDestroy` 的 {@link releaseGameArt} 已经把整组拆掉，
+ *   迟到的那份由 AssetLoader 自己还给引擎（见 core `asset-manager.md` 的「迟到分支」）；
+ * - 这里挡的是**在尸体上继续建节点**，以及**把「取消」当成「失败」抛出去**——
+ *   bundle 已经被卸掉时那几个 `load` 会 reject，而 `async start()` 没人 catch，
+ *   控制台就会多一条查起来很误导的 Uncaught (in promise)。
+ * - `owner` 还活着时的失败是**真失败**，照抛不误 —— 那是该看见的错。
  */
 export async function loadGameArt<T extends string>(
+  owner: Node,
   bundle: string,
   names: readonly T[],
-): Promise<Record<T, SpriteFrame>> {
+): Promise<Record<T, SpriteFrame> | undefined> {
   const assets = getAssetLoader();
-  const loaded = await Promise.all(
-    names.map((name) =>
-      assets.load<SpriteFrame>(`art/${name}/spriteFrame`, {
-        bundle,
-        type: 'spriteFrame',
-        group: bundle,
-      }),
-    ),
-  );
+  let loaded: SpriteFrame[];
+  try {
+    loaded = await Promise.all(
+      names.map((name) =>
+        assets.load<SpriteFrame>(`art/${name}/spriteFrame`, {
+          bundle,
+          type: 'spriteFrame',
+          group: bundle,
+        }),
+      ),
+    );
+  } catch (e) {
+    if (owner.isValid) throw e; // 真失败
+    return undefined; // 已经没人要了 —— 这是取消，不是错误
+  }
+  if (!owner.isValid) return undefined;
   const table = {} as Record<T, SpriteFrame>;
   names.forEach((name, i) => (table[name] = loaded[i]));
   return table;

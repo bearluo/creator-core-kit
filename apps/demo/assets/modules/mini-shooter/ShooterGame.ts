@@ -47,7 +47,7 @@ const FIELD_WIDTH = 800;
 @ccclass('ShooterGame')
 export class ShooterGame extends Component {
   private vm?: ShooterVM;
-  private frames?: Record<ArtName, SpriteFrame>;
+  private frames!: Record<ArtName, SpriteFrame>;
   private binds?: BindingScope;
 
   private player?: Node;
@@ -62,8 +62,9 @@ export class ShooterGame extends Component {
     const metrics = fieldByWidth(FIELD_WIDTH);
     this.scale = metrics.scale;
 
-    this.frames = await loadGameArt(BUNDLE, ART);
-    if (!this.node.isValid) return;
+    const frames = await loadGameArt(this.node, BUNDLE, ART);
+    if (!frames) return; // 加载期间被切走了
+    this.frames = frames;
 
     this.vm = new ShooterVM({
       halfWidth: metrics.halfWidth,
@@ -93,7 +94,7 @@ export class ShooterGame extends Component {
       const enemy = vm.enemies[i];
       node.setPosition(enemy.x, enemy.y, 0);
       // 种类是出生时定的，但节点是复用的 —— 每帧对一次图，才不会「打掉一颗、后面那颗换了张脸」。
-      node.getComponent(Sprite)!.spriteFrame = this.frames![ENEMY_ART[enemy.kind]];
+      node.getComponent(Sprite)!.spriteFrame = this.frames[ENEMY_ART[enemy.kind]];
     });
   }
 
@@ -112,7 +113,7 @@ export class ShooterGame extends Component {
     this.tileBackground(field, vm.halfWidth, vm.halfHeight);
     this.enemyLayer = gameNode(field, 'Enemies');
     this.laserLayer = gameNode(field, 'Lasers');
-    this.player = gameSprite(field, 'Player', this.frames!.player, [0.5, 0.5], PLAYER_SIZE.width, PLAYER_SIZE.height);
+    this.player = gameSprite(field, 'Player', this.frames.player, [0.5, 0.5], PLAYER_SIZE.width, PLAYER_SIZE.height);
   }
 
   /** 星空是 256×256 的小图，铺满整场（不用 `Sprite.Type.TILED`，理由同 mini-brick）。 */
@@ -122,18 +123,18 @@ export class ShooterGame extends Component {
     const rows = Math.ceil((halfHeight * 2) / BG_TILE);
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        const tile = gameSprite(layer, `Tile${r}_${c}`, this.frames!.space, [0, 0], BG_TILE, BG_TILE);
+        const tile = gameSprite(layer, `Tile${r}_${c}`, this.frames.space, [0, 0], BG_TILE, BG_TILE);
         tile.setPosition(-halfWidth + c * BG_TILE, -halfHeight + r * BG_TILE, 0);
       }
     }
   }
 
   private laserNode(i: number): Node {
-    return gameSprite(this.laserLayer!, `Laser${i}`, this.frames!.laser, [0.5, 0.5], LASER_SIZE.width, LASER_SIZE.height);
+    return gameSprite(this.laserLayer!, `Laser${i}`, this.frames.laser, [0.5, 0.5], LASER_SIZE.width, LASER_SIZE.height);
   }
 
   private enemyNode(i: number): Node {
-    return gameSprite(this.enemyLayer!, `Enemy${i}`, this.frames!.enemy0, [0.5, 0.5], ENEMY_SIZE.width, ENEMY_SIZE.height);
+    return gameSprite(this.enemyLayer!, `Enemy${i}`, this.frames.enemy0, [0.5, 0.5], ENEMY_SIZE.width, ENEMY_SIZE.height);
   }
 
   private buildHud(halfScreenHeight: number): void {

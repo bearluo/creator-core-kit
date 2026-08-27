@@ -10,7 +10,7 @@
 
 ### BundleGraph
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:39
+Defined in: [packages/core/src/bundle/bundle-graph.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L39)
 
 #### Methods
 
@@ -18,7 +18,7 @@ Defined in: packages/core/src/bundle/bundle-graph.ts:39
 
 > **has**(`name`): `boolean`
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:41
+Defined in: [packages/core/src/bundle/bundle-graph.ts:41](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L41)
 
 这个包登记过没有。没登记 = 表外的包，`BundleManager` 按 strict 决定抛还是告警。
 
@@ -36,7 +36,7 @@ Defined in: packages/core/src/bundle/bundle-graph.ts:41
 
 > **layersFor**(`name`): readonly readonly `string`[][]
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:50
+Defined in: [packages/core/src/bundle/bundle-graph.ts:50](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L50)
 
 装 `name` 要按顺序装的层，**最后一层就是 `name` 自己**，层内彼此无依赖、可并行。
 依赖成环（含自依赖）时抛 —— 表是人写的，环写得出来。
@@ -55,7 +55,7 @@ readonly readonly `string`[][]
 
 > **mayUse**(`user`, `target`): `boolean`
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:52
+Defined in: [packages/core/src/bundle/bundle-graph.ts:52](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L52)
 
 `user` 能不能碰 `target` 的资源：自己、常驻豁免包、或在依赖闭包里。
 
@@ -77,7 +77,7 @@ Defined in: packages/core/src/bundle/bundle-graph.ts:52
 
 > **names**(): readonly `string`[]
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:43
+Defined in: [packages/core/src/bundle/bundle-graph.ts:43](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L43)
 
 登记过的包名（升序）。
 
@@ -89,7 +89,7 @@ readonly `string`[]
 
 > **needsOf**(`name`): readonly `string`[]
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:45
+Defined in: [packages/core/src/bundle/bundle-graph.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L45)
 
 直接依赖（resolver 已按当前状态求值，去重）。未登记的包返回空表。
 
@@ -107,7 +107,7 @@ readonly `string`[]
 
 ### BundleGraphOptions
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:55
+Defined in: [packages/core/src/bundle/bundle-graph.ts:55](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L55)
 
 #### Properties
 
@@ -115,7 +115,7 @@ Defined in: packages/core/src/bundle/bundle-graph.ts:55
 
 > `optional` **alwaysAllowed**: readonly `string`[]
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:60
+Defined in: [packages/core/src/bundle/bundle-graph.ts:60](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L60)
 
 谁都能碰、不用声明的常驻包。默认是 AOT 那几个（Creator 内置包）——
 它们跟应用同寿命，且共享资源本来就只许经 `resources` 这一个仓。
@@ -124,7 +124,7 @@ Defined in: packages/core/src/bundle/bundle-graph.ts:60
 
 > `optional` **logger**: [`ILogger`](logging.md#ilogger)
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:61
+Defined in: [packages/core/src/bundle/bundle-graph.ts:61](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L61)
 
 ***
 
@@ -569,7 +569,7 @@ Defined in: [packages/core/src/bundle/bundle-scope.ts:46](https://hlgit.5518game
 
 ### BundleSpec
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:33
+Defined in: [packages/core/src/bundle/bundle-graph.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L33)
 
 表里的一行。
 
@@ -579,13 +579,13 @@ Defined in: packages/core/src/bundle/bundle-graph.ts:33
 
 > `readonly` **name**: `string`
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:34
+Defined in: [packages/core/src/bundle/bundle-graph.ts:34](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L34)
 
 ##### needs?
 
 > `readonly` `optional` **needs**: readonly [`BundleRef`](bundle.md#bundleref)[]
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:36
+Defined in: [packages/core/src/bundle/bundle-graph.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L36)
 
 装它之前必须先装好的包，**也是它能碰的资源边界**。
 
@@ -723,7 +723,7 @@ Defined in: [packages/core/src/bundle/bundle-manager.ts:18](https://hlgit.5518ga
 
 > **BundleRef**: `string` \| () => `string`
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:30
+Defined in: [packages/core/src/bundle/bundle-graph.ts:30](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L30)
 
 依赖项：包名，或运行时才定的解析函数（皮包名依赖当前马甲，启动后才有值）。
 
@@ -763,7 +763,7 @@ DI token：engine 注册 cc.assetManager 适配，createBundleManager() 自动�
 
 > `const` **DEFAULT\_ALWAYS\_ALLOWED**: readonly `string`[]
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:65
+Defined in: [packages/core/src/bundle/bundle-graph.ts:65](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L65)
 
 默认豁免：Creator 的四个内置包，全都在 AOT 层、常驻。
 
@@ -773,7 +773,7 @@ Defined in: packages/core/src/bundle/bundle-graph.ts:65
 
 > **createBundleGraph**(`specs`, `opts`?): [`BundleGraph`](bundle.md#bundlegraph)
 
-Defined in: packages/core/src/bundle/bundle-graph.ts:73
+Defined in: [packages/core/src/bundle/bundle-graph.ts:73](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/bundle/bundle-graph.ts#L73)
 
 从声明表造图。表里重名以**后一条**为准（便于接入方覆盖）。
 

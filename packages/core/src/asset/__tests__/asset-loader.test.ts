@@ -29,8 +29,12 @@ function fakeLogger(): { logger: ILogger; warns: unknown[][] } {
 
 const val = (path: string): { id: string } => ({ id: path });
 
-/** 可控 spy IAssetSource：记录调用；auto=false 时 loadOne 挂起，由 flush/failAll 结算。 */
-function makeSource() {
+/**
+ * 可控 spy IAssetSource：记录调用；auto=false 时 loadOne 挂起，由 flush/failAll 结算。
+ * `byValue` 打开可选的 `releaseValue`（engine 那侧就实现了它）。
+ */
+function makeSource(opts?: { byValue?: boolean }) {
+  const releaseValueCalls: unknown[] = [];
   const loadOneCalls: string[] = [];
   const loadDirCalls: string[] = [];
   const loadRemoteCalls: string[] = [];
@@ -60,12 +64,14 @@ function makeSource() {
       releaseOneCalls.push({ path, bundle: opts?.bundle, type: opts?.type });
     },
   };
+  if (opts?.byValue) source.releaseValue = (a: unknown): void => void releaseValueCalls.push(a);
   return {
     source,
     loadOneCalls,
     loadDirCalls,
     loadRemoteCalls,
     releaseOneCalls,
+    releaseValueCalls,
     setAuto: (v: boolean) => {
       auto = v;
     },
@@ -217,6 +223,94 @@ describe('AssetLoader', () => {
     al.releaseGroup('none');
     expect(warns.length).toBe(1);
     expect(s.releaseOneCalls).toEqual([]);
+  });
+
+  it('11b. 加载途中 releaseGroup：拆得到 inflight 条目、迟到那份当场还掉、表里不留脏缓存', async () => {
+    const s = makeSource();
+    s.setAuto(false);
+    const { logger, warns } = fakeLogger();
+    const al = createAssetLoader({ source: s.source, logger });
+    const p = al.load('a', { group: 'game' });
+
+    al.releaseGroup('game'); // 场景在贴图落地之前就被切走了
+    expect(warns).toEqual([]); // 组在 await 之前就建好了 —— 不再扑空
+    expect(s.releaseOneCalls).toEqual([]); // 资源还没到手，先不喊引擎
+
+    s.flush();
+    await p;
+    expect(s.releaseOneCalls.map((c) => c.path)).toEqual(['a']); // 迟到的这份当场还掉
+    expect(al.get('a')).toBeUndefined(); // 表里没有复活的脏条目
+    al.releaseGroup('game');
+    expect(warns.length).toBe(1); // 组也没被重新建起来
+  });
+
+  it('11c. 途中被拆之后再 load 同键 → 真重新加载，不会命中已还掉的旧值', async () => {
+    const s = makeSource();
+    s.setAuto(false);
+    const al = createAssetLoader({ source: s.source });
+    const first = al.load('a', { group: 'game' });
+    al.releaseGroup('game');
+    s.flush();
+    await first;
+
+    s.setAuto(true);
+    expect(await al.load('a', { group: 'game' })).toEqual({ id: 'a' });
+    expect(s.loadOneCalls).toEqual(['a', 'a']); // 第二次是真加载，不是拿旧句柄
+    expect(al.get('a')).toEqual({ id: 'a' });
+  });
+
+  it('11d. 共享 inflight 的等待方：途中整组被拆 → 自己重来一次真加载', async () => {
+    const s = makeSource();
+    s.setAuto(false);
+    const al = createAssetLoader({ source: s.source });
+    const owner = al.load('a', { group: 'game' });
+    const other = al.load('a'); // 共享同一个 inflight
+    expect(s.loadOneCalls).toEqual(['a']);
+
+    al.releaseGroup('game');
+    s.flush();
+    await owner;
+    await Promise.resolve(); // 让 other 的续跑先落地
+    expect(s.loadOneCalls).toEqual(['a', 'a']);
+
+    s.flush();
+    expect(await other).toEqual({ id: 'a' });
+    expect(al.get('a')).toEqual({ id: 'a' });
+  });
+
+  it('11e. source 实现了 releaseValue → 手里有资源就按值还，不再按 path 反查', async () => {
+    const s = makeSource({ byValue: true });
+    const al = createAssetLoader({ source: s.source });
+    await al.load('a', { bundle: 'game', group: 'game' });
+    al.releaseGroup('game');
+    expect(s.releaseValueCalls).toEqual([{ id: 'a' }]);
+    expect(s.releaseOneCalls).toEqual([]);
+  });
+
+  it('11f. 迟到那份也按值还 —— 此刻 bundle 多半已经卸了，按 path 反查是 no-op', async () => {
+    const s = makeSource({ byValue: true });
+    s.setAuto(false);
+    const al = createAssetLoader({ source: s.source });
+    const p = al.load('a', { bundle: 'game', group: 'game' });
+    al.releaseGroup('game');
+    s.flush();
+    await p;
+    expect(s.releaseValueCalls).toEqual([{ id: 'a' }]);
+    expect(s.releaseOneCalls).toEqual([]);
+  });
+
+  it('11g. 加载中就 release：手里还没有值 → 退回按 path 还；迟到那份再按值还', async () => {
+    const s = makeSource({ byValue: true });
+    s.setAuto(false);
+    const al = createAssetLoader({ source: s.source });
+    const p = al.load('a', { bundle: 'game' });
+    al.release('a', { bundle: 'game' }); // 计数归零 → 条目出表，但值还没到手
+    expect(s.releaseOneCalls.map((c) => c.path)).toEqual(['a']);
+    expect(s.releaseValueCalls).toEqual([]);
+
+    s.flush();
+    await p;
+    expect(s.releaseValueCalls).toEqual([{ id: 'a' }]);
   });
 
   it('12. 不同 bundle/type 同 path → 不同键、独立加载与释放', async () => {

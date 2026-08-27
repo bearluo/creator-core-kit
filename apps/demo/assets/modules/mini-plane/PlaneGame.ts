@@ -73,7 +73,7 @@ const TAP_SIZE = 59;
 @ccclass('PlaneGame')
 export class PlaneGame extends Component {
   private vm?: PlaneVM;
-  private frames?: Record<ArtName, SpriteFrame>;
+  private frames!: Record<ArtName, SpriteFrame>;
   private binds?: BindingScope;
 
   private plane?: Node;
@@ -90,8 +90,9 @@ export class PlaneGame extends Component {
   async start(): Promise<void> {
     const metrics = fieldByHeight(FIELD_HEIGHT);
 
-    this.frames = await loadGameArt(BUNDLE, ART);
-    if (!this.node.isValid) return; // 加载期间被切走了
+    const frames = await loadGameArt(this.node, BUNDLE, ART);
+    if (!frames) return; // 加载期间被切走了
+    this.frames = frames;
 
     this.vm = new PlaneVM({
       halfWidth: metrics.halfWidth,
@@ -199,7 +200,7 @@ export class PlaneGame extends Component {
     if (this.propellerTimer >= PROPELLER_FRAME_TIME) {
       this.propellerTimer = 0;
       this.propellerFrame = (this.propellerFrame + 1) % PROPELLER.length;
-      plane.getComponent(Sprite)!.spriteFrame = this.frames![PROPELLER[this.propellerFrame]];
+      plane.getComponent(Sprite)!.spriteFrame = this.frames[PROPELLER[this.propellerFrame]];
     }
     this.tapHint!.active = vm.phase.value === 'ready';
   }
@@ -226,7 +227,7 @@ export class PlaneGame extends Component {
     width: number,
     height: number,
   ): Node {
-    return gameSprite(parent, name, this.frames![art], anchor, width, height);
+    return gameSprite(parent, name, this.frames[art], anchor, width, height);
   }
 }
 

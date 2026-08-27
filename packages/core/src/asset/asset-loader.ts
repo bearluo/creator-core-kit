@@ -73,8 +73,8 @@ export function createAssetLoader(opts?: { source?: IAssetSource; logger?: ILogg
     s.add(e.key);
   }
 
-  /** 真释放一个条目：从所有 group 摘除、删表、调 source.releaseOne。 */
-  function finalize(e: Entry): void {
+  /** 只销账：从所有 group 摘除、删表，**不碰引擎**（资源还没到手时用）。 */
+  function detach(e: Entry): void {
     for (const g of e.groups) {
       const s = groups.get(g);
       if (s) {
@@ -83,10 +83,31 @@ export function createAssetLoader(opts?: { source?: IAssetSource; logger?: ILogg
       }
     }
     table.delete(e.key);
-    source.releaseOne(e.path, { bundle: e.bundle, type: e.type });
   }
 
-  /** 统一加载：命中缓存/inflight 去重；新建则 loader() 真加载。countRef=false 为弱缓存（preload）。 */
+  /**
+   * 还给引擎。**手里有资源本身就按值还**（`source.releaseValue`）——`releaseOne` 靠 bundle+path
+   * 反查，bundle 已被卸载时反查不到、静默 no-op，而「scope 关了、bundle 也卸了」正是最需要还的时候。
+   * source 没实现按值释放（或压根没拿到值）时退回按 path。
+   */
+  function releaseToEngine(path: string, bundle: string, type: AssetTypeToken, value: unknown): void {
+    if (value !== undefined && source.releaseValue) source.releaseValue(value);
+    else source.releaseOne(path, { bundle, type });
+  }
+
+  /** 真释放一个条目：销账 + 还给引擎。 */
+  function finalize(e: Entry): void {
+    detach(e);
+    releaseToEngine(e.path, e.bundle, e.type, e.value);
+  }
+
+  /**
+   * 统一加载：命中缓存/inflight 去重；新建则 loader() 真加载。countRef=false 为弱缓存（preload）。
+   *
+   * **并组在 await 之前**：加载中的条目也得归 scope 管。否则这段窗口里资源不属于任何组，
+   * scope 关闭时 releaseGroup 扑空（组还没建），等 load 落地又把组重新建起来 —— 从此没人还，
+   * 而 bundle 那边早被 releaseAll 拆干净了，下次同键 load 会命中这条脏缓存拿到已销毁的资源。
+   */
   async function acquire(
     key: string,
     path: string,
@@ -98,26 +119,37 @@ export function createAssetLoader(opts?: { source?: IAssetSource; logger?: ILogg
   ): Promise<unknown> {
     const existing = table.get(key);
     if (existing) {
-      if (existing.inflight) await existing.inflight; // 失败则抛，本次不计账
+      if (existing.inflight) {
+        await existing.inflight; // 失败则抛，本次不计账
+        // 等的这份在途中被整组拆了 → 别把已还掉的值发出去，重来一次真加载。
+        if (table.get(key) !== existing) return acquire(key, path, bundle, type, group, countRef, loader);
+      }
       if (countRef) existing.refCount++;
       if (group) addToGroup(existing, group);
       return existing.value;
     }
     const e: Entry = { key, path, bundle, type, refCount: 0, value: undefined, groups: new Set() };
     table.set(key, e);
+    if (group) addToGroup(e, group); // ← 在 await 之前，见函数注释
     const p = loader();
     e.inflight = p;
     let val: unknown;
     try {
       val = await p;
     } catch (err) {
-      table.delete(key); // 回滚新建条目
+      if (table.get(key) === e) detach(e); // 回滚新建条目（含摘组）；已被拆则无事可做
       throw err;
+    }
+    // 加载途中整组被拆了：这份是迟到的，当场还给引擎，不重新入表复活。
+    // ponytail: 多方共享同一 inflight 时，建条目那一方拿到的是这个已还掉的值 —— 眼下 group
+    // 是「一个 scope 一个组」的单一 owner 语义，真出现多方共享再按 owner 分别记账不迟。
+    if (table.get(key) !== e) {
+      releaseToEngine(path, bundle, type, val); // 按值还 —— 此刻 bundle 多半已经被卸掉了
+      return val;
     }
     e.inflight = undefined;
     e.value = val;
     if (countRef) e.refCount++;
-    if (group) addToGroup(e, group);
     return val;
   }
 
@@ -186,8 +218,12 @@ export function createAssetLoader(opts?: { source?: IAssetSource; logger?: ILogg
         return;
       }
       for (const key of Array.from(s)) {
-        const e = table.get(key);
-        if (e) finalize(e); // scope 强制拆除，忽略 refCount
+        // 组里有键 ⇒ 表里必有条目：入组只经 addToGroup（那时条目已在表里），
+        // 出表只经 detach（它把键从所属的每个组里摘掉）。
+        const e = table.get(key)!;
+        // 加载中的只销账、不喊引擎（那份还没到手）；真释放由 acquire 的「迟到」分支收尾。
+        if (e.inflight) detach(e);
+        else finalize(e); // scope 强制拆除，忽略 refCount
       }
       groups.delete(group);
     },

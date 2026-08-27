@@ -1,0 +1,25 @@
+{
+  // 给 CI / `pnpm typecheck:demo` 用的**可移植**类型视图。
+  //
+  // 工程自己那份 `tsconfig.json` 继承 Creator 生成的 `temp/tsconfig.cocos.json`，而 `temp/` 是
+  // 生成物、不入库，里头还写死了本机绝对路径（`C:\ProgramData\cocos\editors\...`）——CI 上根本不存在，
+  // 所以那份只能给编辑器和 IDE 用，当不了门。这份不碰 `temp/`：cc 类型走 `@cocos/creator-types`
+  // （与 packages/engine 同一套，见 ADR-0005），路径别名指向 kit 源码。
+  //
+  // ⚠️ 只做 `noEmit` 的类型检查，不参与任何构建；Creator 打包不看它。
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "sourceMap": false,
+    // Creator 的 `@ccclass` / `@property` 是老式装饰器。
+    "experimentalDecorators": true,
+    "types": ["@cocos/creator-types/engine"],
+    "paths": {
+      "@cck/core": ["../../packages/core/src/index.ts"],
+      "@cck/engine": ["../../packages/engine/src/index.ts"]
+    }
+  },
+  "include": ["assets/**/*.ts", "test/**/*.ts", "types/**/*.d.ts"]
+}

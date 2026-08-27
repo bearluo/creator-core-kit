@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { settings } from 'cc';
+
+/** `__clear` 是 vitest 那份 cc 替身独有的（真 `settings` 没有）—— 每条用例之间清干净注入值。 */
+const mockSettings = settings as unknown as { __clear(): void };
 import { buildValue } from '../../assets/boot/build-config';
 
 /**
@@ -9,7 +12,7 @@ import { buildValue } from '../../assets/boot/build-config';
  */
 describe('buildValue', () => {
   afterEach(() => {
-    settings.__clear();
+    mockSettings.__clear();
   });
 
   it('没注入 → 用 fallback（这就是编辑器预览走的路）', () => {

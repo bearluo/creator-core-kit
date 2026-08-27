@@ -48,7 +48,7 @@ const FIELD_WIDTH = 800;
 @ccclass('BrickGame')
 export class BrickGame extends Component {
   private vm?: BrickVM;
-  private frames?: Record<ArtName, SpriteFrame>;
+  private frames!: Record<ArtName, SpriteFrame>;
   private binds?: BindingScope;
 
   private ball?: Node;
@@ -62,8 +62,9 @@ export class BrickGame extends Component {
     const metrics = fieldByWidth(FIELD_WIDTH);
     this.scale = metrics.scale;
 
-    this.frames = await loadGameArt(BUNDLE, ART);
-    if (!this.node.isValid) return; // 加载期间被切走了
+    const frames = await loadGameArt(this.node, BUNDLE, ART);
+    if (!frames) return; // 加载期间被切走了
+    this.frames = frames;
 
     this.vm = new BrickVM({
       halfWidth: metrics.halfWidth,
@@ -108,8 +109,8 @@ export class BrickGame extends Component {
     this.tileBackground(field, vm.halfWidth, vm.halfHeight);
     const wall = gameNode(field, 'Wall');
     for (const brick of vm.bricks) this.brickNodes.push(this.brickNode(wall, brick));
-    this.paddle = gameSprite(field, 'Paddle', this.frames!.bat, [0.5, 0.5], PADDLE_SIZE.width, PADDLE_SIZE.height);
-    this.ball = gameSprite(field, 'Ball', this.frames!.ball, [0.5, 0.5], BALL_RADIUS * 2, BALL_RADIUS * 2);
+    this.paddle = gameSprite(field, 'Paddle', this.frames.bat, [0.5, 0.5], PADDLE_SIZE.width, PADDLE_SIZE.height);
+    this.ball = gameSprite(field, 'Ball', this.frames.ball, [0.5, 0.5], BALL_RADIUS * 2, BALL_RADIUS * 2);
   }
 
   /**
@@ -125,7 +126,7 @@ export class BrickGame extends Component {
     const rows = Math.ceil((halfHeight * 2) / BG_TILE);
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        const tile = gameSprite(layer, `Tile${r}_${c}`, this.frames!.bg, [0, 0], BG_TILE, BG_TILE);
+        const tile = gameSprite(layer, `Tile${r}_${c}`, this.frames.bg, [0, 0], BG_TILE, BG_TILE);
         tile.setPosition(-halfWidth + c * BG_TILE, -halfHeight + r * BG_TILE, 0);
       }
     }
@@ -135,7 +136,7 @@ export class BrickGame extends Component {
     const node = gameSprite(
       parent,
       `Brick${brick.x}_${brick.y}`,
-      this.frames![`block-${brick.color}` as ArtName],
+      this.frames[`block-${brick.color}` as ArtName],
       [0.5, 0.5],
       BRICK_SIZE.width,
       BRICK_SIZE.height,

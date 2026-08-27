@@ -1,4 +1,5 @@
 import {
+  Asset,
   assetManager,
   resources,
   Prefab,
@@ -115,11 +116,17 @@ export function createCcAssetSource(): IAssetSource {
 
     releaseOne(path: string, opts?: { bundle?: string; type?: AssetTypeToken }): void {
       const bundle = bundleOrNull(opts?.bundle);
-      // ponytail: remote（无 bundle）/ 未加载 bundle → 无从按 path 释放，no-op。
-      // remote 精确释放需 asset 引用（assetManager.releaseAsset），而接缝只按 key 释放；
-      // 需要时由 core 传 asset 或 engine 维护 url→asset 映射再补。
+      // remote（无 bundle）/ 已卸载的 bundle → 按 path 反查不到，no-op。
+      // core 手里有资源本身时不会走到这里（走下面的 releaseValue）。
       if (!bundle) return;
       bundle.release(path, ctorOf(opts?.type));
+    },
+
+    releaseValue(asset: unknown): void {
+      // 不查 bundle 表 —— `removeBundle` 之后 `getBundle(name)` 就是 null，而这条路上要还的
+      // 恰恰是「bundle 已经卸了、资源才刚落地」的那一份。语义与 `bundle.release(path)` 等价
+      // （官方文档：`Bundle.release`「详细信息请参考 `AssetManager.releaseAsset`」）。
+      if (asset instanceof Asset) assetManager.releaseAsset(asset);
     },
   };
 }

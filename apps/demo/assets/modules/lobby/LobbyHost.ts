@@ -93,6 +93,8 @@ class LobbyNav {
   private flow?: SceneFlow;
   private backSub?: Disposer;
   private pendingGame?: CatalogEntry;
+  /** 正在装包、还没落到 `openPanel`/`pendingGame` 的那一个 —— 见 {@link openModule}。 */
+  private opening?: string;
 
   private lobbyPanel?: Node;
   private openPanel?: { entry: CatalogEntry; ctx: ModuleContext };
@@ -125,6 +127,7 @@ class LobbyNav {
     this.backSub = undefined;
     this.flow = undefined;
     this.pendingGame = undefined;
+    this.opening = undefined;
     this.lobbyPanel = undefined;
     this.openPanel = undefined;
   }
@@ -184,21 +187,33 @@ class LobbyNav {
     return entry.skinned ? currentSkinBundle(entry.id) : undefined;
   }
 
-  /** 打开一个 catalog 模块（panel 挂本场景；game 走 SceneFlow 切自带场景）。 */
+  /**
+   * 打开一个 catalog 模块（panel 挂本场景；game 走 SceneFlow 切自带场景）。
+   *
+   * **占坑要占在 `await` 之前**：`openPanel` / `pendingGame` 都是 `load(bundle)` 回来之后才落的，
+   * 只拿它们当守卫的话，包还在下的那几秒里第二次点击照样进得来 —— 两个模块都装上，
+   * 后一个把前一个的记录覆盖掉，前一个的 `scope` 从此没人 dispose（bundle 引用 + DI 子作用域 +
+   * 界面实例一起漏，界面还赖在屏幕上）。首次从 CDN 下包时这个窗口有好几秒，双击就能踩到。
+   */
   async openModule(entry: CatalogEntry): Promise<void> {
-    if (this.openPanel || this.pendingGame) {
-      console.warn(`${TAG} 已有模块打开，忽略 openModule('${entry.id}')`);
+    if (this.opening || this.openPanel || this.pendingGame) {
+      console.warn(`${TAG} 已有模块打开/正在打开，忽略 openModule('${entry.id}')`);
       return;
     }
-    console.log(`${TAG} openModule('${entry.id}') kind=${entry.kind} → load('${entry.bundle}')`);
-    // 换皮模块的脸在皮包里，但**这里不用管** —— 皮包是它在依赖表里的一条 `needs`，
-    // `load` 会先把它装上并各加一次引用，`release` 时对称减掉。
-    await getBundleManager().load(entry.bundle);
-    if (entry.kind === 'game') {
-      this.pendingGame = entry;
-      this.flow!.push('game'); // → 'game'.onEnter → enterGameScene
-    } else {
-      await this.mountPanel(entry);
+    this.opening = entry.id;
+    try {
+      console.log(`${TAG} openModule('${entry.id}') kind=${entry.kind} → load('${entry.bundle}')`);
+      // 换皮模块的脸在皮包里，但**这里不用管** —— 皮包是它在依赖表里的一条 `needs`，
+      // `load` 会先把它装上并各加一次引用，`release` 时对称减掉。
+      await getBundleManager().load(entry.bundle);
+      if (entry.kind === 'game') {
+        this.pendingGame = entry;
+        this.flow!.push('game'); // → 'game'.onEnter → enterGameScene
+      } else {
+        await this.mountPanel(entry);
+      }
+    } finally {
+      this.opening = undefined;
     }
   }
 

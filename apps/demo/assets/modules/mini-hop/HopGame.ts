@@ -66,7 +66,7 @@ const PAD = { size: 170, bottom: 190, left: -340, right: -150, jump: 330 } as co
 @ccclass('HopGame')
 export class HopGame extends Component {
   private vm?: HopVM;
-  private frames?: Record<ArtName, SpriteFrame>;
+  private frames!: Record<ArtName, SpriteFrame>;
   private binds?: BindingScope;
 
   private world?: Node;
@@ -81,8 +81,9 @@ export class HopGame extends Component {
     const metrics = fieldByHeight(FIELD_HEIGHT);
     this.halfViewWidth = metrics.halfWidth;
 
-    this.frames = await loadGameArt(BUNDLE, ART);
-    if (!this.node.isValid) return;
+    const frames = await loadGameArt(this.node, BUNDLE, ART);
+    if (!frames) return; // 加载期间被切走了
+    this.frames = frames;
 
     this.vm = new HopVM({ scoreboard: scoreboardFor(BUNDLE) });
     this.buildWorld(metrics.scale);
@@ -119,38 +120,38 @@ export class HopGame extends Component {
     // 顺序 = 渲染层次：云 → 装饰 → 砖 → 硬币 → 藤壶 → 人。
     for (const decor of DECORS) {
       if (decor.art !== 'cloud') continue;
-      place(gameSprite(world, 'Cloud', this.frames!.cloud, [0, 0], decor.w, decor.h), decor.x, decor.y);
+      place(gameSprite(world, 'Cloud', this.frames.cloud, [0, 0], decor.w, decor.h), decor.x, decor.y);
     }
     for (const decor of DECORS) {
       if (decor.art === 'cloud') continue;
       place(
-        gameSprite(world, decor.art, this.frames![decor.art as ArtName], [0, 0], decor.w, decor.h),
+        gameSprite(world, decor.art, this.frames[decor.art as ArtName], [0, 0], decor.w, decor.h),
         decor.x,
         decor.y,
       );
     }
     for (const tile of SOLIDS) {
       place(
-        gameSprite(world, tile.art, this.frames![tile.art as ArtName], [0, 0], TILE_SIZE, TILE_SIZE),
+        gameSprite(world, tile.art, this.frames[tile.art as ArtName], [0, 0], TILE_SIZE, TILE_SIZE),
         tile.x,
         tile.y,
       );
     }
     // 终点也插一面旗 —— 不然「跑到最右边」只能靠猜（原版那面旗在出生点，是起点标记）。
-    place(gameSprite(world, 'Goal', this.frames!.flag, [0.5, 0], TILE_SIZE, TILE_SIZE), GOAL.x, GOAL.y);
+    place(gameSprite(world, 'Goal', this.frames.flag, [0.5, 0], TILE_SIZE, TILE_SIZE), GOAL.x, GOAL.y);
     for (const coin of this.vm!.coins) {
       this.coinNodes.push(
-        place(gameSprite(world, 'Coin', this.frames!.coin, [0.5, 0.5], COIN_SIZE, COIN_SIZE), coin.x, coin.y),
+        place(gameSprite(world, 'Coin', this.frames.coin, [0.5, 0.5], COIN_SIZE, COIN_SIZE), coin.x, coin.y),
       );
     }
     for (const hazard of HAZARDS) {
       place(
-        gameSprite(world, 'Barnacle', this.frames!.barnacle, [0.5, 0], hazard.w, hazard.h),
+        gameSprite(world, 'Barnacle', this.frames.barnacle, [0.5, 0], hazard.w, hazard.h),
         hazard.x,
         hazard.y,
       );
     }
-    this.alien = gameSprite(world, 'Alien', this.frames!['alien-idle'], [0.5, 0], ALIEN_ART.width, ALIEN_ART.height);
+    this.alien = gameSprite(world, 'Alien', this.frames['alien-idle'], [0.5, 0], ALIEN_ART.width, ALIEN_ART.height);
   }
 
   /** 三个虚拟键。按住走、点一下跳 —— 都只是把输入转给 VM。 */
@@ -232,7 +233,7 @@ export class HopGame extends Component {
       }
       art = this.walkFrame === 0 ? 'alien-walk0' : 'alien-walk1';
     }
-    alien.getComponent(Sprite)!.spriteFrame = this.frames![art];
+    alien.getComponent(Sprite)!.spriteFrame = this.frames[art];
   }
 }
 

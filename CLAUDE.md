@@ -80,14 +80,15 @@ skins/vest/…           → `skin-vest-*`（示例马甲）      同名同路�
 - **测试**：**vitest**，TDD（先写测试）。`core` 覆盖率是 CI 硬门槛；**`core` 的测试不允许 import `cc`**。`engine` 用 `cc` mock 测薄壳。
 - **模块通信**：走类型安全 EventBus / 接口，不做跨模块直接引用。
 
-### 业务开发三条硬规则（做新功能前必读全文：[`docs/design/testing-strategy-overview.md`](docs/design/testing-strategy-overview.md)）
+### 业务开发四条硬规则（做新功能前必读全文：[`docs/design/testing-strategy-overview.md`](docs/design/testing-strategy-overview.md)）
 
 1. **逻辑一律进 VM**（零 `cc`，可 node 直跑）；**View 只许做四件事**——取组件 / 建绑定 / 转发事件 / 转发生命周期钩子。写到第五件就下沉到 VM。单测覆盖到 VM 为止，View + prefab + 装配由启动 smoke 兜底。
 2. **禁模块级单例**——`export const x = new Foo()` / `static instance` / `getInstance()` 全禁。bundle 卸载不卸脚本、编辑器 stop→play 保留 JS 上下文、单 bundle 出包依赖内联，三条都让它拿到脏的旧实例。要共享就注册进模块 DI scope（`containerScoped`）。唯一豁免是 `getRootContainer()`（ADR-0001 指定机制）。
 3. **测试不进 `assets/`**——Creator 会把 `.test.ts` 当游戏脚本打包并炸构建。放 `apps/<project>/test/`，路径**镜像** `assets/`（`assets/a/B.ts` → `test/a/B.test.ts`）。
+4. **`await` 回来先确认「自己还在」**——组件可能已销毁、scope 可能已关、bundle 可能已卸。回来第一件事是判（`this.node.isValid` / `e.closed` / 条目还在不在表里），再碰任何东西；**占坑要占在 `await` 之前**（守卫读的状态若是 `await` 之后才落的，那道守卫等于不存在）。**取消不是失败**：已经没人要了就安静收摊，别把它抛成错误去污染日志；宿主还活着的失败才该抛。这类 bug 只在**加载慢**的时候现形（首次从 CDN 下包、弱网），本机秒开一辈子测不出来，所以靠规则不靠运气。已修的两处现场（`AssetLoader` 的组籍时机、`LobbyHost.openModule` 的守卫时机）见 [`asset-manager.md`](packages/core/docs/modules/asset-manager.md) 与 `docs/progress.md`。
 
 > 业务侧 lint 规则要写进 `apps/<project>/eslint.config.mjs`（`pnpm lint:demo`）——根 `eslint.config.js` 把 `apps/**` 整个 ignore 了，加在那里**静默失效**。
-> 八道门：`pnpm lint` / `pnpm typecheck` / `pnpm test` / `pnpm check:vm-tests`（每个 `*VM.ts` 必须有镜像路径的测试）/ `pnpm check:pins`（工程引用到的 Creator 内置资源必须都被 `resources` 钉住，见下条铁律）/ `pnpm check:graph`（跨包 `import` 只许指向优先级更高的包，见下条铁律）/ `pnpm check:masks`（美术烘出来的纯数据没跟贴图同步就报错，见下条）/ `pnpm docs:api`（改了 `core` 公开 API 就重新生成并一起提交，CI 会挡不同步）。
+> 八道门：`pnpm lint` / `pnpm typecheck`（= `typecheck:pkgs` 的 `tsc -b` **加上** `typecheck:demo`——工程自己那份 `tsconfig.json` 继承 Creator 生成的 `temp/tsconfig.cocos.json`（不入库、含本机绝对路径），当不了门，所以 `apps/demo/tsconfig.check.json` 另备一份可移植的：cc 类型走 `@cocos/creator-types`）/ `pnpm test` / `pnpm check:vm-tests`（每个 `*VM.ts` 必须有镜像路径的测试）/ `pnpm check:pins`（工程引用到的 Creator 内置资源必须都被 `resources` 钉住，见下条铁律）/ `pnpm check:graph`（跨包 `import` 只许指向优先级更高的包，见下条铁律）/ `pnpm check:masks`（美术烘出来的纯数据没跟贴图同步就报错，见下条）/ `pnpm docs:api`（改了 `core` 公开 API 就重新生成并一起提交，CI 会挡不同步）。
 >
 > **要「形状」的逻辑，把美术在源码期烘成纯数据，别在运行时读贴图。** VM 零 `cc` 就拿不到
 > `Texture2D` / `readPixels`，node 单测里更没有。`mini-plane` 的像素级碰撞是这么落地的：
