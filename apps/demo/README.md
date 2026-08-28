@@ -14,8 +14,9 @@
 | `assets/modules/mini-shooter/Shooter.scene` | 🎮 太空射击：速度按场高推导，换屏幕不改手感 | `modules/mini-shooter/ShooterGame.ts` |
 | `assets/modules/mini-hop/Hop.scene` | 🎮 平台跳跃：**关卡烘成纯数据**，VM 与单测读同一份 | `modules/mini-hop/HopGame.ts` |
 | `assets/modules/mini-cards/Cards.scene` | 🎮 骰子卡牌：没有 `update()`、没有记分板，演示 `GameHost` 的另外两件事 | `modules/mini-cards/CardsGame.ts` |
+| `assets/modules/mini-fish/Fish.scene` | 🎮 捕鱼：**ECS + 四道联网接缝 + 图集 + 横屏**，本工程唯一的经济型玩法 | `modules/mini-fish/FishGame.ts` |
 
-后五款移植自 Kenney 的 Construct 2 模板包（CC0）。每一款都是 **VM（零 `cc`，node 直跑）+ 薄壳 View + 自带 `.scene` + 镜像单测**，接入大厅只经 `foundation/game/` 那一份契约（见下）。
+其中五款移植自 Kenney 的 Construct 2 模板包（CC0）。每一款都是 **VM（零 `cc`，node 直跑）+ 薄壳 View + 自带 `.scene` + 镜像单测**，接入大厅只经 `foundation/game/` 那一份契约（见下）。
 
 **`Boot` / `Lobby` / `Dodge` 都不含相机、不含 Canvas** —— 相机由 kit 的常驻相机组（`cameraRigModule`）在 Boot 阶段建好并跨场景存活。原理与约束见下方设计文档。
 
@@ -130,6 +131,11 @@ new BrickVM({ scoreboard: memoryScoreboard(50) })          // 单测里
 | `assets/modules/mini-shooter/art/*.png` | 同上，`spaceshooter.capx` | CC0 |
 | `assets/modules/mini-hop/art/*.png` + `level.ts` | 同上，`platformer.capx`（关卡由 `scripts/gen-hop-level.mjs` 烘出） | CC0 |
 | `assets/modules/mini-cards/art/*.png` | 同上，`dicecards.capx` | CC0 |
+| `assets/modules/mini-fish/art/textures.{png,plist}` + `seabed.jpg` | GitHub [`fylz1125/CCFish`](https://github.com/fylz1125/CCFish)（Cocos Creator 2.2.2 工程） | ⚠️ **原始版权归属不明** —— 该仓**没有 LICENSE 文件**，README 自述「仿照官方在线游戏」，无任何素材来源说明；图集里的鱼、炮台、UI 大概率源自某款商业捕鱼游戏。**不标 CC0**，仅作本仓 demo 的占位素材，商用前必须换掉 |
+
+上表这一行的标签必须写准，否则其余五款的 CC0 声明也跟着不可信 —— 一张表里混进一条「按 CC0 处理」
+的来路不明素材，整张表就只是装饰。`mini-fish` 用它是因为**这一刀验的是图集流水线本身**
+（2MB 图集怎么打进 bundle、归属会不会漂、卸得干不干净），素材换成别的照样成立。
 
 那套模板包里还有一个 `rpg.capx`，**没有移植**：它的事件表是空的、布局里只有三层瓦片和零个对象 ——
 它是一张静态图，不是游戏，照搬过来只会多一个「打开看一眼就返回」的入口。

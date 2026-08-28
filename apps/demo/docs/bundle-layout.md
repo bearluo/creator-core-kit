@@ -19,7 +19,7 @@ bundle 不能嵌套；真正的皮包是 `skins/<马甲>/<跟随者>/`，**一�
 flowchart TB
   boot["<b>① boot/ — AOT 主包</b><br/>Boot.scene · Bootstrap · app-config 含 VEST · foundation-api<br/><i>改它 = 发新包 + 玩家重装</i>"]
   foundation["<b>② foundation/ — 地基 bundle</b> · priority 6<br/>net · login · catalog<br/><i>改它 = 热更，不重启</i>"]
-  modules["<b>③ modules/* — 功能 bundle</b> · priority 1~3<br/>lobby · shop · mail · mini-clicker · mini-dodge · mini-plane<br/><i>按需 load / release</i>"]
+  modules["<b>③ modules/* — 功能 bundle</b> · priority 1~3<br/>lobby · shop · mail · 八款 mini-*（clicker / dodge / plane / brick / shooter / hop / cards / fish）<br/><i>按需 load / release</i>"]
   shared["<b>shared — 共享资源</b> · priority 5<br/>i18n · 图集 · 音效"]
   skins["<b>skins/&lt;马甲&gt;/&lt;跟随者&gt;/ — 皮包</b> · priority 1~2<br/><i>只有 prefab 与图，没有脚本</i>"]
 
@@ -57,6 +57,11 @@ graph BT
   mini_clicker["mini-clicker · 1"]
   mini_dodge["mini-dodge · 1"]
   mini_plane["mini-plane · 1"]
+  mini_brick["mini-brick · 1"]
+  mini_shooter["mini-shooter · 1"]
+  mini_hop["mini-hop · 1"]
+  mini_cards["mini-cards · 1"]
+  mini_fish["mini-fish · 1"]
   shop["shop · 1"]
   skin_base_lobby["skin-base-lobby · 1"]
   skin_base_mail["skin-base-mail · 1"]
@@ -130,6 +135,8 @@ graph BT
 | `mini-clicker` | `assets/modules/mini-clicker/` | 1 | 打开时 | 关闭时 |
 | `mini-dodge` | `assets/modules/mini-dodge/` | 1 | 打开时（`kind:'game'`，自带场景） | 关闭时 |
 | `mini-plane` | `assets/modules/mini-plane/` | 1 | 打开时（`kind:'game'`，自带场景 + 自带贴图） | 关闭时 |
+| `mini-brick` / `mini-shooter` / `mini-hop` / `mini-cards` | `assets/modules/<id>/` | 1 | 同上 | 关闭时 |
+| `mini-fish` | `assets/modules/mini-fish/` | 1 | 同上（自带 **2MB 图集**：`art/textures.{png,plist}`） | 关闭时 |
 | `skin-<马甲>-foundation` | `assets/skins/<马甲>/foundation/` | 2 | 启动 `shared` 阶段（在 `APP_CONFIG.shared` 里） | 不卸，常驻 |
 | `skin-<马甲>-lobby` | `assets/skins/<马甲>/lobby/` | 1 | 进大厅时 | 不卸 |
 | `skin-<马甲>-mail` | `assets/skins/<马甲>/mail/` | 1 | 打开邮件时，与 `mail` 并行 | 关闭时，与 `mail` 一起 |

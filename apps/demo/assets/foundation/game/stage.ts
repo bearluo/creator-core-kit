@@ -4,6 +4,7 @@ import {
   Layers,
   Node,
   Sprite,
+  SpriteAtlas,
   SpriteFrame,
   UITransform,
   view,
@@ -122,9 +123,8 @@ export async function loadGameArt<T extends string>(
   names: readonly T[],
 ): Promise<Record<T, SpriteFrame> | undefined> {
   const assets = getAssetLoader();
-  let loaded: SpriteFrame[];
-  try {
-    loaded = await Promise.all(
+  const loaded = await guardedLoad(owner, () =>
+    Promise.all(
       names.map((name) =>
         assets.load<SpriteFrame>(`art/${name}/spriteFrame`, {
           bundle,
@@ -132,15 +132,49 @@ export async function loadGameArt<T extends string>(
           group: bundle,
         }),
       ),
-    );
-  } catch (e) {
-    if (owner.isValid) throw e; // 真失败
-    return undefined; // 已经没人要了 —— 这是取消，不是错误
-  }
-  if (!owner.isValid) return undefined;
+    ),
+  );
+  if (!loaded) return undefined;
   const table = {} as Record<T, SpriteFrame>;
   names.forEach((name, i) => (table[name] = loaded[i]));
   return table;
+}
+
+/**
+ * 同 {@link loadGameArt}，但取的是**一张图集**（`art/<name>` → `SpriteAtlas`），取消语义一模一样。
+ *
+ * 一张图集换掉几十上百张散图：一次加载、一个 draw call、一条释放路径。
+ * 帧名就是图集里的原名（`atlas.getSpriteFrame('fish_red_run_0')`）。
+ */
+export async function loadGameAtlas(
+  owner: Node,
+  bundle: string,
+  name: string,
+): Promise<SpriteAtlas | undefined> {
+  return guardedLoad(owner, () =>
+    getAssetLoader().load<SpriteAtlas>(`art/${name}`, {
+      bundle,
+      type: 'spriteAtlas',
+      group: bundle,
+    }),
+  );
+}
+
+/**
+ * {@link loadGameArt} / {@link loadGameAtlas} 共用的那道守卫 —— 三条规矩收在这一处：
+ * 宿主已死时的 reject 是**取消**不是失败（安静收摊，别让没人 catch 的 `async start()` 往
+ * 控制台扔一条很误导的 Uncaught in promise）；宿主还活着时的失败是**真失败**，照抛；
+ * 加载回来宿主才死的，返回 `undefined` 挡住「在尸体上继续建节点」。
+ */
+async function guardedLoad<T>(owner: Node, run: () => Promise<T>): Promise<T | undefined> {
+  let value: T;
+  try {
+    value = await run();
+  } catch (e) {
+    if (owner.isValid) throw e;
+    return undefined;
+  }
+  return owner.isValid ? value : undefined;
 }
 
 /** 还掉 {@link loadGameArt} 那一组的引用。在 `onDestroy` 里调 —— bundle 随后被大厅 release。 */

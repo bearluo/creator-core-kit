@@ -18,7 +18,7 @@ import type {
 } from '../../../assets/modules/mini-fish/economy';
 import type { CatchEvent, FishEvent } from '../../../assets/modules/mini-fish/events';
 import { spawnFish } from '../../../assets/modules/mini-fish/feedSystem';
-import { FISH_KINDS, MAX_FISH_R } from '../../../assets/modules/mini-fish/fish-kinds';
+import { FISH_KINDS, MAX_FISH_R, fishKind } from '../../../assets/modules/mini-fish/fish-kinds';
 import { createNetSystem, netRadius } from '../../../assets/modules/mini-fish/netSystem';
 
 const fish = defineQuery([Fish]);
@@ -121,9 +121,9 @@ describe('netSystem', () => {
 
   it('罩不到的鱼不进裁决（圆判定，不是方框）', () => {
     const { world, tickets, calls, step } = setup();
-    // 网半径 108 + 红鱼半径 34 = 142
-    fishAt(world, RED, 141, 0);
-    fishAt(world, RED, 143, 0);
+    const reach = netRadius(1) + fishKind(RED).r; // 网边 + 鱼身，正好够着
+    fishAt(world, RED, reach - 1, 0);
+    fishAt(world, RED, reach + 1, 0);
     netAt(world, tickets, 0, 0, 1);
     step();
     expect(calls[0].caught).toHaveLength(1);
@@ -132,7 +132,8 @@ describe('netSystem', () => {
   it('炸弹鱼死了再炸一圈：第二次调用裁决，够得着的鱼跟着遭殃', () => {
     const { world, tickets, calls, events, step } = setup(() => true);
     const bomb = fishAt(world, HETUN, 0, 0);
-    const far = fishAt(world, RED, 150, 0); // 网够不着（142），炸圈够得着（294）
+    // 网够不着、炸圈够得着的那一环
+    const far = fishAt(world, RED, netRadius(1) + fishKind(RED).r + 10, 0);
     netAt(world, tickets, 0, 0, 1);
     step();
 
@@ -148,7 +149,7 @@ describe('netSystem', () => {
     const doomed = new Set<number>();
     const { world, tickets, calls, step } = setup((eid) => doomed.has(eid));
     const bomb = fishAt(world, HETUN, 0, 0);
-    const lucky = fishAt(world, RED, 100, 0); // 网够得着(142)，炸圈也够得着(294)
+    const lucky = fishAt(world, RED, netRadius(1) - 10, 0); // 网够得着，炸圈也够得着
     doomed.add(bomb); // 只有炸弹鱼死
     netAt(world, tickets, 0, 0, 1);
     step();

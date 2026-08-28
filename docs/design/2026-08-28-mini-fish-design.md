@@ -328,11 +328,20 @@ export interface FishFeeder {
 （78 例）。八道门全绿。⚠️ 此刻这些脚本还**没有 bundle meta**，Creator 会把它们编进主包 ——
 第二刀建 bundle 时归位。
 
-### 第二刀「能看见」
+### 第二刀「能看见」 ✅ 已完成（2026-08-28）
 
-图集导入（`.plist` → 3.8）→ `FishGame.ts` + `Fish.scene` → `catalog.ts` 加一行 →
-`foundation/bundles.ts` 的 `BUNDLE_GRAPH` 加 `mini-fish` 的 `needs` → 横屏提示 →
-`pnpm check:pins` / `check:graph` → **web 真产物 e2e**。
+图集导入（`.plist` → 3.8）→ `FishGame.ts` + `Fish.scene` → `catalog.ts` 加一行 → 横屏提示 →
+落盘钱包（接缝 ② 的单机实现）→ 八道门 → **web 真产物 e2e**。
+
+三条实测结论：
+
+- **`.plist` 图集 3.8 直接认**：Creator 生成 `importer: "sprite-atlas"` 的 meta + 167 个
+  `sprite-frame` subMeta（帧名**不带 `.png`**，`atlas.getSpriteFrame('fish_red_run_0')`）。
+  本仓只需把 `.png` / `.plist` 丢进 `art/`，meta 由 Creator 首次构建时现生成。
+- **`BUNDLE_GRAPH` 不用改**：模块段按 `MODULE_CATALOG` 现推，而 `@cck/ecs-bitecs` 是 npm 依赖
+  （落 AOT chunk），不是 bundle —— 所以加 `mini-fish` 真的只改 `catalog.ts` 一行。
+- **e2e 走的是「竖屏大厅 → 进游戏看提示 → 转横屏开打」**：横屏大厅列表放不下第 10 个入口
+  （**这是本刀撞出来的既有 UI 问题，不是捕鱼的**，见 §11 开放项 7）。
 
 ### 第三刀「量得准」
 
@@ -347,8 +356,10 @@ export interface FishFeeder {
    路径数据是否要像 `mini-hop` 的 `level.ts` 那样烘成生成物，取决于**源在不在仓里**——
    这里没有外部源，那就当手写文件维护，**不配 `--check` 闸**。
 2. **AI 陪玩的瞄准行为未定**（随机挑一条鱼？挑最大的？）。它只影响观感，不影响任何接缝。
-3. **图集归属会不会漂**——2MB 图集被 `mini-fish` 独用时应归它自己，但这是**第一次**在这个仓里
-   打图集，`deps` / `redirect` 要实测确认（CLAUDE.md 那条「归属会漂，且漂了是静默的」）。
+3. ~~**图集归属会不会漂**~~ —— **已实测：没漂**（2026-08-28）。产物里 `mini-fish` 的
+   `deps` / `redirect` 都是空，2MB 图集整个归自己那个包；`check:pins` / `check:graph` 照过。
+   判据跟 `mini-plane` 那批散图一样：**资源在模块目录下、有自己的 `.meta`，就天然归这个包**
+   —— 钉子治的是没有工程 `.meta` 的 `db://internal`，跟图集是两回事。
 4. **200 条鱼真机跑不动怎么办**——路子已经查清但**先不做**：Cocos 3.8.7 有
    `UIRenderer` + 自定义 `IAssembler`（`createData` / `updateRenderData` / `fillBuffers`），
    可以一个节点画 200 条鱼、1 个 draw call、零 Node 树遍历。
@@ -360,3 +371,7 @@ export interface FishFeeder {
    `submit`（它没有「最高分」）。要不要把 `GameHost` 扩成更通用的形状，是这一款暴露出来的问题，
    **本设计不解决**，留作后续议题。
 6. **破产保底会破坏 RTP**，模拟时必须关掉（§5）。
+7. **横屏大厅放不下 10 个入口** —— `LobbyPanel` 是一列纵向按钮、没有滚动，横屏（1920×1080）下
+   第 10 条掉到屏外。**这是既有 UI 的问题，不是捕鱼的**：第 9 个入口时就已经贴边了。
+   要么给大厅加滚动，要么横屏改多列 —— 本设计不解决，但它是下一个加模块的人一定会撞上的墙。
+8. **AI 档位固定 3 级**（`AI_LEVEL`）。第三刀压量时再说要不要让它们变档。

@@ -9,6 +9,7 @@ export type AssetTypeToken =
   | 'prefab'
   | 'scene'
   | 'spriteFrame'
+  | 'spriteAtlas'
   | 'texture'
   | 'imageAsset'
   | 'audioClip'
