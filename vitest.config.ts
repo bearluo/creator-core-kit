@@ -8,6 +8,10 @@ export default defineConfig({
       cc: fileURLToPath(new URL('./packages/engine/test/mocks/cc.ts', import.meta.url)),
       // engine 测试直跑 core 源码，免去「改完 core 必须先 build 才跑 engine 测」
       '@cck/core': fileURLToPath(new URL('./packages/core/src/index.ts', import.meta.url)),
+      // 同理：apps/demo 的 mini-fish 直跑 ecs 包源码
+      '@cck/ecs-bitecs': fileURLToPath(
+        new URL('./packages/ecs-bitecs/src/index.ts', import.meta.url),
+      ),
     },
   },
   // 固定 esbuild 的 TS 选项，**顺带关掉 tsconfig 自动查找**——apps/demo/tsconfig.json

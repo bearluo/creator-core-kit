@@ -18,7 +18,8 @@
     "types": ["@cocos/creator-types/engine"],
     "paths": {
       "@cck/core": ["../../packages/core/src/index.ts"],
-      "@cck/engine": ["../../packages/engine/src/index.ts"]
+      "@cck/engine": ["../../packages/engine/src/index.ts"],
+      "@cck/ecs-bitecs": ["../../packages/ecs-bitecs/src/index.ts"]
     }
   },
   "include": ["assets/**/*.ts", "test/**/*.ts", "types/**/*.d.ts"]
