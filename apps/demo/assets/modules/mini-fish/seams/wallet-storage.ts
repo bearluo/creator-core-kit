@@ -13,7 +13,7 @@
  * 一个路数（那边是地基 boot 读，这边是场景启动读，因为只有这一款用）。
  */
 import { getRootContainer, STORAGE, type IStorage } from '@cck/core';
-import { scopedKey } from '../../foundation/net/auth';
+import { scopedKey } from '../../../foundation/net/auth';
 import { memoryWallet, type FishWallet } from './economy';
 
 /** 余额存这个键。前缀由 {@link scopedKey} 加。 */

@@ -37,6 +37,17 @@ export interface CatchEvent {
   readonly payout: number;
   readonly x: number;
   readonly y: number;
+  /**
+   * 死的那一刻鱼朝哪（弧度，+x 为 0，与 `Angle.v` 同一套）。
+   * 死亡动画要接着游动的姿势演下去，不带这个就会在断气瞬间「唰」地摆正头朝右。
+   */
+  readonly angle: number;
 }
 
-export type FishEvent = FireEvent | HitEvent | CatchEvent;
+/** 一条鱼挨了一网**没死**（给受击闪白）。死了的走 {@link CatchEvent}，两者互斥。 */
+export interface HurtEvent {
+  readonly type: 'hurt';
+  readonly eid: number;
+}
+
+export type FishEvent = FireEvent | HitEvent | CatchEvent | HurtEvent;

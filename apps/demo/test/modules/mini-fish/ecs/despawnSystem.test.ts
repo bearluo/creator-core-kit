@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createEcsWorld, defineQuery } from '@cck/ecs-bitecs';
-import { Fish, PathFollow } from '../../../assets/modules/mini-fish/components';
-import { despawnSystem } from '../../../assets/modules/mini-fish/despawnSystem';
-import { spawnFish } from '../../../assets/modules/mini-fish/feedSystem';
+import { Fish, PathFollow } from '../../../../assets/modules/mini-fish/ecs/components';
+import { despawnSystem } from '../../../../assets/modules/mini-fish/ecs/despawnSystem';
+import { spawnFish } from '../../../../assets/modules/mini-fish/ecs/feedSystem';
 
 const fish = defineQuery([Fish]);
 

@@ -203,6 +203,8 @@ apps/demo/assets/
 - **自定义 bundle 里的 `.scene` 不进 build「包含场景」列表也能 `bundle.loadScene`**（调研标注项，已坐实）。
 - **`GameHost` 回路 web 真产物 e2e**（2026-08-25）：打砖块打掉 8 块 → 掉球结算「新纪录！」→ 返回大厅按钮变成「🎮 打砖块  最好 8」→ 再玩另外三款，`localStorage` 里 `cck-demo.cck.gameBest={"mini-brick":8,"mini-shooter":4,"mini-hop":90,"mini-plane":1}`（**带 appId 前缀**，两个马甲不串）。平台跳跃自动驾驶跑完整关（`phase=won`、90 分），骰子卡牌桌上写着 `player.name`。控制台除 favicon 404 外零错误。
 
+- **入口列表横竖屏网格 + 滚动 web 真产物 e2e**（2026-08-28）：竖屏 1080×1954 → 2 列 5 行、`vertical` 滚；转横屏 2025×1080 **不重进大厅**实时重排成 2 列 7 行、`horizontal` 滚；**横屏下第 10 个入口「🎮 捕鱼」落在屏内 (535, 291) 并点进 `Fish.scene`**（改之前它掉在屏外）；返回大厅后网格按横屏重建、10 个入口全在；把 `content` 临时撑高后拖动真滚起来（207 → 516）且**拖完大厅还在**（`cancelInnerEvents` 生效，没有误开模块）。本次 navigation 控制台 0 error。
+
 ## 9. 已知行为与坑
 
 - **直接播放 `Lobby.scene` 会全黑**：预览起始场景取「当前在编辑器里打开的场景」，跳过 Boot 就没有 kit、没有相机组。`LobbyHost` 已对这种情况打一条指路的 `console.error`——验证启动流程前先打开 `Boot.scene`。
@@ -210,4 +212,8 @@ apps/demo/assets/
 - **kit 换了要整套重建导航状态**：编辑器 Game View 重播走 `shutdown → reboot`，上一轮的 EventBus / SceneFlow 已作废，旧订阅永远收不到事件 → `LobbyNav` 记住自己是绑在哪个 `Kit` 上建的，kit 变了就重建订阅。
 - **UI 节点必须置 `Layers.Enum.UI_2D`**，否则 UI 相机 `visibility` 不含它 → 不可见且无日志。prefab 生成器（`apps/demo/scripts/prefab-gen/`）已统一置好；手搭节点或运行时 `new Node` 时要自己注意。
 - **大厅界面是 prefab 不是代码，且从皮包按路径取**：`LobbyPanel.prefab`（布局）+ `LobbyItem.prefab`（入口按钮模板）住在 `skin-<马甲>-lobby` 里，由 `currentSkinBundle('lobby')` 运行时解析 —— **不是 `@property(Prefab)`**（那是编辑器期绑定，绑死在 `lobby` 包里，马甲换不掉）。代码只按 `MODULE_CATALOG` 克隆模板、填标题、绑点击。**节点名 `Items` / `Label` 是契约**，改 prefab 时别改，否则代码静默取不到（只打一条 error）。
+- **入口列表按横竖屏排网格，装不下才滚**：`Items` 在 prefab 里是个**空容器**（条目一个都没有，位置就是设计者指定的「第一个条目中心」），运行时就地装成 `Mask` + `ScrollView`，内容节点由代码建。**竖屏先填满一行再往下、上下滚；横屏先填满一列再往右、左右滚** —— 行列数按可用区现算（十个入口：竖屏 2 列 5 行、横屏 2 列 7 行），**装得下时视口贴着内容收窄、根本不滚**，滚动是加到第十几个模块才用得上的兜底。转屏走 `view.on('canvas-resize')` 实时重排，不必重进大厅。
+  - 排布算式在 `modules/lobby/grid.ts`（**零 `cc`**，11 例单测）而不是 `cc.Layout` 的 GRID 模式：条目位置本来就是清单驱动算出来的，而 `Layout` 的 `startAxis` / `constraint` / `constraintNum` 得在编辑器里配、还得两个马甲各配一遍，配错了只有真机上看得出来。
+  - **两套皮的坐标体系不同**（base 是 600×520 的面板、`Items` 在 y=60；vest 是 1080×1920 满屏、`Items` 在 y=520），所以列表区上沿**读 prefab 里 `Items` 的位置**、不硬编码；同时夹在屏内（`min(itemsTop, halfH - 40)`），否则竖屏 prefab 的坐标在横屏 1080 高的屏上是屏外，列表整个看不见。
+  - **拖动不会误开模块**：`ScrollView.cancelInnerEvents` 默认 `true`，滚起来就把子节点的触摸取消掉（触点几乎没动才照常派发 `TOUCH_END`）。条目用的是裸 `node.on(TOUCH_END)` 而不是 `Button`，这条同样成立。
 - **面板打开失败要走同一条回滚链**（`scope.dispose()`），否则 bundle 计数与 DI 子作用域会泄漏。

@@ -10,7 +10,7 @@ import {
   view,
   type EventTouch,
 } from 'cc';
-import { getAssetLoader } from '@cck/core';
+import { getAssetLoader, type AssetTypeToken } from '@cck/core';
 import { getGameHost } from './host';
 
 /**
@@ -158,6 +158,20 @@ export async function loadGameAtlas(
       group: bundle,
     }),
   );
+}
+
+/**
+ * 同 {@link loadGameArt}，但按**原样路径**取任意一种资源（effect / json / prefab …），
+ * 取消语义一模一样。默认 `type:'asset'` 走通配加载 —— 同名同路径下只可能有一个资源，
+ * 不指定类型就够了；真有歧义再传具体 token。
+ */
+export async function loadGameAsset<T>(
+  owner: Node,
+  bundle: string,
+  path: string,
+  type: AssetTypeToken = 'asset',
+): Promise<T | undefined> {
+  return guardedLoad(owner, () => getAssetLoader().load<T>(path, { bundle, type, group: bundle }));
 }
 
 /**

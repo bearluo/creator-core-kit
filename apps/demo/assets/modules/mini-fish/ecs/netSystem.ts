@@ -20,10 +20,10 @@ import {
   type EcsWorld,
   type SpatialHash,
 } from '@cck/ecs-bitecs';
-import { Bomb, Fish, Net } from './components';
-import type { CaughtFish, FishArbiter, TicketBook } from './economy';
-import type { FishEvent } from './events';
-import { BOMB_RADIUS, MAX_FISH_R } from './fish-kinds';
+import { Angle, Bomb, Fish, Net } from './components';
+import type { CaughtFish, FishArbiter, TicketBook } from '../seams/economy';
+import type { FishEvent } from '../events';
+import { BOMB_RADIUS, MAX_FISH_R } from '../content/fish-kinds';
 
 /** 网的半径随档位增大：1 级 108，7 级 216（设计像素）。 */
 export const NET_BASE_R = 90;
@@ -87,7 +87,10 @@ export function createNetSystem(
         const results = arbiter.resolve(ticket, caught);
         for (let k = 0; k < results.length; k++) {
           const s = results[k];
-          if (!s.dead) continue;
+          if (!s.dead) {
+            events.push({ type: 'hurt', eid: s.eid });
+            continue;
+          }
           const fx = Position.x[s.eid];
           const fy = Position.y[s.eid];
           events.push({
@@ -98,6 +101,7 @@ export function createNetSystem(
             payout: s.payout,
             x: fx,
             y: fy,
+            angle: Angle.v[s.eid],
           });
           if (hasComponent(world, Bomb, s.eid)) queue.push({ x: fx, y: fy, r: BOMB_RADIUS });
           removeEntity(world, s.eid);

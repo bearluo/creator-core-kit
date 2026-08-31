@@ -1,32 +1,41 @@
 import {
   _decorator,
+  Camera,
   Color,
   Component,
   EventTouch,
+  Layers,
+  Material,
   Node,
+  RenderTexture,
   Sprite,
   SpriteAtlas,
   SpriteFrame,
+  Texture2D,
   UIOpacity,
   UITransform,
+  Vec4,
   view,
+  type EffectAsset,
 } from 'cc';
 import { bindText, BindingScope } from '@cck/engine';
-import { defineQuery, enterQuery, exitQuery, Position } from '@cck/ecs-bitecs';
+import { defineQuery, enterQuery, exitQuery, Position, Velocity } from '@cck/ecs-bitecs';
 import {
   exitButton,
   gameLabel,
   gameNode,
   loadGameArt,
+  loadGameAsset,
   loadGameAtlas,
   releaseGameArt,
 } from '../../foundation/game/stage';
-import { Angle, Bullet, Fish } from './components';
+import { Angle, Bullet, Fish } from './ecs/components';
+import { reconcileNodes } from './ecs/reconcile';
 import { AI_LEVEL, CANNON_SLOTS, FishVM, INITIAL_COINS } from './FishVM';
-import { DEAD_FRAMES, fishKind } from './fish-kinds';
-import { netRadius } from './netSystem';
-import { accountWallet } from './wallet-storage';
-import { FIELD } from './paths';
+import { DEAD_FRAMES, fishKind } from './content/fish-kinds';
+import { netRadius } from './ecs/netSystem';
+import { accountWallet } from './seams/wallet-storage';
+import { FIELD } from './content/paths';
 
 const { ccclass } = _decorator;
 const TAG = '[CCK-FISH]';
@@ -44,6 +53,30 @@ const NET_TIME = 0.3;
 const MUZZLE_TIME = 0.16;
 /** 炮台画多高（贴图 51×69 ~ 63×87，统一按这个高度画）。 */
 const CANNON_HEIGHT = 96;
+/** 挨一网没死，白闪多久。 */
+const HURT_TIME = 0.12;
+
+/**
+ * **水下层** —— 只有这一层进 RenderTexture、跟着水面折射。
+ * 渔网 / 炮台 / HUD 留在 `UI_2D` 一点都不扭：网是玩家撒下去的，跟着水晃会让人以为自己瞄歪了。
+ * bit 0 被 kit 的 `BG` 层占着，这里用 bit 1。
+ */
+const WATER_LAYER = 'WATER';
+const WATER_BIT = 1;
+
+/** 注册（或取回）水下层。`Layers.addLayer` 是全局注册表，重复注册会打警告，所以先查一次。 */
+function waterLayerMask(): number {
+  const known = (Layers.Enum as unknown as Record<string, number | undefined>)[WATER_LAYER];
+  if (typeof known === 'number') return known;
+  Layers.addLayer(WATER_LAYER, WATER_BIT);
+  return 1 << WATER_BIT;
+}
+
+/** 整棵子树置层 —— `layer` 不继承，每个节点各记各的。 */
+function sinkLayer(node: Node, layer: number): void {
+  node.layer = layer;
+  node.children.forEach((c) => sinkLayer(c, layer));
+}
 
 const fishQuery = defineQuery([Fish, Position, Angle]);
 const fishEnter = enterQuery(fishQuery);
@@ -109,11 +142,24 @@ export class FishGame extends Component {
 
   private elapsed = 0;
   private scale = 1;
+  /** `new Material()` / `new RenderTexture()` 不归 AssetLoader 记账，得自己销毁。 */
+  private water?: Material;
+  private flash?: Material;
+  private waterRT?: RenderTexture;
+  private waterCam?: Camera;
+  private waterView?: Sprite;
+  private waterFrame?: SpriteFrame;
+  /** 建好就 = 水下层的 layer 值；`0` 表示 effect 没加载上，这一局不做后处理。 */
+  private waterLayer = 0;
+  /** 受击闪白剩余时间（eid → 秒）。 */
+  private readonly hurting = new Map<number, number>();
 
   async start(): Promise<void> {
-    const [atlas, art, wallet] = await Promise.all([
+    const [atlas, art, water, flash, wallet] = await Promise.all([
       loadGameAtlas(this.node, BUNDLE, 'textures'),
-      loadGameArt(this.node, BUNDLE, ['seabed'] as const),
+      loadGameArt(this.node, BUNDLE, ['seabed', 'noise'] as const),
+      loadGameAsset<EffectAsset>(this.node, BUNDLE, 'art/water'),
+      loadGameAsset<EffectAsset>(this.node, BUNDLE, 'art/hit-flash'),
       accountWallet(INITIAL_COINS),
     ]);
     if (!atlas || !art || !this.node.isValid) return; // 加载期间被切走了 —— 那是取消，不是失败
@@ -121,6 +167,12 @@ export class FishGame extends Component {
 
     this.vm = new FishVM({ wallet });
     this.build(art.seabed);
+    // 两样都是「有更好，没有照玩」：effect 没加载上就退回没水效、没闪白的普通画面
+    if (water) this.buildWater(water, art.noise);
+    if (flash) {
+      this.flash = new Material();
+      this.flash.initialize({ effectAsset: flash });
+    }
     this.layout();
     view.on('canvas-resize', this.layout, this);
     console.log(
@@ -140,16 +192,80 @@ export class FishGame extends Component {
     this.syncBullets();
     this.syncCannons(dt);
     this.tickEffects(dt);
+    this.tickHurt(dt);
   }
 
   onDestroy(): void {
     view.off('canvas-resize', this.layout, this);
     this.binds?.dispose();
+    this.water?.destroy();
+    this.flash?.destroy();
+    this.waterRT?.destroy();
     // 图集随本场景走：切回大厅时连同 bundle 一起卸，这里先把这一组的引用还掉。
     releaseGameArt(BUNDLE);
   }
 
   // —— 建场 ————————————————————————————————————————————————
+
+  /**
+   * 水面**后处理**：海底 / 鱼 / 子弹沉进水下层 → 一台只看这层的相机把它们画进 RenderTexture
+   * → 一张全屏 quad 用 `art/water.effect` 采这张 RT，折射 + 焦散 + 气泡一次做完。
+   *
+   * 所以拧的是「隔着水面看到的一切」，不是某张贴图的 UV —— 鱼会跟着晃，
+   * 而**渔网 / 炮台 / HUD 不进 RT，一点都不扭**。
+   *
+   * 噪声图**必须开 REPEAT**：波纹靠 UV 一直往外滚，clamp 的话滚出 [0,1] 之后整幅图
+   * 会糊成边缘那一行像素。64×64 是 2 的幂，WebGL1 也吃得下这个 wrap。
+   */
+  private buildWater(effect: EffectAsset, noise: SpriteFrame): void {
+    const size = view.getVisibleSize();
+    const layer = waterLayerMask();
+    this.waterLayer = layer;
+    const field = this.field!;
+    // 只沉海底和鱼。**子弹不进水** —— 折射是个空间上变化的位移场，一条直线穿过去就
+    // 不再是直线；鱼大且慢只表现为微微变形，子弹细长又每帧走很远，整条轨迹会被拧成
+    // 抖动的波浪，还跟不扭的炮口对不上。跟渔网同一条理由：玩家射出去的东西不许晃。
+    sinkLayer(field.getChildByName('Seabed')!, layer);
+    sinkLayer(this.fishLayer!, layer);
+
+    const rt = new RenderTexture();
+    rt.reset({ width: Math.round(size.width), height: Math.round(size.height) });
+    this.waterRT = rt;
+
+    const camNode = gameNode(this.node, 'WaterCamera');
+    camNode.setPosition(0, 0, 1000);
+    const cam = camNode.addComponent(Camera);
+    cam.projection = Camera.ProjectionType.ORTHO;
+    cam.orthoHeight = size.height / 2;
+    cam.near = 1;
+    cam.far = 2000;
+    cam.visibility = layer;
+    cam.clearFlags = Camera.ClearFlag.SOLID_COLOR;
+    cam.clearColor = new Color(0, 0, 0, 255);
+    cam.priority = 100; // 必须小于 kit 那台 ui 相机（200）：RT 得先画完，采它的人才画得对
+    cam.targetTexture = rt;
+    this.waterCam = cam;
+
+    const tex = noise.texture as Texture2D;
+    tex.setWrapMode(Texture2D.WrapMode.REPEAT, Texture2D.WrapMode.REPEAT);
+    const mat = new Material();
+    mat.initialize({ effectAsset: effect });
+    mat.setProperty('noiseMap', tex);
+    // 气泡按场地宽高比换算成正方形坐标，否则宽屏上会被拉成椭圆
+    mat.setProperty('bubbleParams', new Vec4(22, FIELD.width / FIELD.height, 1, 0.3));
+    this.water = mat;
+
+    const viewNode = gameNode(this.node, 'WaterView');
+    const sprite = viewNode.addComponent(Sprite);
+    const frame = new SpriteFrame();
+    frame.texture = rt;
+    sprite.customMaterial = mat;
+    sprite.spriteFrame = frame;
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    viewNode.setSiblingIndex(0); // 压在 Field 底下 —— 网 / 炮台画在水面之上
+    this.waterView = sprite;
+    this.waterFrame = frame;
+  }
 
   private build(seabed: SpriteFrame): void {
     const field = gameNode(this.node, 'Field');
@@ -170,6 +286,8 @@ export class FishGame extends Component {
     CANNON_SLOTS.forEach((slot, i) => {
       const node = gameNode(cannons, `Cannon${i}`);
       node.setPosition(slot.x, slot.y);
+      // 贴图炮口朝 +y，所以上半场那两门待机时先转过来朝下；开过火之后由 `fire` 事件接管朝向。
+      if (slot.y > 0) node.setRotationFromEuler(0, 0, 180);
       const sprite = node.addComponent(Sprite);
       sprite.sizeMode = Sprite.SizeMode.CUSTOM;
       node.getComponent(UITransform)!.setContentSize(CANNON_HEIGHT * 0.74, CANNON_HEIGHT);
@@ -234,7 +352,10 @@ export class FishGame extends Component {
       hint.active = portrait;
       hint.getComponent(UITransform)!.setContentSize(size.width, size.height);
     }
+    // 竖屏不推进玩法，那张全屏 RT 也别白画
+    if (this.waterCam) this.waterCam.enabled = !portrait;
     if (portrait) return;
+    this.layoutWater(size.width, size.height);
 
     this.scale = Math.max(size.width / FIELD.width, size.height / FIELD.height);
     this.field?.setScale(this.scale, this.scale, 1);
@@ -246,6 +367,24 @@ export class FishGame extends Component {
     this.hudNode('Minus')?.setPosition(halfW - 400, -halfH + 60);
     this.hudNode('Level')?.setPosition(halfW - 250, -halfH + 60);
     this.hudNode('Plus')?.setPosition(halfW - 100, -halfH + 60);
+  }
+
+  /** 屏幕变了：RT 跟着改尺寸，相机的正交高度和水面 quad 一起对齐过去。 */
+  private layoutWater(width: number, height: number): void {
+    const rt = this.waterRT;
+    const frame = this.waterFrame;
+    const sprite = this.waterView;
+    if (!rt || !frame || !sprite) return;
+    const w = Math.round(width);
+    const h = Math.round(height);
+    if (rt.width !== w || rt.height !== h) {
+      rt.resize(w, h);
+      // resize 之后 SpriteFrame 的 uv 是按旧尺寸算的，重挂一次让它重算
+      frame.texture = rt;
+      sprite.spriteFrame = frame;
+    }
+    this.waterCam!.orthoHeight = h / 2;
+    sprite.node.getComponent(UITransform)!.setContentSize(w, h);
   }
 
   private hudNode(name: string): Node | undefined {
@@ -262,19 +401,40 @@ export class FishGame extends Component {
         this.cannonNodes[e.cannon]?.setRotationFromEuler(0, 0, (e.angle * 180) / Math.PI - 90);
       } else if (e.type === 'hit') {
         const r = netRadius(e.level);
-        this.spawnEffect(`net_${e.level}`, '', 1, NET_TIME, e.x, e.y, r * 2);
+        this.spawnEffect(`net_${e.level}`, '', 1, NET_TIME, e.x, e.y, r * 2, 0);
+      } else if (e.type === 'hurt') {
+        // 罩住了没打死 —— 闪一下白。鱼还活着，节点一定已经建好了
+        const node = this.fishNodes.get(e.eid);
+        if (node && this.flash) {
+          node.getComponent(Sprite)!.customMaterial = this.flash;
+          this.hurting.set(e.eid, HURT_TIME);
+        }
       } else {
         const kind = fishKind(e.kind);
-        this.spawnEffect(`${kind.id}_dead_0`, `${kind.id}_dead_`, DEAD_FRAMES, DEATH_TIME, e.x, e.y, 0);
+        this.spawnEffect(
+          `${kind.id}_dead_0`,
+          `${kind.id}_dead_`,
+          DEAD_FRAMES,
+          DEATH_TIME,
+          e.x,
+          e.y,
+          0,
+          e.angle,
+        );
       }
     }
   }
 
   private syncFish(): void {
     const world = this.vm!.world;
-    for (const eid of fishExit(world)) this.dropNode(this.fishNodes, eid);
-    for (const eid of fishEnter(world)) {
+    const alive = fishQuery(world);
+    // 别照着 entered/exited 直接做 —— 两个数组读不出交错顺序，见 `ecs/reconcile.ts`
+    const diff = reconcileNodes(alive, fishEnter(world), fishExit(world));
+    for (const eid of diff.drop) this.dropNode(this.fishNodes, eid);
+    for (const eid of diff.create) {
+      this.dropNode(this.fishNodes, eid); // eid 可能是回收重用的，先拆掉上一位租客
       const node = gameNode(this.fishLayer!, `Fish${eid}`);
+      if (this.waterLayer) node.layer = this.waterLayer; // 新生的鱼也得沉到水下层
       const sprite = node.addComponent(Sprite);
       sprite.sizeMode = Sprite.SizeMode.TRIMMED;
       sprite.spriteFrame = this.frame(`${fishKind(Fish.kind[eid]).id}_run_0`);
@@ -282,7 +442,7 @@ export class FishGame extends Component {
     }
 
     const step = Math.floor(this.elapsed * ART_FPS);
-    for (const eid of fishQuery(world)) {
+    for (const eid of alive) {
       const node = this.fishNodes.get(eid);
       if (!node) continue;
       const kind = fishKind(Fish.kind[eid]);
@@ -297,16 +457,28 @@ export class FishGame extends Component {
 
   private syncBullets(): void {
     const world = this.vm!.world;
-    for (const eid of bulletExit(world)) this.dropNode(this.bulletNodes, eid);
-    for (const eid of bulletEnter(world)) {
+    const alive = bulletQuery(world);
+    const diff = reconcileNodes(alive, bulletEnter(world), bulletExit(world));
+    for (const eid of diff.drop) this.dropNode(this.bulletNodes, eid);
+    for (const eid of diff.create) {
+      this.dropNode(this.bulletNodes, eid);
       const node = gameNode(this.bulletLayer!, `Bullet${eid}`);
       const sprite = node.addComponent(Sprite);
       sprite.sizeMode = Sprite.SizeMode.TRIMMED;
       sprite.spriteFrame = this.frame(`bullet${Bullet.level[eid]}`);
       this.bulletNodes.set(eid, node);
     }
-    for (const eid of bulletQuery(world)) {
-      this.bulletNodes.get(eid)?.setPosition(Position.x[eid], Position.y[eid]);
+    for (const eid of alive) {
+      const node = this.bulletNodes.get(eid);
+      if (!node) continue;
+      node.setPosition(Position.x[eid], Position.y[eid]);
+      // 子弹贴图头朝 +y（跟炮台一样），所以转到速度方向要减 90°。
+      // 速度是匀速直线的，方向一辈子不变——但每帧算一次比记一份状态便宜。
+      node.setRotationFromEuler(
+        0,
+        0,
+        (Math.atan2(Velocity.y[eid], Velocity.x[eid]) * 180) / Math.PI - 90,
+      );
     }
   }
 
@@ -358,7 +530,11 @@ export class FishGame extends Component {
     return f;
   }
 
-  /** `size > 0` = 按这个直径画（网）；`0` = 用贴图原尺寸（鱼的死亡帧）。 */
+  /**
+   * `size > 0` = 按这个直径画（网）；`0` = 用贴图原尺寸（鱼的死亡帧）。
+   * `angle` 是弧度（网传 0）—— 死亡帧得**接着活鱼那一套朝向**演（转到切线 + 朝左时上下翻），
+   * 否则鱼一断气就「唰」地摆正头朝右。
+   */
   private spawnEffect(
     first: string,
     prefix: string,
@@ -367,9 +543,14 @@ export class FishGame extends Component {
     x: number,
     y: number,
     size: number,
+    angle: number,
   ): void {
     const node = gameNode(this.effectLayer!, prefix || first);
     node.setPosition(x, y);
+    if (angle !== 0) {
+      node.setRotationFromEuler(0, 0, (angle * 180) / Math.PI);
+      node.setScale(1, Math.abs(angle) > Math.PI / 2 ? -1 : 1, 1);
+    }
     const sprite = node.addComponent(Sprite);
     sprite.spriteFrame = this.frame(first);
     if (size > 0) {
@@ -379,6 +560,20 @@ export class FishGame extends Component {
       sprite.sizeMode = Sprite.SizeMode.TRIMMED;
     }
     this.effects.push({ node, sprite, prefix, frames, total, left: total });
+  }
+
+  /** 闪白到点了换回内置材质。鱼死了 / eid 换了租客都只是查不到节点，删掉记账即可。 */
+  private tickHurt(dt: number): void {
+    for (const [eid, left] of this.hurting) {
+      const next = left - dt;
+      if (next > 0) {
+        this.hurting.set(eid, next);
+        continue;
+      }
+      this.hurting.delete(eid);
+      const node = this.fishNodes.get(eid);
+      if (node?.isValid) node.getComponent(Sprite)!.customMaterial = null;
+    }
   }
 
   private dropNode(table: Map<number, Node>, eid: number): void {

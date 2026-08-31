@@ -7,7 +7,7 @@
  */
 import { defineQuery, Position, type EcsSystem } from '@cck/ecs-bitecs';
 import { Angle, Fish, PathFollow } from './components';
-import { angleAt, fishPath, pointAt } from './paths';
+import { angleAt, fishPath, pointAt } from '../content/paths';
 
 const swimmers = defineQuery([Fish, PathFollow, Position, Angle]);
 

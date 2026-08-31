@@ -28,15 +28,15 @@ import {
   type EcsWorld,
   type SpatialHash,
 } from '@cck/ecs-bitecs';
-import { aiAgent, manualAgent, type CannonAgent, type FishView, type ManualAgent } from './agent';
-import { createBulletSystem, spawnBullet } from './bulletSystem';
-import { Fish } from './components';
-import { createFeedSystem } from './feedSystem';
-import { createNetSystem } from './netSystem';
-import { despawnSystem } from './despawnSystem';
-import { pathSystem } from './pathSystem';
-import { randomFeeder, type FishFeeder } from './feeder';
-import { MAX_FISH_R } from './fish-kinds';
+import { aiAgent, manualAgent, type CannonAgent, type FishView, type ManualAgent } from './seams/agent';
+import { createBulletSystem, spawnBullet } from './ecs/bulletSystem';
+import { Fish } from './ecs/components';
+import { createFeedSystem } from './ecs/feedSystem';
+import { createNetSystem } from './ecs/netSystem';
+import { despawnSystem } from './ecs/despawnSystem';
+import { pathSystem } from './ecs/pathSystem';
+import { randomFeeder, type FishFeeder } from './seams/feeder';
+import { MAX_FISH_R } from './content/fish-kinds';
 import {
   localArbiter,
   memoryWallet,
@@ -45,7 +45,7 @@ import {
   type FishArbiter,
   type FishWallet,
   type TicketBook,
-} from './economy';
+} from './seams/economy';
 import type { FishEvent } from './events';
 
 /** 一门炮：位置固定，指令从 {@link CannonAgent} 来。 */
@@ -59,11 +59,20 @@ export interface Cannon {
  * 四个炮位（横屏底边）。**0 号是玩家**，所以数组顺序不是从左到右 —— 让「玩家 = 0」这件事
  * 在任何地方都成立，比让 x 递增有用。
  */
+/**
+ * 四门炮的机位 —— **上下对坐**，跟四人捕鱼机台一样：玩家在下左，三个 AI 占掉另外三个角。
+ * 一排四个的话中间两门会互相挡视线，而且上半场没人打、鱼白游。
+ *
+ * ⚠️ `|y| = 360` 不是随手取的：场地是 cover 缩放的（`FishGame.layout`），比 16:9 更宽的屏
+ * 会把上下裁掉一截 —— 可见半高 ≈ `960 / 宽高比`，21:9 只剩 412。炮台半高 48，所以 360
+ * 是「连 21:9 都还完整露着」的上限。**故意不在 View 里做钳制**：那会让画出来的炮口
+ * 跟 VM 里子弹的出膛点对不上，超宽屏下子弹就凭空从旁边冒出来。
+ */
 export const CANNON_SLOTS: readonly { x: number; y: number }[] = [
-  { x: -240, y: -450 }, // 0 玩家
-  { x: -720, y: -450 }, // 1 AI
-  { x: 240, y: -450 }, // 2 AI
-  { x: 720, y: -450 }, // 3 AI
+  { x: -480, y: -360 }, // 0 玩家（下左）
+  { x: 480, y: -360 }, // 1 AI（下右）
+  { x: -480, y: 360 }, // 2 AI（上左）
+  { x: 480, y: 360 }, // 3 AI（上右）
 ];
 
 /** 初始金币。 */

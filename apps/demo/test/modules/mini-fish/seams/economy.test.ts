@@ -5,8 +5,8 @@ import {
   MAX_LEVEL,
   RTP,
   type FishArbiter,
-} from '../../../assets/modules/mini-fish/economy';
-import { FISH_KINDS, fishKind } from '../../../assets/modules/mini-fish/fish-kinds';
+} from '../../../../assets/modules/mini-fish/seams/economy';
+import { FISH_KINDS, fishKind } from '../../../../assets/modules/mini-fish/content/fish-kinds';
 
 /** 逐个吐出给定值，用完从头再来。用来把「这条鱼死不死」钉死。 */
 function scriptedRand(...values: number[]): () => number {

@@ -19,6 +19,7 @@
     "check:pins": "node packages/tools/dist/cli.cjs check-pins --assets apps/demo/assets",
     "check:graph": "node packages/tools/dist/cli.cjs check-graph --assets apps/demo/assets",
     "gen:masks": "node apps/demo/scripts/gen-collision-mask.mjs",
+    "gen:noise": "node apps/demo/scripts/gen-noise.mjs",
     "check:masks": "node apps/demo/scripts/gen-collision-mask.mjs --check",
     "proto:sync": "node scripts/sync-proto.mjs",
     "docs:api": "typedoc",

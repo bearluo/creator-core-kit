@@ -9,17 +9,17 @@ import {
   Position,
   type EcsWorld,
 } from '@cck/ecs-bitecs';
-import { Fish, Net } from '../../../assets/modules/mini-fish/components';
+import { Angle, Fish, Net } from '../../../../assets/modules/mini-fish/ecs/components';
 import type {
   CaughtFish,
   FireTicket,
   FishArbiter,
   TicketBook,
-} from '../../../assets/modules/mini-fish/economy';
-import type { CatchEvent, FishEvent } from '../../../assets/modules/mini-fish/events';
-import { spawnFish } from '../../../assets/modules/mini-fish/feedSystem';
-import { FISH_KINDS, MAX_FISH_R, fishKind } from '../../../assets/modules/mini-fish/fish-kinds';
-import { createNetSystem, netRadius } from '../../../assets/modules/mini-fish/netSystem';
+} from '../../../../assets/modules/mini-fish/seams/economy';
+import type { CatchEvent, FishEvent } from '../../../../assets/modules/mini-fish/events';
+import { spawnFish } from '../../../../assets/modules/mini-fish/ecs/feedSystem';
+import { FISH_KINDS, MAX_FISH_R, fishKind } from '../../../../assets/modules/mini-fish/content/fish-kinds';
+import { createNetSystem, netRadius } from '../../../../assets/modules/mini-fish/ecs/netSystem';
 
 const fish = defineQuery([Fish]);
 const nets = defineQuery([Net]);
@@ -55,11 +55,12 @@ function setup(dies: (eid: number) => boolean = () => false) {
   return { world, tickets, events, calls, step };
 }
 
-/** 摆一条鱼在指定位置。 */
-function fishAt(world: EcsWorld, kind: number, x: number, y: number): number {
+/** 摆一条鱼在指定位置（`angle` = 它正朝哪游，弧度）。 */
+function fishAt(world: EcsWorld, kind: number, x: number, y: number, angle = 0): number {
   const eid = spawnFish(world, { kind, pathId: 0, speed: 0 });
   Position.x[eid] = x;
   Position.y[eid] = y;
+  Angle.v[eid] = angle;
   return eid;
 }
 
@@ -101,6 +102,28 @@ describe('netSystem', () => {
     expect(survivors).toEqual([alive]);
     expect(catches(events).map((e) => e.eid)).toEqual([dead]);
     expect(catches(events)[0]).toMatchObject({ cannon: 2, payout: 10, kind: RED });
+  });
+
+  it('罩住了没打死的也发一条 hurt —— View 拿它闪一下白；死的那条只发 catch', () => {
+    const { world, tickets, events, step } = setup((eid) => eid % 2 === 0);
+    const a = fishAt(world, RED, 0, 0);
+    const b = fishAt(world, RED, 40, 0);
+    netAt(world, tickets, 0, 0);
+    step();
+
+    const dead = a % 2 === 0 ? a : b;
+    const alive = dead === a ? b : a;
+    expect(events.filter((e) => e.type === 'hurt').map((e) => e.eid)).toEqual([alive]);
+    expect(catches(events).map((e) => e.eid)).toEqual([dead]);
+  });
+
+  it('catch 带上死的那一刻鱼朝哪 —— 死亡动画得接着游动的姿势演，不然会「唰」地摆正', () => {
+    const { world, tickets, events, step } = setup(() => true);
+    const facing = -2.4; // 朝左下游
+    fishAt(world, RED, 0, 0, facing);
+    netAt(world, tickets, 0, 0);
+    step();
+    expect(catches(events)[0].angle).toBeCloseTo(facing, 5); // Angle 是 f32
   });
 
   it('不管罩没罩到，都发一条 hit 让 View 去画张网', () => {

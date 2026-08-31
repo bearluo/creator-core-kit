@@ -4,7 +4,7 @@ import {
   FISH_KINDS,
   MAX_FISH_R,
   fishKind,
-} from '../../../assets/modules/mini-fish/fish-kinds';
+} from '../../../../assets/modules/mini-fish/content/fish-kinds';
 
 describe('鱼种表', () => {
   it('id 不重复 —— 它是图集帧名前缀，重了第二刀会静默切错图', () => {

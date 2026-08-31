@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aiAgent, manualAgent, type PoolView } from '../../../assets/modules/mini-fish/agent';
+import { aiAgent, manualAgent, type PoolView } from '../../../../assets/modules/mini-fish/seams/agent';
 
 const pool = (...fish: { eid: number; kind: number; x: number; y: number }[]): PoolView => ({ fish });
 const empty: PoolView = { fish: [] };

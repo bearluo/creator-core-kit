@@ -5,7 +5,7 @@
  * 联网时把 AI 换成网络下发即可，**接缝天天在跑**（决策 D1）—— 三个 AI 陪打不是装饰，
  * 它们的存在保证这条缝一直是活的，而不是一个从没被第二种实现验证过的接口。
  */
-import { fishKind } from './fish-kinds';
+import { fishKind } from '../content/fish-kinds';
 
 /** 场上一条鱼在 AI 眼里的样子。 */
 export interface FishView {

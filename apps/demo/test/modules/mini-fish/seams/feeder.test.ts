@@ -3,9 +3,9 @@ import {
   emptyFeeder,
   randomFeeder,
   scriptedFeeder,
-} from '../../../assets/modules/mini-fish/feeder';
-import { FISH_KINDS } from '../../../assets/modules/mini-fish/fish-kinds';
-import { PATHS } from '../../../assets/modules/mini-fish/paths';
+} from '../../../../assets/modules/mini-fish/seams/feeder';
+import { FISH_KINDS } from '../../../../assets/modules/mini-fish/content/fish-kinds';
+import { PATHS } from '../../../../assets/modules/mini-fish/content/paths';
 
 const spawn = (kind: number) => ({ kind, pathId: 0, speed: 100 });
 

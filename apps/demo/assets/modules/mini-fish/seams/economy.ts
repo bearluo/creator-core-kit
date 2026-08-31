@@ -21,7 +21,7 @@
  * ⚠️ `FishVM` 的**破产保底是白送的钱，会破坏 RTP** —— 它是 demo 的便利不是经济设计的一部分，
  * 模拟 RTP 时必须关掉（`bailout: 0`）。
  */
-import { fishKind } from './fish-kinds';
+import { fishKind } from '../content/fish-kinds';
 
 /** 返奖率。见类注释里的推导。 */
 export const RTP = 0.95;

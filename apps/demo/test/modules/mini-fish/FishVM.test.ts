@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { defineQuery } from '@cck/ecs-bitecs';
-import type { CannonAgent } from '../../../assets/modules/mini-fish/agent';
-import { Bullet, PathFollow } from '../../../assets/modules/mini-fish/components';
-import { localArbiter, memoryWallet, MAX_LEVEL } from '../../../assets/modules/mini-fish/economy';
+import type { CannonAgent } from '../../../assets/modules/mini-fish/seams/agent';
+import { Bullet, PathFollow } from '../../../assets/modules/mini-fish/ecs/components';
+import { localArbiter, memoryWallet, MAX_LEVEL } from '../../../assets/modules/mini-fish/seams/economy';
 import type { FishEvent } from '../../../assets/modules/mini-fish/events';
-import { scriptedFeeder } from '../../../assets/modules/mini-fish/feeder';
-import { fishKind } from '../../../assets/modules/mini-fish/fish-kinds';
+import { scriptedFeeder } from '../../../assets/modules/mini-fish/seams/feeder';
+import { fishKind } from '../../../assets/modules/mini-fish/content/fish-kinds';
 import { CANNON_SLOTS, FishVM, type FishVMOptions } from '../../../assets/modules/mini-fish/FishVM';
 
 const FRAME = 1 / 60;

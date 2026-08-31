@@ -19,9 +19,9 @@ import {
   type SpatialHash,
 } from '@cck/ecs-bitecs';
 import { Bullet, Fish, Net } from './components';
-import { MAX_FISH_R } from './fish-kinds';
-import type { FireTicket, TicketBook } from './economy';
-import { FIELD, FIELD_MARGIN } from './paths';
+import { MAX_FISH_R } from '../content/fish-kinds';
+import type { FireTicket, TicketBook } from '../seams/economy';
+import { FIELD, FIELD_MARGIN } from '../content/paths';
 
 /** 子弹速度（像素/秒）与判定半径。 */
 export const BULLET_SPEED = 1400;

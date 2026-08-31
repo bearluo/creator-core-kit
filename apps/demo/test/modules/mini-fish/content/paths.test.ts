@@ -5,7 +5,7 @@ import {
   angleAt,
   fishPath,
   pointAt,
-} from '../../../assets/modules/mini-fish/paths';
+} from '../../../../assets/modules/mini-fish/content/paths';
 
 describe('路径表', () => {
   it('每条都是 4 个控制点、弧长为正', () => {

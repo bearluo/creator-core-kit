@@ -8,16 +8,16 @@ import {
   Velocity,
   type EcsWorld,
 } from '@cck/ecs-bitecs';
-import { Bullet, Net } from '../../../assets/modules/mini-fish/components';
+import { Bullet, Net } from '../../../../assets/modules/mini-fish/ecs/components';
 import {
   BULLET_SPEED,
   createBulletSystem,
   spawnBullet,
-} from '../../../assets/modules/mini-fish/bulletSystem';
-import type { FireTicket, TicketBook } from '../../../assets/modules/mini-fish/economy';
-import { spawnFish } from '../../../assets/modules/mini-fish/feedSystem';
-import { MAX_FISH_R } from '../../../assets/modules/mini-fish/fish-kinds';
-import { FIELD, FIELD_MARGIN } from '../../../assets/modules/mini-fish/paths';
+} from '../../../../assets/modules/mini-fish/ecs/bulletSystem';
+import type { FireTicket, TicketBook } from '../../../../assets/modules/mini-fish/seams/economy';
+import { spawnFish } from '../../../../assets/modules/mini-fish/ecs/feedSystem';
+import { MAX_FISH_R } from '../../../../assets/modules/mini-fish/content/fish-kinds';
+import { FIELD, FIELD_MARGIN } from '../../../../assets/modules/mini-fish/content/paths';
 
 const bullets = defineQuery([Bullet]);
 const nets = defineQuery([Net]);

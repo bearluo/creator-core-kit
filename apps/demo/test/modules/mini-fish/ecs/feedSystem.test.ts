@@ -5,11 +5,11 @@ import {
   Bomb,
   Fish,
   PathFollow,
-} from '../../../assets/modules/mini-fish/components';
-import { createFeedSystem, spawnFish } from '../../../assets/modules/mini-fish/feedSystem';
-import { scriptedFeeder } from '../../../assets/modules/mini-fish/feeder';
-import { FISH_KINDS, fishKind } from '../../../assets/modules/mini-fish/fish-kinds';
-import { PATHS, angleAt, pointAt } from '../../../assets/modules/mini-fish/paths';
+} from '../../../../assets/modules/mini-fish/ecs/components';
+import { createFeedSystem, spawnFish } from '../../../../assets/modules/mini-fish/ecs/feedSystem';
+import { scriptedFeeder } from '../../../../assets/modules/mini-fish/seams/feeder';
+import { FISH_KINDS, fishKind } from '../../../../assets/modules/mini-fish/content/fish-kinds';
+import { PATHS, angleAt, pointAt } from '../../../../assets/modules/mini-fish/content/paths';
 
 const HETUN = FISH_KINDS.findIndex((k) => k.bomb);
 

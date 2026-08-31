@@ -1,0 +1,67 @@
+// 挨了一网没死的鱼：整条**闪一下白**。
+//
+// 为什么非要一个 effect：`Sprite.color` 是**乘算**的，只能把鱼调暗，白色乘上去等于没变。
+// 想要「变亮/变白」只能在 frag 里 mix。
+//
+// 合批代价：闪白的鱼跟普通鱼材质不同，会在鱼群里切开几段 draw call。
+// 全场受击的鱼共用**同一个** Material（强度是常量，不随时间衰减），所以切开的段数
+// 只跟它们在节点树里的位置有关；闪 0.12 秒就换回内置材质，代价是瞬时的。
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: flash-vs:vert
+      frag: flash-fs:frag
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      rasterizerState:
+        cullMode: none
+      properties:
+        # rgb 闪成什么颜色 · a 混多少（0 = 原样）
+        flashColor: { value: [1.0, 1.0, 1.0, 0.75], editor: { type: color } }
+}%
+
+CCProgram flash-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+
+  out vec4 color;
+  out vec2 uv0;
+
+  vec4 vert () {
+    uv0 = a_texCoord;
+    color = a_color;
+    return cc_matViewProj * vec4(a_position, 1);
+  }
+}%
+
+CCProgram flash-fs %{
+  precision highp float;
+
+  in vec4 color;
+  in vec2 uv0;
+
+  #pragma builtin(local)
+  layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
+
+  uniform FlashUBO {
+    vec4 flashColor;
+  };
+
+  vec4 frag () {
+    vec4 o = texture(cc_spriteTexture, uv0) * color;
+    // 乘 o.a：贴图透明的地方不能被染白，否则鱼会顶着一个白方块
+    o.rgb = mix(o.rgb, flashColor.rgb * o.a, flashColor.a * o.a);
+    return o;
+  }
+}%

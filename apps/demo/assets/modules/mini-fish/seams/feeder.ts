@@ -8,8 +8,8 @@
  * （{@link scriptedFeeder}），「这条鱼走到第 3 秒时网罩不罩得住」在 vitest 里问得死
  * —— 跟 `mini-hop` 把关卡烘成 `level.ts` 是同一个路数。
  */
-import { FISH_KINDS } from './fish-kinds';
-import { PATHS } from './paths';
+import { FISH_KINDS } from '../content/fish-kinds';
+import { PATHS } from '../content/paths';
 
 /** 放一条鱼进来：什么种、走哪条路、多快（像素/秒）。 */
 export interface FishSpawn {

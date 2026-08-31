@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { MAX_LEVEL, MIN_LEVEL } from '../../../assets/modules/mini-fish/economy';
-import { DEAD_FRAMES, FISH_KINDS } from '../../../assets/modules/mini-fish/fish-kinds';
+import { MAX_LEVEL, MIN_LEVEL } from '../../../assets/modules/mini-fish/seams/economy';
+import { DEAD_FRAMES, FISH_KINDS } from '../../../assets/modules/mini-fish/content/fish-kinds';
 
 /**
  * 图集与代码对得上 —— **`mini-plane` 的 `check:masks` 在这里的对应物**。

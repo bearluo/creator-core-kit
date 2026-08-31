@@ -7,9 +7,9 @@
 import { addComponent, addEntity, type EcsSystem, type EcsWorld } from '@cck/ecs-bitecs';
 import { Circle, Position } from '@cck/ecs-bitecs';
 import { Angle, Bomb, Fish, PathFollow } from './components';
-import type { FishFeeder, FishSpawn } from './feeder';
-import { fishKind } from './fish-kinds';
-import { angleAt, fishPath, pointAt } from './paths';
+import type { FishFeeder, FishSpawn } from '../seams/feeder';
+import { fishKind } from '../content/fish-kinds';
+import { angleAt, fishPath, pointAt } from '../content/paths';
 
 /** 建一条鱼，返回它的 eid。位置/朝向按路径起点摆好，第一帧就在对的地方。 */
 export function spawnFish(world: EcsWorld, spawn: FishSpawn): number {

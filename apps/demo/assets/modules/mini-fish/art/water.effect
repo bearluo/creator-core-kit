@@ -1,0 +1,134 @@
+// 水面**后处理**：整个水下画面先画进 RenderTexture，再由这张全屏 quad 采样输出 ——
+// 所以折射拧的是「隔着水面看到的一切」（海底 + 鱼 + 子弹），不是某一张贴图的 UV。
+//
+// 分层在 `FishGame.buildWater`：进 RT 的只有 WATER 层（海底 / 鱼 / 子弹）；
+// **渔网、炮台、HUD 留在 UI_2D 层不进 RT，一点都不扭** —— 网是玩家撒下去的，
+// 跟着水晃会让人以为自己瞄歪了。
+//
+// 三件事都在这一个 pass 里：折射 + 焦散光网 + 上浮气泡，于是水面就一个 draw call。
+// 噪声图 `art/noise.png` 由 `pnpm gen:noise` 烘出：64×64（POT 才能开 REPEAT），
+// R/G/B 三通道装三层频率，一次采样拿三层。时间取引擎全局 `cc_time.x`，不用每帧塞 uniform。
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: water-vs:vert
+      frag: water-fs:frag
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      rasterizerState:
+        cullMode: none
+      properties:
+        noiseMap:     { value: grey }
+        # x 折射强度(UV) · y 噪声缩放(平铺几次) · z 流速 · w 焦散强度
+        waveParams:   { value: [0.012, 1.8, 0.020, 0.20] }
+        # x 分几列(每列一个气泡) · y 场地宽高比 · z 气泡半径系数 · w 亮度
+        bubbleParams: { value: [22.0, 1.78, 1.0, 0.30] }
+}%
+
+CCProgram water-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+
+  out vec4 color;
+  out vec2 uv0;
+
+  vec4 vert () {
+    uv0 = a_texCoord;
+    color = a_color;
+    return cc_matViewProj * vec4(a_position, 1);
+  }
+}%
+
+CCProgram water-fs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #include <common/common-define>   // CC_HANDLE_RT_SAMPLE_FLIP
+
+  in vec4 color;
+  in vec2 uv0;
+
+  #pragma builtin(local)
+  layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
+
+  uniform sampler2D noiseMap;
+  uniform WaterUBO {
+    vec4 waveParams;
+    vec4 bubbleParams;
+  };
+
+  float hash11 (float n) {
+    return fract(sin(n * 12.9898) * 43758.5453);
+  }
+
+  /**
+   * 一列一个气泡：每个像素只查**相邻三列**，所以画多少个气泡每像素开销都恒定。
+   * 画的是**环**不是实心圆 —— 实心的看着像光球，气泡是薄壳，亮的是边。
+   */
+  float bubbles (vec2 p, float aspect) {
+    float cols = bubbleParams.x;
+    float cw = aspect / cols;
+    float ci = floor(p.x / cw);
+    float acc = 0.0;
+    for (int k = -1; k <= 1; k++) {
+      float id = mod(ci + float(k) + cols, cols);
+      float s1 = hash11(id + 1.7);
+      float s2 = hash11(id + 31.3);
+      float s3 = hash11(id + 71.9);
+      // 上浮：t 从 0（底）到 1（水面），每列速度不同，所以永远不会排成一条线
+      float t = fract(cc_time.x * (0.055 + 0.085 * s1) + s2);
+      // 一边浮一边左右摇，摆幅不到半列宽 —— 摇出格子就会被邻列的查询漏掉
+      float x = (id + 0.28 + 0.44 * s3) * cw + sin((t * 3.0 + s2) * 6.2831) * cw * 0.16;
+      float r = cw * (0.10 + 0.15 * s3) * bubbleParams.z;
+      float d = length(vec2(p.x - x, p.y - t));
+      float shell = smoothstep(r, r * 0.80, d) - smoothstep(r * 0.78, r * 0.52, d) * 0.85;
+      // 冒出来那一下淡入、快到顶时破掉
+      float life = smoothstep(0.0, 0.10, t) * (1.0 - smoothstep(0.72, 1.0, t));
+      acc += max(shell, 0.0) * life;
+    }
+    return acc;
+  }
+
+  vec4 frag () {
+    float t = cc_time.x;
+    float scale = waveParams.y;
+    float flow = waveParams.z;
+
+    // 两层**反向**滚动的噪声：同向的话整幅画面会像一张纸在平移，看不出「水在动」
+    vec3 n1 = texture(noiseMap, uv0 * scale + vec2(t * flow, t * flow * 0.62)).rgb;
+    vec3 n2 = texture(noiseMap, uv0 * scale * 1.7 - vec2(t * flow * 0.83, t * flow * 0.31)).rgb;
+
+    // 折射：拿两层的不同通道当 x/y 偏移，别用同一个通道（那样整幅画只会沿对角线抖）
+    vec2 offset = (vec2(n1.r, n2.g) - 0.5) * waveParams.x;
+
+    // 取 RT 的颜色要翻 y。GL 系后端往 framebuffer 写的第 0 行是屏幕**底**边，而采样时
+    // uv.y=0 拿的就是第 0 行 —— 于是整幅水下画面上下颠倒。引擎给内置 sprite 材质备了
+    // 这条路（`SAMPLE_FROM_RT` define + builtin-sprite.effect 里同名的宏），但那段只在
+    // `_updateBuiltinMaterial` 里跑，**用 customMaterial 就够不着**，得自己翻。
+    // 宏自带后端判断（`cc_cameraPos.w` 编码了屏幕空间 y 的符号），Metal / Vulkan 上它不动手。
+    // 只翻这一次：噪声 / 焦散 / 气泡都是屏幕空间效果，照旧吃没翻过的 uv0（上 = 0）。
+    vec2 rt = uv0 + offset;
+    CC_HANDLE_RT_SAMPLE_FLIP(rt);
+    vec4 o = texture(cc_spriteTexture, rt);
+
+    // 焦散：两层等值线**相交处**才亮，于是自然形成阳光透过水面那种游动的光网
+    float band = 1.0 - abs(n1.g - n2.r) * 2.4;
+    o.rgb += pow(max(band, 0.0), 5.0) * waveParams.w * vec3(0.45, 0.80, 1.0);
+
+    // 气泡坐标按宽高比换成正方形，否则宽屏上会被拉成椭圆；uv.y 向下，翻一下才是「往上浮」
+    float b = bubbles(vec2(uv0.x * bubbleParams.y, 1.0 - uv0.y), bubbleParams.y);
+    o.rgb += clamp(b, 0.0, 1.0) * bubbleParams.w * vec3(0.62, 0.88, 1.0);
+
+    return o * color;
+  }
+}%

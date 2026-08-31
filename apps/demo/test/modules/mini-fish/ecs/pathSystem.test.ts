@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createEcsWorld, Position } from '@cck/ecs-bitecs';
-import { Angle, PathFollow } from '../../../assets/modules/mini-fish/components';
-import { spawnFish } from '../../../assets/modules/mini-fish/feedSystem';
-import { pathSystem } from '../../../assets/modules/mini-fish/pathSystem';
-import { PATHS, angleAt, pointAt } from '../../../assets/modules/mini-fish/paths';
+import { Angle, PathFollow } from '../../../../assets/modules/mini-fish/ecs/components';
+import { spawnFish } from '../../../../assets/modules/mini-fish/ecs/feedSystem';
+import { pathSystem } from '../../../../assets/modules/mini-fish/ecs/pathSystem';
+import { PATHS, angleAt, pointAt } from '../../../../assets/modules/mini-fish/content/paths';
 
 describe('pathSystem', () => {
   it('按像素速度前进：走 1 秒 = 前进 speed 像素的弧长', () => {

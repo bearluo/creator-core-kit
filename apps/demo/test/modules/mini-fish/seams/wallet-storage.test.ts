@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { persistentWallet } from '../../../assets/modules/mini-fish/wallet-storage';
+import { persistentWallet } from '../../../../assets/modules/mini-fish/seams/wallet-storage';
 
 describe('persistentWallet', () => {
   it('读得到存档就从存档开始', () => {

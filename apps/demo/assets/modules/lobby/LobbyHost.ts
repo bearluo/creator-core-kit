@@ -1,4 +1,15 @@
-import { _decorator, Component, Label, Node, instantiate, type Prefab } from 'cc';
+import {
+  _decorator,
+  Component,
+  Label,
+  Mask,
+  Node,
+  ScrollView,
+  UITransform,
+  instantiate,
+  view,
+  type Prefab,
+} from 'cc';
 import {
   createBundleScope,
   createSceneFlow,
@@ -20,6 +31,7 @@ import { GATEWAY_MIGRATION } from '../../foundation/net/migration';
 import { currentSkinBundle, MODULE_CATALOG, type CatalogEntry } from '../../foundation/catalog';
 import type { ModuleContext } from '../../foundation/ModuleContext';
 import { LOBBY_EVENTS, type LobbyEventMap } from '../../foundation/events';
+import { gridLayout } from './grid';
 
 export { LOBBY_EVENTS } from '../../foundation/events';
 
@@ -38,8 +50,11 @@ const N_ITEM_LABEL = 'Label';
  */
 const P_PANEL = 'LobbyPanel';
 const P_ITEM = 'LobbyItem';
-/** 条目行距。纯布局参数——真要做滚动列表就换成 `Layout` 组件，这里够用。 */
-const ITEM_GAP = 80;
+/** 条目间距。条目**尺寸**不写这里——读 `LobbyItem.prefab` 实例的 `UITransform`，各马甲各画各的。 */
+const ITEM_GAP_X = 24;
+const ITEM_GAP_Y = 14;
+/** 列表区四周留白（设计单位）。 */
+const EDGE = 40;
 
 /** DI token：当前 kit 的大厅导航实例。见 {@link resolveNav}——**不做模块级单例**。 */
 const LOBBY_NAV: Token<LobbyNav> = createToken<LobbyNav>('demo.lobbyNav');
@@ -98,6 +113,11 @@ class LobbyNav {
 
   private lobbyPanel?: Node;
   private openPanel?: { entry: CatalogEntry; ctx: ModuleContext };
+  /** 入口列表的滚动视图（挂在 prefab 的 `Items` 上）。随场景生死，见 {@link relayout}。 */
+  private scroll?: ScrollView;
+  private itemNodes: Node[] = [];
+  /** prefab 里 `Items` 的原始 y —— 设计者指定的「第一个条目中心」，两套皮各写各的。 */
+  private itemsY = 0;
 
   /** Lobby.scene 每次加载都调用：在场景里重建大厅 UI；导航常驻状态只初始化一次。 */
   async enterLobby(root: Node): Promise<void> {
@@ -130,6 +150,8 @@ class LobbyNav {
     this.opening = undefined;
     this.lobbyPanel = undefined;
     this.openPanel = undefined;
+    this.scroll = undefined;
+    this.itemNodes = [];
   }
 
   // —— 大厅导航 UI（数据驱动：布局吃 LobbyPanel.prefab，条目吃 MODULE_CATALOG × LobbyItem.prefab）——
@@ -164,19 +186,83 @@ class LobbyNav {
       console.error(`${TAG} LobbyPanel.prefab 里找不到 '${N_ITEMS}' 容器节点 → 无功能入口`);
       return;
     }
-    MODULE_CATALOG.forEach((entry, i) => {
+    // `Items` 在 prefab 里是个**空容器**（只有 UITransform，条目一个都没有），位置就是设计者
+    // 指定的「第一个条目中心」——两套皮各写各的（base 面板内 y=60，vest 满屏 y=520），所以
+    // 读它、不硬编码。它自己的尺寸随后被视口覆盖。
+    this.itemsY = items.position.y;
+    // 就地装成滚动视图：Mask 裁掉视口外的、ScrollView 负责拖动。**内容节点由代码建** ——
+    // 条目位置本来就是算出来的（见 grid.ts），prefab 里没有也不该有它们的坑位。
+    // ⚠️ ScrollView 认的「视口」是 `content.parent`，所以 Mask 必须挂在 content 的父节点上。
+    items.addComponent(Mask);
+    const scroll = items.addComponent(ScrollView);
+    const content = new Node('Content');
+    content.layer = items.layer; // 不置 UI_2D 层的节点不渲染（子节点跟着遭殃）
+    content.addComponent(UITransform).setAnchorPoint(0, 1); // 内容从左上角长出去
+    items.addChild(content);
+    scroll.content = content;
+    scroll.elastic = true;
+    this.scroll = scroll;
+    this.itemNodes = [];
+
+    MODULE_CATALOG.forEach((entry) => {
       const node = instantiate(itemPrefab);
-      items.addChild(node);
-      node.setPosition(0, -i * ITEM_GAP, 0);
+      content.addChild(node);
       const label = node.getChildByName(N_ITEM_LABEL)?.getComponent(Label);
       if (label) label.string = itemText(entry);
       // 更新失败现在一路抛上来（BundleUpdater 不再退回包内版本）——不接住就只剩「点了没反应」
+      // 拖动时不会误触发：ScrollView 的 `cancelInnerEvents` 默认 true，滚起来就把子节点的
+      // 触摸取消掉（触点几乎没动的情况下才照常派发 TOUCH_END）。
       node.on(Node.EventType.TOUCH_END, () => {
         this.openModule(entry).catch((e: unknown) =>
           console.error(`${TAG} 打开模块 '${entry.id}' 失败（多半是热更没下来）`, e),
         );
       });
+      this.itemNodes.push(node);
     });
+    this.relayout();
+  }
+
+  /**
+   * 按当前横竖屏重排入口列表 —— **竖屏上下滚、横屏左右滚**，装得下就不滚。
+   *
+   * 由 {@link LobbyHost} 在场景启动和每次 `canvas-resize` 时调用（转屏走的就是这条）。
+   * 算式在 `grid.ts`（零 `cc`、有单测），这里只负责把算出来的数字塞给节点。
+   */
+  relayout(): void {
+    const scroll = this.scroll;
+    const content = scroll?.content;
+    if (!scroll?.isValid || !content?.isValid || !this.itemNodes.length) return;
+    const items = scroll.node;
+    const size = view.getVisibleSize();
+    const halfH = size.height / 2;
+    const horizontal = size.width > size.height;
+
+    // 列表区：上沿取 prefab 指定的位置，**但不许跑出屏幕** —— 竖屏 prefab 的坐标（vest 的
+    // Title 在 y=720）在横屏 1080 高的屏上是屏外，不夹一下列表整个看不见。
+    const first = this.itemNodes[0].getComponent(UITransform);
+    const itemW = first?.width ?? 0;
+    const itemH = first?.height ?? 0;
+    const top = Math.min(this.itemsY + itemH / 2, halfH - EDGE);
+    const bottom = -halfH + EDGE;
+
+    const g = gridLayout({
+      count: this.itemNodes.length,
+      itemW,
+      itemH,
+      gapX: ITEM_GAP_X,
+      gapY: ITEM_GAP_Y,
+      availW: size.width - EDGE * 2,
+      availH: top - bottom,
+      horizontal,
+    });
+
+    items.getComponent(UITransform)!.setContentSize(g.viewW, g.viewH);
+    items.setPosition(0, top - g.viewH / 2, 0); // 视口横向居中、上沿贴 top
+    content.getComponent(UITransform)!.setContentSize(g.contentW, g.contentH);
+    content.setPosition(-g.viewW / 2, g.viewH / 2, 0); // 锚点 (0,1) → 这就是视口左上角
+    g.slots.forEach((s, i) => this.itemNodes[i].setPosition(s.x, s.y, 0));
+    scroll.horizontal = horizontal;
+    scroll.vertical = !horizontal;
   }
 
   /**
@@ -321,5 +407,17 @@ export class LobbyHost extends Component {
    */
   start(): void {
     void resolveNav().enterLobby(this.node);
+    // 转屏要重排入口列表（竖屏上下滚 / 横屏左右滚）。同方向内的窗口缩放也会来，
+    // 照样重算——网格是按可用区算的，窗口变窄就该少一列。
+    view.on('canvas-resize', this.relayout, this);
+  }
+
+  onDestroy(): void {
+    view.off('canvas-resize', this.relayout, this);
+  }
+
+  /** 转发给导航实例（UI 节点归它持有）。列表还没建好时是 no-op。 */
+  private relayout(): void {
+    resolveNav().relayout();
   }
 }
