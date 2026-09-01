@@ -5,6 +5,7 @@ import {
 } from '../../../assets/modules/mini-fish-editor/EditorVM';
 import type { FishContent } from '../../../assets/modules/mini-fish/content/content-types';
 import { waveFeeder } from '../../../assets/modules/mini-fish/seams/feeder';
+import { MIN_HANDLE } from '../../../assets/modules/mini-fish/content/paths';
 
 const SRC: FishContent = {
   rev: 3,
@@ -183,5 +184,139 @@ describe('EditorVM · 变更通知', () => {
     vm.addGroup();
     vm.dragPoint(0, 1, 1);
     expect(vm.changed.value).toBe(before + 2);
+  });
+});
+
+/**
+ * 多段编辑。一条路径是 `6n+2` 的分段贝塞尔链，编辑器要能加段、删段、拖任意一个控制点，
+ * 并且**拖的时候不许把形状拽坏** —— 三条规矩：
+ *
+ * - 拖**锚点**：两侧手柄刚性跟随（否则挪一下整段就变形了）。
+ * - 拖**手柄**：接点对面那个只对齐方向、**保留原长**（拖这一段不该把另一段也拉变形）。
+ * - 手柄离锚点不许近于 `MIN_HANDLE`：贴上去导数退化成 0 ⇒ 鱼**突然朝右**，不崩不报错。
+ */
+describe('EditorVM · 多段路径', () => {
+  /** 两段共 7 个点，全部共线：接点是第 3 个点 (600,0)，两侧手柄各离它 200。 */
+  const TWO_SEG: FishContent = {
+    rev: 1,
+    paths: [{ id: 'two', p: [0, 0, 200, 0, 400, 0, 600, 0, 800, 0, 1000, 0, 1200, 0] }],
+    waves: [],
+  };
+  const two = (): EditorVM => new EditorVM(TWO_SEG);
+
+  it('段数按 6n+2 数出来，加一段 +6 个数、删一段 -6 个数', () => {
+    const vm = new EditorVM(SRC); // 单段：8 个数
+    expect(vm.segments()).toBe(1);
+    vm.addSegment();
+    expect(vm.segments()).toBe(2);
+    expect(vm.draft.paths[0].p).toHaveLength(14);
+    vm.removeSegment();
+    expect(vm.segments()).toBe(1);
+    expect(vm.draft.paths[0].p).toHaveLength(8);
+  });
+
+  it('新段顺着末端切线接出去 ⇒ 天然平滑，不产生折角', () => {
+    const vm = new EditorVM(SRC); // 'a' 是一条向右的直线
+    vm.addSegment();
+    expect(vm.corners()).toEqual([]);
+    expect(vm.selectedSegment).toBe(1); // 加完就选中新那段
+    const p = vm.draft.paths[0].p;
+    expect(p[8]).toBeGreaterThan(p[6]); // 确实往前接，不是往回折
+  });
+
+  it('只剩一段不许删 —— 删空了就没有路径可言了', () => {
+    const vm = new EditorVM(SRC);
+    vm.removeSegment();
+    expect(vm.segments()).toBe(1);
+    expect(vm.draft.paths[0].p).toHaveLength(8);
+  });
+
+  it('命中判定扫全部控制点，不是写死的前 4 个', () => {
+    const vm = two(); // 7 个点
+    expect(vm.hitTest(1200, 0, 12)).toBe(6);
+    expect(vm.hitTest(800, 0, 12)).toBe(4);
+  });
+
+  it('控制点归段：第 k 段吃下标 3k..3k+3，末锚点夹回最后一段', () => {
+    const vm = two();
+    expect(vm.segmentOf(0)).toBe(0);
+    expect(vm.segmentOf(2)).toBe(0);
+    expect(vm.segmentOf(3)).toBe(1); // 接点算后一段的起点
+    expect(vm.segmentOf(6)).toBe(1); // floor(6/3)=2 越界，夹回
+  });
+
+  it('换路径后段号自愈 —— 从 3 段那条切到单段那条不会留个越界的段号', () => {
+    const vm = new EditorVM({
+      rev: 1,
+      paths: [TWO_SEG.paths[0], { id: 'one', p: [0, 0, 1, 0, 2, 0, 3, 0] }],
+      waves: [],
+    });
+    vm.selectedSegment = 1;
+    vm.selectedPath = 1;
+    expect(vm.selectedSegment).toBe(0);
+  });
+
+  it('拖锚点：两侧手柄刚性跟随，形状不变', () => {
+    const vm = two();
+    vm.dragPoint(3, 600, 500); // 接点往上抬 500
+    const p = vm.draft.paths[0].p;
+    expect(p.slice(4, 10)).toEqual([400, 500, 600, 500, 800, 500]);
+  });
+
+  it('拖手柄：对面镜像方向、**保留原长**', () => {
+    const vm = two();
+    vm.dragPoint(4, 600, 300); // 出向手柄扳成朝上，离锚点 300
+    const p = vm.draft.paths[0].p;
+    expect(p.slice(8, 10)).toEqual([600, 300]);
+    expect(p.slice(4, 6)).toEqual([600, -200]); // 对面转到反方向，长度仍是 200
+  });
+
+  it('按住不镜像（Alt）就只动这一个 ⇒ 故意折出一个角', () => {
+    const vm = two();
+    vm.dragPoint(4, 600, 300, { mirror: false });
+    expect(vm.draft.paths[0].p.slice(4, 6)).toEqual([400, 0]); // 对面纹丝不动
+    expect(vm.corners()).toEqual([{ seg: 1, deg: 90 }]);
+  });
+
+  it('手柄拖到锚点上：夹到 MIN_HANDLE、方向沿用原来那条，对面保持原长', () => {
+    const vm = two();
+    vm.dragPoint(4, 600, 0); // 正好压在接点上 ⇒ 方向未定义
+    const p = vm.draft.paths[0].p;
+    expect(p.slice(8, 10)).toEqual([600 + MIN_HANDLE, 0]); // 沿用原方向（+x）推出去
+    expect(Math.hypot(p[4] - 600, p[5] - 0)).toBeCloseTo(200, 6); // 对面没被一起塌掉
+  });
+
+  it('塌到最小值之后还拽得回来 —— 这是「对面保留原长」必须带下限的原因', () => {
+    const vm = two();
+    vm.dragPoint(2, 600, 0); // 进向手柄压到接点上 ⇒ 夹成 60
+    expect(Math.hypot(vm.draft.paths[0].p[4] - 600, vm.draft.paths[0].p[5])).toBeCloseTo(60, 6);
+    vm.dragPoint(2, 258, 0); // 再拖远
+    expect(Math.hypot(vm.draft.paths[0].p[4] - 600, vm.draft.paths[0].p[5])).toBeCloseTo(342, 6);
+  });
+
+  it('对面那个已经塌在锚点上时，拖这一边把它救回来 —— 用户报的「后面变成一个点」就是这个', () => {
+    // 一条**接点出向手柄压在锚点上**的路径（手编的旧数据，或没有下限时镜像塌出来的）。
+    // 没有下限的话 `len` 恒为 0，镜像每次都把它算回锚点 ⇒ 那个点永远回不来。
+    const vm = new EditorVM({
+      rev: 1,
+      paths: [{ id: 'flat', p: [0, 0, 200, 0, 400, 0, 600, 0, 600, 0, 1000, 0, 1200, 0] }],
+      waves: [],
+    });
+    vm.dragPoint(2, 300, 0); // 拖进向手柄，出向手柄跟着被镜像
+    const p = vm.draft.paths[0].p;
+    expect(Math.hypot(p[8] - 600, p[9] - 0)).toBeCloseTo(MIN_HANDLE, 6);
+  });
+
+  it('首尾锚点没有对面，镜像时不越界', () => {
+    const vm = two();
+    expect(() => vm.dragPoint(1, 200, 400)).not.toThrow();
+    expect(vm.draft.paths[0].p.slice(0, 2)).toEqual([0, 0]); // 起点锚点没被动过
+  });
+
+  it('折角报得出段号与度数，给 View 标红', () => {
+    const vm = two();
+    expect(vm.corners()).toEqual([]); // 共线 = 不是折角
+    vm.dragPoint(4, 600, 300, { mirror: false });
+    expect(vm.corners()).toEqual([{ seg: 1, deg: 90 }]);
   });
 });

@@ -2,12 +2,12 @@
   "ver": "1.2.0",
   "importer": "directory",
   "imported": true,
-  "uuid": "be9d1ad6-1d0c-46bb-b3eb-33adcd7cb771",
+  "uuid": "4cd3de28-192e-4f36-ae23-4de18d30f26b",
   "files": [],
   "subMetas": {},
   "userData": {
     "isBundle": true,
     "priority": 1,
-    "bundleName": "skin-base-mail"
+    "bundleName": "skin-default-lobby"
   }
 }

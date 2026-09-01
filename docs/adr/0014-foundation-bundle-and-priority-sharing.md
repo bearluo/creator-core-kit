@@ -6,7 +6,7 @@
 
 # ADR-0014：业务地基单独成 bundle，跨 bundle 共享代码靠 bundle 优先级
 
-> 摘要：AOT 与功能模块之间补一层 `foundation` bundle，承载协议 / 登录 / 认证 / 模块清单等业务地基；
+> 摘要：base 与功能模块之间补一层 `foundation` bundle，承载协议 / 登录 / 认证 / 模块清单等业务地基；
 > 它启动期加载、常驻不卸、**可热更不重启**。跨 bundle 共享代码不复制，靠优先级归属保证唯一。
 > 何时读：往 demo 加「所有模块都要用」的东西时、决定某段代码放哪一层时、改 bundle 优先级前。
 
@@ -32,7 +32,7 @@ demo 的 `assets/` 因此变成三层，目录即分层：
 
 | 层 | 目录 | 换它要 |
 |---|---|---|
-| ① AOT | `assets/boot/`（`Boot.scene` / `Bootstrap.ts` / `app-config.ts` / 启动界面 / `foundation-api.ts`） | 发新包、重启 |
+| ① base | `assets/boot/`（`Boot.scene` / `Bootstrap.ts` / `app-config.ts` / 启动界面 / `foundation-api.ts`） | 热更、**重启** |
 | ② 地基 | `assets/foundation/` | **热更，不重启** |
 | ③ 模块 | `assets/modules/*` | 按需 load / release |
 
@@ -51,13 +51,13 @@ demo 的 `assets/` 因此变成三层，目录即分层：
 | `lobby` | 3 |
 | 功能模块（shop / mail / mini-clicker / mini-dodge） | 1 |
 
-`foundation` 高于所有引用它的包 → 它的代码归属它自己，模块引用的是**同一份**，热更地基对已装模块立即生效。同时低于内置的 `main`(7) / `resources`(8) → 不会反过来把 AOT 框架代码吸进热更包。
+`foundation` 高于所有引用它的包 → 它的代码归属它自己，模块引用的是**同一份**，热更地基对已装模块立即生效。同时低于内置的 `main`(7) / `resources`(8) → 不会反过来把 base 框架代码吸进热更包。
 
 于是模块可以**正常 `import` 地基的函数与常量**，不必为了怕复制而全走 DI。
 
 ### 4. 主包只能通过 `import type` + `js.getClassByName` 桥接地基
 
-主包 `import` 地基的任何**值**，都会让那段代码被判给主包（优先级最高者赢）→ 地基进 AOT → 热更失效。所以接缝定死为 `assets/boot/foundation-api.ts`：一个 `interface`（`import type`，编译期擦除）+ 两个主包自己的字符串常量（bundle 名、类名）。运行时 `js.getClassByName('DemoFoundation')` 取类——`@ccclass` 在 bundle 加载执行脚本时已把它注册进 cc 类表，这是引擎原生的跨 bundle 通道，不必自建 `globalThis` 注册表。
+主包 `import` 地基的任何**值**，都会让那段代码被判给主包（优先级最高者赢）→ 地基进 base → 热更失效。所以接缝定死为 `assets/boot/foundation-api.ts`：一个 `interface`（`import type`，编译期擦除）+ 两个主包自己的字符串常量（bundle 名、类名）。运行时 `js.getClassByName('DemoFoundation')` 取类——`@ccclass` 在 bundle 加载执行脚本时已把它注册进 cc 类表，这是引擎原生的跨 bundle 通道，不必自建 `globalThis` 注册表。
 
 `@ccclass` 用在**非 `Component`** 类上同样会注册进类表（已实测），所以地基入口不必是组件、不必配一个只为承载它而存在的 prefab。
 

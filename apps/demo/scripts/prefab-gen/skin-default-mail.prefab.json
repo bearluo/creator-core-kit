@@ -1,5 +1,5 @@
 {
-  "url": "db://assets/skins/base/mail/Mail.prefab",
+  "url": "db://assets/skins/default/mail/Mail.prefab",
   "root": {
     "name": "Mail",
     "comp": "MailView",

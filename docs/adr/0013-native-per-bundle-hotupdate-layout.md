@@ -16,7 +16,7 @@
 
 1. **一 bundle 一份 manifest**，文件名 `<bundle>.manifest` / `<bundle>.version.manifest`，与 base 的 `project.manifest` / `version.manifest` 并列在同一 `packageUrl` 根下。由 `cck-manifest --split` 产出。
 2. **所有 manifest 的 asset key 一律相对 data 根**（`assets/shop/index.js`），bundle manifest 只是全表的一个子集，不是「相对 bundle 目录」的独立表。
-3. **base 的边界 = AOT bundle 名单**：`src/` + `jsb-adapter/` + `assets/{main,internal,resources}` 归 base，其余 `assets/<name>/` 各自成包。名单可经 `--aot-bundles` 覆盖。
+3. **base 的边界 = base bundle 名单**：`src/` + `jsb-adapter/` + `assets/{main,internal,resources}` 归 base，其余 `assets/<name>/` 各自成包。名单可经 `--base-bundles` 覆盖。
 4. **一 bundle 一 storagePath**：`<writablePath>cck-bundle-asset/<bundle>/`，与 base 的 `<writablePath>cck-remote-asset/` **并列而非嵌套**。
 5. **模块 bundle 的 `apply()` 不写 localStorage**；只有 base 写（键 `HotUpdateSearchPaths`，供 `build-templates/native/index.ejs` 冷启动还原）。
 6. **更新挂在 `BundleManager.load` 之前**，经 core 的 `BundleUpdater` 接缝（`ensureLatest(bundle)`，永不 reject）。

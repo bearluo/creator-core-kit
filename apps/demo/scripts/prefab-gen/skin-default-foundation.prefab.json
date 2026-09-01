@@ -1,5 +1,5 @@
 {
-  "url": "db://assets/skins/base/foundation/login/Login.prefab",
+  "url": "db://assets/skins/default/foundation/login/Login.prefab",
   "root": {
     "name": "Login",
     "size": [1080, 1920],

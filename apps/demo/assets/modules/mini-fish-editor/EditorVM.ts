@@ -15,6 +15,7 @@
  */
 import { signal, type Signal } from '@cck/core';
 import type { FishContent, FishGroup } from '../mini-fish/content/content-types';
+import { MIN_HANDLE, segmentCount } from '../mini-fish/content/paths';
 
 /** 草稿态的一条路径。跟 {@link FishContent} 的区别只有一个：可变。 */
 export interface DraftPath {
@@ -123,6 +124,19 @@ export class EditorVM {
   selectedPath = 0;
   selectedWave = 0;
 
+  /**
+   * 编辑中的第几段。**读出来一定合法** —— `selectedPath` 是 View 直接写的公开字段，
+   * 换到一条更短的路径上时这个段号会越界；夹在读的这一刻，谁改路径都不用记得同步。
+   */
+  get selectedSegment(): number {
+    return Math.min(this.segment, Math.max(0, this.segments() - 1));
+  }
+  set selectedSegment(v: number) {
+    this.segment = Math.max(0, v);
+  }
+
+  private segment = 0;
+
   private readonly source: FishContent;
   private readonly storage?: EditorStorage;
   private readonly key: string;
@@ -175,6 +189,72 @@ export class EditorVM {
 
   // —— 控制点 ——————————————————————————————————————————————————————
 
+  /** 选中路径有几段。 */
+  segments(): number {
+    const p = this.draft.paths[this.selectedPath]?.p;
+    return p ? segmentCount(p) : 0;
+  }
+
+  /** 第 `index` 个控制点属于哪一段 —— 第 k 段吃下标 `3k..3k+3`，末锚点夹回最后一段。 */
+  segmentOf(index: number): number {
+    return Math.max(0, Math.min(this.segments() - 1, Math.floor(index / 3)));
+  }
+
+  /**
+   * 在**尾巴**接一段，顺着末端切线接出去 ⇒ 新接点两侧切线共线，**天然平滑**。
+   * 接完选中新那段：加段的下一个动作十有八九是调它。
+   */
+  addSegment(): void {
+    const p = this.draft.paths[this.selectedPath]?.p;
+    if (!p) return;
+    const n = p.length;
+    const ax = p[n - 2];
+    const ay = p[n - 1];
+    const vx = ax - p[n - 4];
+    const vy = ay - p[n - 3];
+    const len = Math.hypot(vx, vy) || 1;
+    for (const k of [260, 520, 780]) {
+      p.push(Math.round(ax + (vx / len) * k), Math.round(ay + (vy / len) * k));
+    }
+    this.selectedSegment = segmentCount(p) - 1;
+    this.bump();
+  }
+
+  /** 删末段。**少于 2 段不许删** —— 删空了这条路径就不存在了，那是 {@link removePath} 的活。 */
+  removeSegment(): void {
+    const p = this.draft.paths[this.selectedPath]?.p;
+    if (!p || segmentCount(p) < 2) return;
+    p.length -= 6;
+    this.bump();
+  }
+
+  /**
+   * 每个**折角**接点的段号与度数（0 度 = 平滑，不报）。View 拿它标红。
+   *
+   * 折角是**允许**的（决策：接点处切线可以不连续），报出来只为「不是手滑弄出来的」——
+   * 位置连续由数据结构保证（相邻两段共享接点坐标），切线连续则要人自己看着办。
+   */
+  corners(): { seg: number; deg: number }[] {
+    const p = this.draft.paths[this.selectedPath]?.p;
+    const out: { seg: number; deg: number }[] = [];
+    if (!p) return out;
+    for (let k = 1; k < segmentCount(p); k++) {
+      const i = k * 6; // 接点在 p 里的下标
+      const ax = p[i] - p[i - 2];
+      const ay = p[i + 1] - p[i - 1]; // 进：前一段 P2 → 接点
+      const bx = p[i + 2] - p[i];
+      const by = p[i + 3] - p[i + 1]; // 出：接点 → 后一段 P1
+      const la = Math.hypot(ax, ay);
+      const lb = Math.hypot(bx, by);
+      if (la < 1e-6 || lb < 1e-6) continue;
+      const cos = (ax * bx + ay * by) / (la * lb);
+      if (cos < 0.999) {
+        out.push({ seg: k, deg: Math.round((Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI) });
+      }
+    }
+    return out;
+  }
+
   /**
    * 选中路径上离 `(x, y)` 最近的控制点，超出 `tol` 返回 `null`。
    * 世界坐标进世界坐标出 —— 屏幕坐标的换算是 View 的事（它才知道画布多大）。
@@ -184,7 +264,7 @@ export class EditorVM {
     if (!path) return null;
     let best = -1;
     let bestD = tol;
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < path.p.length / 2; i++) {
       const d = Math.hypot(x - path.p[i * 2], y - path.p[i * 2 + 1]);
       if (d <= bestD) {
         best = i;
@@ -194,12 +274,73 @@ export class EditorVM {
     return best < 0 ? null : best;
   }
 
-  /** 把选中路径的第 `index` 个控制点挪到 `(x, y)`。 */
-  dragPoint(index: number, x: number, y: number): void {
+  /**
+   * 把选中路径的第 `index` 个控制点挪到 `(x, y)`。三条规矩全在这儿，View 一条都不重复：
+   *
+   * - 拖**锚点**：两侧手柄刚性跟随（相对位置不变），否则挪一下整段就变形了。
+   * - 拖**手柄**：接点对面那个只对齐方向、**保留原长** —— 拖这一段不该把另一段也拉变形。
+   *   `mirror: false`（View 按 Alt）就只动这一个，那正是**故意折角**的做法。
+   * - 手柄离锚点不许近于 {@link MIN_HANDLE}：贴上去导数 `3(P1−P0)` 退化成 0，`angleAt`
+   *   那道守卫返回 0 ⇒ 鱼游到那儿**突然朝右**，不崩不报错，只能在这里挡住。
+   */
+  dragPoint(index: number, x: number, y: number, options: { mirror?: boolean } = {}): void {
     const path = this.draft.paths[this.selectedPath];
-    if (!path || index < 0 || index > 3) return;
-    path.p[index * 2] = x;
-    path.p[index * 2 + 1] = y;
+    if (!path) return;
+    const p = path.p;
+    const count = p.length / 2;
+    if (index < 0 || index >= count) return;
+
+    if (index % 3 === 0) {
+      const dx = x - p[index * 2];
+      const dy = y - p[index * 2 + 1];
+      p[index * 2] = x;
+      p[index * 2 + 1] = y;
+      for (const j of [index - 1, index + 1]) {
+        if (j < 0 || j >= count) continue;
+        p[j * 2] += dx;
+        p[j * 2 + 1] += dy;
+      }
+      this.bump();
+      return;
+    }
+
+    const anchor = index % 3 === 1 ? index - 1 : index + 1;
+    const ax = p[anchor * 2];
+    const ay = p[anchor * 2 + 1];
+    let vx = x - ax;
+    let vy = y - ay;
+    let d = Math.hypot(vx, vy);
+    if (d < MIN_HANDLE) {
+      if (d < 1e-6) {
+        // 正好落在锚点上 ⇒ 方向未定义。沿用它**原来**的方向，别凭空造一个
+        vx = p[index * 2] - ax;
+        vy = p[index * 2 + 1] - ay;
+        d = Math.hypot(vx, vy);
+        if (d < 1e-6) {
+          vx = 1;
+          vy = 0;
+          d = 1;
+        } // 连原来都退化了（旧数据修复）
+      }
+      x = Math.round(ax + (vx / d) * MIN_HANDLE);
+      y = Math.round(ay + (vy / d) * MIN_HANDLE);
+      vx = x - ax;
+      vy = y - ay;
+      d = MIN_HANDLE;
+    }
+    p[index * 2] = x;
+    p[index * 2 + 1] = y;
+
+    if (options.mirror !== false) {
+      const opp = index % 3 === 1 ? anchor - 1 : anchor + 1;
+      if (opp >= 0 && opp < count) {
+        // 对面保持原长，但同样不许短于最小值 —— 一旦塌到零就再也回不来（长度恒为 0，
+        // 镜像每次都把它算回锚点上）
+        const len = Math.max(MIN_HANDLE, Math.hypot(p[opp * 2] - ax, p[opp * 2 + 1] - ay));
+        p[opp * 2] = Math.round(ax - (vx / d) * len);
+        p[opp * 2 + 1] = Math.round(ay - (vy / d) * len);
+      }
+    }
     this.bump();
   }
 

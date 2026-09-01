@@ -28,7 +28,7 @@
 3. **包内那份未必存在**。从没随包发过的新模块 / 新马甲皮走种子 manifest 全量下载，本地没有旧版可退——降级只是把失败从 `ensureLatest` 推迟到 `loadBundle`，报错更难查。
 4. **web 上前提更弱**：版本表与页面同源。页面 + 一堆 js 都拉下来了却少这一个 json，几乎只有一种解释——它没被部署上去。
 
-而「客户端太旧、协议对不上」不归这条链管：那是 `dispatch` 步握手时服务端按 `appVersion` / `capabilityStamp` 判的（`action: update` → `needFullUpdate`），**排在所有更新之前**；包内 AOT 与包内 bundle 是同一次构建的产物，天然配套，不存在「新 AOT 配旧 bundle」的错配。
+而「客户端太旧、协议对不上」不归这条链管：那是 `dispatch` 步握手时服务端按 `appVersion` / `capabilityStamp` 判的（`action: update` → `needFullUpdate`），**排在所有更新之前**；包内 base 与包内 bundle 是同一次构建的产物，天然配套，不存在「新 base 配旧 bundle」的错配。
 
 ## 决策
 

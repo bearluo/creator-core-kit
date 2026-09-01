@@ -303,19 +303,22 @@ export class FishEditor extends Component {
       }
       g.stroke();
       if (!sel) return;
-      // 把手：p0-p1、p2-p3 两条虚线（这里用细实线，Graphics 没有虚线）
+      // 把手：每个手柄连回自己的锚点（下标 %3===0 是锚点，两侧各一个手柄）
       g.lineWidth = 1;
       g.strokeColor = COL_HANDLE;
-      for (const [a, b] of [[0, 1], [2, 3]] as const) {
+      const count = path.p.length / 2;
+      for (let i = 0; i < count; i++) {
+        if (i % 3 === 0) continue;
+        const a = i % 3 === 1 ? i - 1 : i + 1;
         const [ax, ay] = this.toBoard(path.p[a * 2], path.p[a * 2 + 1]);
-        const [bx, by] = this.toBoard(path.p[b * 2], path.p[b * 2 + 1]);
+        const [bx, by] = this.toBoard(path.p[i * 2], path.p[i * 2 + 1]);
         g.moveTo(ax, ay);
         g.lineTo(bx, by);
       }
       g.stroke();
-      for (let k = 0; k < 4; k++) {
+      for (let k = 0; k < count; k++) {
         const [x, y] = this.toBoard(path.p[k * 2], path.p[k * 2 + 1]);
-        g.fillColor = k === 0 || k === 3 ? COL_END : COL_HANDLE;
+        g.fillColor = k % 3 === 0 ? COL_END : COL_HANDLE;
         g.circle(x, y, 9);
         g.fill();
       }
