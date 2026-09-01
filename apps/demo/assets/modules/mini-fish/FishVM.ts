@@ -35,7 +35,8 @@ import { createFeedSystem } from './ecs/feedSystem';
 import { createNetSystem } from './ecs/netSystem';
 import { despawnSystem } from './ecs/despawnSystem';
 import { pathSystem } from './ecs/pathSystem';
-import { randomFeeder, type FishFeeder } from './seams/feeder';
+import { combineFeeders, randomFeeder, waveFeeder, type FishFeeder } from './seams/feeder';
+import { CONTENT } from './content/content';
 import { MAX_FISH_R } from './content/fish-kinds';
 import {
   localArbiter,
@@ -98,6 +99,23 @@ export interface FishVMOptions {
   rand?: () => number;
 }
 
+/**
+ * 单机的默认投喂 = **编好的鱼阵 + 压低密度的随机底噪**。合流在这儿（装配点），不在
+ * `waveFeeder` 内部 —— 编辑器要的正是「只放鱼阵、不要底噪」，它自己传 `feeder` 就没有底噪。
+ *
+ * 底噪那两个数不是拍的：鱼是**流**，稳态同屏数 = 投喂率 × 平均寿命（八条路径平均弧长 2387 ÷
+ * 平均速度 140 ≈ 17 秒）。1 条/秒 × 17 秒 ≈ **17 条**，约为原先（0.6 秒 2 批 = 57 条）的三分之一
+ * —— **总量守恒**，剩下三分之二让给鱼阵。底噪一旦超过总量的三分之一，眼睛就分不出
+ * 「这是一队」还是「碰巧游到一起」，鱼阵的钱就白花了。判据与闸见
+ * `docs/design/2026-08-31-mini-fish-content-editor.md` §7 / §8。
+ */
+function defaultFeeder(rand: () => number): FishFeeder {
+  return combineFeeders(
+    waveFeeder(CONTENT, { loop: true }),
+    randomFeeder({ interval: 1.0, batch: 1, rand }),
+  );
+}
+
 export class FishVM {
   /** ECS world。View 自己 `defineQuery` 去 diff 鱼的生灭（`enterQuery` / `exitQuery`）。 */
   readonly world: EcsWorld;
@@ -137,7 +155,7 @@ export class FishVM {
     this.world = createEcsWorld();
     this.hash = createSpatialHash(CELL_SIZE);
     this.runner = createEcsRunner(this.world, [
-      createFeedSystem(options.feeder ?? randomFeeder({ rand })),
+      createFeedSystem(options.feeder ?? defaultFeeder(rand)),
       pathSystem,
       movementSystem,
       createSpatialIndexSystem(this.hash),

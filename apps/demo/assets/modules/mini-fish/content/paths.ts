@@ -8,9 +8,11 @@
  * 坐标系：**屏心为原点**的横屏设计像素，x∈[-960,960]、y∈[-540,540]。控制点故意伸到屏外
  * （±1160 / ±740）：鱼从画面外游进来、从画面外游出去，玩家看不到「凭空出现」。
  *
- * 路径数据是**手写文件**，不是生成物 —— 判据是「源在不在仓里」（CLAUDE.md 那条）：
- * `mini-hop` 的关卡有个 `.capx` 源在仓外所以烘成生成物 + 配闸；这里没有外部源，手写即真源。
+ * 路径**数据**住 `content.ts`（编辑器导出的那份），本文件只留几何计算。它不是生成物 ——
+ * 判据是「源在不在仓里」（CLAUDE.md 那条）：`mini-hop` 的关卡有个 `.capx` 源在仓外所以烘成
+ * 生成物 + 配闸；这里源和产物是同一个文件，改配一条内容自检单测（`test/…/content.test.ts`）。
  */
+import { CONTENT } from './content';
 
 /** 横屏玩法场地（设计像素，屏心为原点）。 */
 export const FIELD = { width: 1920, height: 1080 } as const;
@@ -50,24 +52,17 @@ function arcLength(p: readonly number[]): number {
   return total;
 }
 
-function path(...p: number[]): FishPath {
-  return { p, length: arcLength(p) };
-}
-
 /**
- * 路径表。下标即 `PathFollow.pathId[eid]`，**顺序就是存档格式**，只许往后加。
- * 八条覆盖四种观感：横穿、斜穿、上下大摆、以及一条从左边进又从左边出的回旋。
+ * 运行期的路径表：`CONTENT.paths` 的顺序 + 载入时采样出来的弧长。
+ *
+ * **下标只是运行期的事**（`PathFollow.pathId[eid]` 只装得下数字），存档格式是 `content.ts` 里的
+ * **字符串 id**；id → 下标的转换发生在 `waveFeeder` 载入内容那一刻。所以改 `content.paths` 的
+ * 顺序不再会让鱼阵静默走错路 —— 引用不到会当场抛。
  */
-export const PATHS: readonly FishPath[] = [
-  path(-1160, 0, -400, 0, 400, 0, 1160, 0), // 0 左→右 平直
-  path(1160, 260, 400, 260, -400, 260, -1160, 260), // 1 右→左 平直偏上
-  path(-1160, -420, -400, -200, 400, 200, 1160, 420), // 2 左下→右上 斜穿
-  path(1160, 420, 400, 200, -400, -200, -1160, -420), // 3 右上→左下 斜穿
-  path(-1160, -300, -400, 600, 400, -600, 1160, 300), // 4 左→右 大摆
-  path(1160, -300, 400, 600, -400, -600, -1160, 300), // 5 右→左 大摆
-  path(-300, -740, -300, -200, -300, 200, -300, 740), // 6 下→上 竖直
-  path(-1160, -200, 600, -700, 600, 700, -1160, 200), // 7 左进左出 回旋
-];
+export const PATHS: readonly FishPath[] = CONTENT.paths.map((it) => ({
+  p: it.p,
+  length: arcLength(it.p),
+}));
 
 /** 取一条路径。越界抛 —— 只可能来自投喂源写错，早炸早发现。 */
 export function fishPath(pathId: number): FishPath {

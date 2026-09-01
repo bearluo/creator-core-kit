@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { defineQuery } from '@cck/ecs-bitecs';
 import type { CannonAgent } from '../../../assets/modules/mini-fish/seams/agent';
-import { Bullet, PathFollow } from '../../../assets/modules/mini-fish/ecs/components';
+import { Bullet, Fish, PathFollow } from '../../../assets/modules/mini-fish/ecs/components';
 import { localArbiter, memoryWallet, MAX_LEVEL } from '../../../assets/modules/mini-fish/seams/economy';
 import type { FishEvent } from '../../../assets/modules/mini-fish/events';
-import { scriptedFeeder } from '../../../assets/modules/mini-fish/seams/feeder';
+import { randomFeeder, scriptedFeeder } from '../../../assets/modules/mini-fish/seams/feeder';
 import { fishKind } from '../../../assets/modules/mini-fish/content/fish-kinds';
 import { CANNON_SLOTS, FishVM, type FishVMOptions } from '../../../assets/modules/mini-fish/FishVM';
 
@@ -157,5 +157,33 @@ describe('FishVM 的边界', () => {
     PathFollow.t[eid] = 1;
     vm.tick(FRAME);
     expect(vm.snapshot()).toHaveLength(0);
+  });
+});
+
+/** 确定性 PRNG（mulberry32）—— 稳态断言不能靠 Math.random，否则它会随机红。 */
+function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const fishes = defineQuery([Fish]);
+
+describe('底噪密度', () => {
+  it('稳态同屏鱼数落在 12~24 —— 有人改了 interval 把屏幕搞空或搞爆，这里当场红', () => {
+    // 只跑底噪（不含鱼阵），判据：投喂率 1 条/秒 × 平均寿命 ≈ 17 秒 ⇒ 稳态 ≈ 17 条。
+    const vm = new FishVM({
+      aiAgents: [],
+      bailout: 0,
+      feeder: randomFeeder({ interval: 1.0, batch: 1, rand: seeded(20260831) }),
+    });
+    for (let i = 0; i < 60 * 60; i++) vm.tick(FRAME);
+    const live = fishes(vm.world).length;
+    expect(live).toBeGreaterThanOrEqual(12);
+    expect(live).toBeLessThanOrEqual(24);
   });
 });

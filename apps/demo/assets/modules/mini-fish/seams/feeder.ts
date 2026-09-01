@@ -10,6 +10,7 @@
  */
 import { FISH_KINDS } from '../content/fish-kinds';
 import { PATHS } from '../content/paths';
+import type { FishContent } from '../content/content';
 
 /** 放一条鱼进来：什么种、走哪条路、多快（像素/秒）。 */
 export interface FishSpawn {
@@ -100,6 +101,109 @@ export function randomFeeder(options: RandomFeederOptions = {}): FishFeeder {
         }
       }
       if (batches >= 4) acc = 0;
+      return out;
+    },
+  };
+}
+
+/**
+ * 把几个投喂源合成一个。**合流发生在装配点**，不在 {@link waveFeeder} 内部 ——
+ * 编辑器要的正是「只放鱼阵、不要底噪」，不合流就完事；反过来把随机源塞进鱼阵播放器里面，
+ * 编辑器就得多一个「关掉底噪」的开关，而一旦漏关，编的人会以为那些随机鱼是自己摆的。
+ *
+ * ⚠️ 用 `flatMap` 不用 `[...a, ...b]`：数组字面量展开会被 Cocos 构建降级成 `[].concat(x)`。
+ */
+export function combineFeeders(...feeders: readonly FishFeeder[]): FishFeeder {
+  return { next: (dt) => feeders.flatMap((f) => f.next(dt)) };
+}
+
+export interface WaveFeederOptions {
+  /** 要播的阵 id 序列。不给就是表里全部，按表序。 */
+  readonly order?: readonly string[];
+  /** 播完最后一阵回到第一阵。默认 `false`（编辑器要的是「放一次看看」）。 */
+  readonly loop?: boolean;
+  /** 阵与阵之间的间隔（秒），从上一阵**投喂完毕**算起。见下方注释。 */
+  readonly gap?: number;
+}
+
+/** 阵长至少一帧，否则一个「所有鱼都在第 0 秒进场」的阵配上 `loop` 会原地空转。 */
+const MIN_WAVE_SPAN = 1 / 60;
+/** 阵与阵之间的默认间隔。 */
+const DEFAULT_WAVE_GAP = 3;
+
+/**
+ * 播一份**编好的鱼阵**。它是纯粹的表播放器：没有随机、没有 `rand` 注入，
+ * 同一份 `content` + 同一串 `dt` 必吐出同一串 spawn —— 将来这套逻辑要在服务端重写一遍，
+ * **确定性是能不能逐行对照的前提**。
+ *
+ * **id → 下标的转换就发生在这里**（载入的那一刻）：`FishSpawn` 里只装得下数字，而内容表用
+ * 稳定字符串 id。**引用不到当场抛**，不许静默跳过 —— 静默跳过就是「这一阵少了两条鱼」，
+ * 找起来极贵。
+ *
+ * **接续判据是「上一阵投喂完毕 + `gap`」，不是等清场**：投喂器不动已经在场的鱼，下一阵开始
+ * 不截断任何东西；等清场则每阵之间要空出十几秒（一队 8 条 `gap 0.3` 的阵 2.1 秒投完、
+ * 却要 19 秒才游干净）。⚠️「清场」那个判据只属**编辑器的预览窗口**，别搬进来。
+ */
+export function waveFeeder(content: FishContent, options: WaveFeederOptions = {}): FishFeeder {
+  const pathIndex = new Map(content.paths.map((p, i) => [p.id, i]));
+  const kindIndex = new Map(FISH_KINDS.map((k, i) => [k.id, i]));
+  const waveById = new Map(content.waves.map((w) => [w.id, w]));
+  const order = options.order ?? content.waves.map((w) => w.id);
+  const gap = options.gap ?? DEFAULT_WAVE_GAP;
+  const loop = options.loop ?? false;
+
+  // 载入即展开成「第几秒放哪条鱼」。运行期只做比较，不再查表。
+  const plan = order.map((id) => {
+    const wave = waveById.get(id);
+    if (!wave) throw new Error(`[mini-fish] 未知鱼阵 '${id}'`);
+    const queue: { at: number; spawn: FishSpawn }[] = [];
+    for (const g of wave.groups) {
+      const pathId = pathIndex.get(g.path);
+      if (pathId === undefined) {
+        throw new Error(`[mini-fish] 鱼阵 '${id}' 引用了未知路径 '${g.path}'`);
+      }
+      const kind = kindIndex.get(g.kind);
+      if (kind === undefined) {
+        throw new Error(`[mini-fish] 鱼阵 '${id}' 引用了未知鱼种 '${g.kind}'`);
+      }
+      const step = g.gap ?? 0;
+      for (let i = 0; i < g.count; i++) {
+        queue.push({ at: g.at + i * step, spawn: { kind, pathId, speed: g.speed } });
+      }
+    }
+    queue.sort((a, b) => a.at - b.at);
+    const feedEnd = queue.length > 0 ? queue[queue.length - 1].at : 0;
+    return { queue, span: Math.max(MIN_WAVE_SPAN, feedEnd + gap) };
+  });
+
+  let idx = 0;
+  let elapsed = 0;
+  let emitted = 0;
+  let done = plan.length === 0;
+
+  return {
+    next(dt) {
+      if (done) return [];
+      elapsed += dt;
+      const out: FishSpawn[] = [];
+      // 大 dt 一次补齐（切后台回来、单测一步跳几秒）：不限批数，因为鱼阵是**时刻表**不是速率 ——
+      // 少放一条就是这一阵缺了一条鱼。真正的量由内容自己决定，不该被投喂器偷偷截断。
+      for (;;) {
+        const cur = plan[idx];
+        while (emitted < cur.queue.length && cur.queue[emitted].at <= elapsed) {
+          out.push(cur.queue[emitted++].spawn);
+        }
+        if (elapsed < cur.span) break;
+        elapsed -= cur.span;
+        emitted = 0;
+        idx++;
+        if (idx < plan.length) continue;
+        idx = 0;
+        if (!loop) {
+          done = true;
+          break;
+        }
+      }
       return out;
     },
   };
