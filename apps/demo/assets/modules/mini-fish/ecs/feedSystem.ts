@@ -26,7 +26,7 @@ export function spawnFish(world: EcsWorld, spawn: FishSpawn): number {
 
   Fish.kind[eid] = spawn.kind;
   PathFollow.pathId[eid] = spawn.pathId;
-  PathFollow.t[eid] = 0;
+  PathFollow.progress[eid] = 0;
   PathFollow.speed[eid] = spawn.speed;
   Circle.r[eid] = kind.r;
 

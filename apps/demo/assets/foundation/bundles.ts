@@ -44,10 +44,9 @@ const specs: BundleSpec[] = [
 // 引用计数保证，不再是大厅里的一段特判。
 for (const e of MODULE_CATALOG) {
   if (e.skinned) specs.push({ name: currentSkinBundle(e.id) });
-  specs.push({
-    name: e.bundle,
-    needs: e.skinned ? ['foundation', () => currentSkinBundle(e.id)] : ['foundation'],
-  });
+  const base = e.skinned ? ['foundation', () => currentSkinBundle(e.id)] : ['foundation'];
+  // alsoNeeds：动态取别的包资源时的声明（静态闸看不见那种引用）。⚠️ 用 concat 不用 [...]
+  specs.push({ name: e.bundle, needs: base.concat(e.alsoNeeds ?? []) });
 }
 
 export const BUNDLE_GRAPH: readonly BundleSpec[] = specs;

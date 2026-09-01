@@ -30,7 +30,7 @@ describe('spawnFish', () => {
     expect(Circle.r[eid]).toBe(fishKind(9).r);
     expect(PathFollow.pathId[eid]).toBe(0);
     expect(PathFollow.speed[eid]).toBeCloseTo(77, 4);
-    expect(PathFollow.t[eid]).toBe(0);
+    expect(PathFollow.progress[eid]).toBe(0);
   });
 
   it('只有炸弹鱼带 Bomb 标记', () => {

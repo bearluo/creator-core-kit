@@ -24,7 +24,7 @@ function makeVM(options: FishVMOptions = {}): FishVM {
 function parkFishAtCenter(vm: FishVM): number {
   vm.tick(FRAME); // 投喂建鱼
   const eid = vm.snapshot()[0].eid;
-  PathFollow.t[eid] = 0.5;
+  PathFollow.progress[eid] = 0.5;
   vm.tick(FRAME); // pathSystem 按 t 摆位置
   return eid;
 }
@@ -154,7 +154,7 @@ describe('FishVM 的边界', () => {
     const vm = makeVM();
     vm.tick(FRAME);
     const eid = vm.snapshot()[0].eid;
-    PathFollow.t[eid] = 1;
+    PathFollow.progress[eid] = 1;
     vm.tick(FRAME);
     expect(vm.snapshot()).toHaveLength(0);
   });

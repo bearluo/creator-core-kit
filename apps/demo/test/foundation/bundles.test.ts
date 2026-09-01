@@ -66,8 +66,24 @@ describe('声明 vs 现实', () => {
     expect(missing).toEqual([]);
   });
 
-  it('表里的每个包都能被 mayUse 正确判定边界（模块之间默认互不可见）', () => {
+  it('模块之间默认互不可见 —— 例外只有 alsoNeeds 明写过的那几对', () => {
+    // 动态取别人包里的资源（`assets.load(path,{bundle})`）静态闸看不见，所以必须在
+    // `alsoNeeds` 里声明；声明过的这里才该放行。鱼阵编辑器取捕鱼的图集就是这么一对。
+    const declared = new Set(
+      MODULE_CATALOG.flatMap((e) => (e.alsoNeeds ?? []).map((n) => `${e.bundle} → ${n}`)),
+    );
     const mods = MODULE_CATALOG.map((e) => e.bundle);
-    for (const a of mods) for (const b of mods) if (a !== b) expect(graph.mayUse(a, b)).toBe(false);
+    for (const a of mods) {
+      for (const b of mods) {
+        if (a === b) continue;
+        expect(graph.mayUse(a, b), `${a} → ${b}`).toBe(declared.has(`${a} → ${b}`));
+      }
+    }
+  });
+
+  it('声明过 alsoNeeds 的模块，装它就把被依赖那个也装上（装卸对称由引用计数保证）', () => {
+    for (const e of MODULE_CATALOG) {
+      for (const n of e.alsoNeeds ?? []) expect(graph.needsOf(e.bundle)).toContain(n);
+    }
   });
 });

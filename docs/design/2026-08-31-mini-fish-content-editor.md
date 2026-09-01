@@ -1,8 +1,12 @@
 ---
-状态: 已定稿
+状态: 已实现（2026-09-01 · web 真产物 e2e 通过）
+改造中: docs/design/2026-09-01-mini-fish-editor-v2-proposal.md（两个页签 + 多段路径 + 交互对齐）
 日期: 2026-08-31
 依赖: docs/design/2026-08-28-mini-fish-design.md, docs/design/testing-strategy-overview.md, docs/design/lobby-modular-framework-overview.md, docs/adr/0014-foundation-bundle-and-priority-sharing.md, docs/adr/0009-bundle-layering-criterion.md
 ---
+
+> ⚠️ **正在改造**，本文描述的仍是**当前**现状（单段贝塞尔、一屏布局）。改造后的目标见上面那份提案；
+> 提案实施完成后本文会整体重写为新现状。
 
 # mini-fish 内容编辑器：路径 + 鱼阵
 
@@ -24,7 +28,7 @@
 | **分包** | `mini-fish` 优先级 `1 → 2`，编辑器包留 `1`；资源**动态**取，`deps` 保持为空 |
 | **预览** | 直接跑 `FishVM`（`aiAgents: []` ⇒ 无炮、无子弹、无结算，只有鱼在游），**不自己写一份插值** |
 | **界面** | `kind:'game'` + 自带 `Editor.scene`；界面走 prefab 三张；逻辑全在一个 `EditorVM` |
-| **入口** | `MODULE_CATALOG` 加一行 + `env` / `VEST` 门控 ⇒ 正式包里那行不存在，代码与资源零进入产物 |
+| **入口** | `MODULE_CATALOG` 加一行 + `env` / `VEST` 门控 ⇒ 正式马甲**看不见入口**。⚠️ 门控删的是入口不是产物：包照打（实测），native 要等「按包选是否随 APK」才不进产物 |
 | **闸** | 八道门**一道都不用改**；新增一条内容自检单测 |
 
 ---
@@ -86,7 +90,16 @@ mini-fish-editor   priority 1
 
 **资源动态取，不写静态引用**：`--allow-deps` 是**全局白名单**（`findDepViolations` 的 `shared` 参数不分包对），开一次等于谁都能借 mini-fish 的图。编辑器用 `assets.load(path, { bundle: 'mini-fish' })` 拿图集，`deps` 保持为 `[]`，产物闸永远不响；边界改由 `foundation/bundles.ts` 的 `BUNDLE_GRAPH.needs` 声明（那张表**一表两用**：装它之前先装谁 + 它能碰谁的资源）。
 
-**入口**：`MODULE_CATALOG` 加一行 + `env` / `VEST` 门控。正式包里那一行根本不存在 ⇒ 编辑器的代码和资源**零进入正式产物**。
+**入口**：`MODULE_CATALOG` 加一行 + `env` / `VEST` 门控 ⇒ 正式马甲**看不见入口、进不去**。
+
+⚠️ **门控删的是入口，不是产物。** 实测（2026-09-01，web 构建）：`build/web-mobile/assets/mini-fish-editor/`
+照样在（`index.js` 17.8 KB + `config.json` 371 B），而那时它**连 `MODULE_CATALOG` 那行都还没写**。
+Creator 是按**目录 meta 的 `isBundle`** 收 bundle 的，与「有没有人引用」无关。代价按平台分：
+
+| 平台 | 代价 |
+|---|---|
+| web / 小游戏 | 产物目录里多一个文件。模块**按需下载**，玩家不开编辑器就不 fetch ⇒ **实际流量 0**，首包一个字节不多 |
+| native | 目前 APK 的 `data/assets/` 里**每个 bundle 都在** ⇒ 占**安装包**几十 KB。等出包期「按包选择是否随 APK」（远程包）做了就不进 APK 产物 —— 那是分包层本来该有的能力，不是为编辑器开的特例 |
 
 ## 4. 装配（[#7](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/7)、[#9](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/9)）
 
@@ -154,7 +167,8 @@ git diff    →  改了哪几条路径、哪几个 group，逐行看得见
 
 **关掉页面只丢最后一次 debounce 内的几秒**；没点过「复制」也不会丢，下次打开有横幅问要不要恢复。
 
-- ⚠️ **`navigator.clipboard` 只在 secure context 可用**：Creator 预览的 `localhost:7456` ✅，web 产物挂在 `172.25.50.135:8082` 上 ❌。所以页面底部**一直**摆着导出全文兜底；复制失败要**明确提示**并把焦点丢进那个只读文本框——静默失败的话人会粘出上一次剪贴板里的东西。
+- ⚠️ **`navigator.clipboard` 只在 secure context 可用**：Creator 预览的 `localhost:7456` ✅，web 产物挂在 `172.25.50.135:8082` 上 ❌。所以**复制失败必须明确提示**（按钮文字改成「⚠ 复制不了 → 看控制台」），静默失败的话人会粘出上一次剪贴板里的东西。
+  兜底不是「页面底部常驻只读文本框」而是**控制台**：导出时无论成败都 `console.log` 全文。Cocos 场景里没有可选中的文本框，硬做一个要么自绘选区、要么叠一层 DOM —— 而编辑器只在桌面 web 上用，浏览器控制台本来就在手边，那才是这个宿主里等价的东西。
 - **不做 `<a download>`**（多一步搬运，还多一份忘在下载目录里的旧版本）；**不做 POST 写回本机服务**（要 token、要一条只在 dev 跑的后端命，且把「源码往返」偷偷变成运行时覆盖）。
 - 读用静态 `import`（优先级 2 > 1，合法；`as const` 顺带把类型对上）。
 - **草稿默认永不自动恢复**：顶部横幅「有一份未导出的草稿（基于 `rev 7`，12 分钟前）· 恢复 / 丢弃」。自动恢复最坏的失败不是丢数据，是**拿三天前的草稿盖掉别人贴回的内容**。草稿记基线 `rev`，key 带 `appId` 前缀（Web / 小游戏同域名共用 `localStorage`）。

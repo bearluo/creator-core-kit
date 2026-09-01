@@ -13,7 +13,7 @@ const swimmers = defineQuery([Fish, PathFollow]);
 export const despawnSystem: EcsSystem = (world) => {
   const ents = swimmers(world);
   for (let i = 0; i < ents.length; i++) {
-    if (PathFollow.t[ents[i]] >= 1) removeEntity(world, ents[i]);
+    if (PathFollow.progress[ents[i]] >= 1) removeEntity(world, ents[i]);
   }
   return world;
 };

@@ -1,4 +1,4 @@
-import { getUIVariant, registerUI, type UILayer, type UIVariant } from '@cck/core';
+import { APP, getRootContainer, getUIVariant, registerUI, type UILayer, type UIVariant } from '@cck/core';
 
 /**
  * 模块清单 —— 数据驱动的功能入口表（设计 §7）。
@@ -33,6 +33,22 @@ export interface CatalogEntry {
    *（见 {@link skinBundle}）。不登记 = 脸留在模块包，所有马甲同一张。
    */
   readonly skinned?: boolean;
+  /**
+   * 开发工具：**`env === 'prod'` 时不进大厅清单**（见 {@link visibleCatalog}）。
+   *
+   * ⚠️ 它删的是**入口**，不是产物：Creator 按目录 meta 的 `isBundle` 收 bundle，与可达性无关
+   *（实测：连这一行都还没写时，编辑器包照样出现在 `build/web-mobile/assets/` 里）。web / 小游戏
+   * 按需下载 ⇒ 玩家不点就不下；native 目前所有 bundle 随 APK 走，等出包期「按包选是否随 APK」
+   * 做了才不进产物。
+   */
+  readonly devOnly?: boolean;
+  /**
+   * 额外的包依赖，写进 `BUNDLE_GRAPH.needs`（装卸跟随 + 资源边界一表两用）。
+   *
+   * **动态**取别的包的资源时必须声明：`assets.load(path, { bundle })` 在构建期一条记录都不产生，
+   * 静态闸看不见。鱼阵编辑器就是这么用捕鱼的图集的 —— 不写静态引用，本包 `deps` 才保得住为空。
+   */
+  readonly alsoNeeds?: readonly string[];
 }
 
 /** 大厅只吃这一张清单。 */
@@ -47,7 +63,21 @@ export const MODULE_CATALOG: readonly CatalogEntry[] = [
   { id: 'mini-hop', title: '平台跳跃', bundle: 'mini-hop', kind: 'game', scene: 'Hop' },
   { id: 'mini-cards', title: '骰子卡牌', bundle: 'mini-cards', kind: 'game', scene: 'Cards' },
   { id: 'mini-fish', title: '捕鱼', bundle: 'mini-fish', kind: 'game', scene: 'Fish' },
+  // 内容编辑器：路径 + 鱼阵。开发工具，正式包里看不见入口；图集从 mini-fish 动态取。
+  { id: 'mini-fish-editor', title: '鱼阵编辑器', bundle: 'mini-fish-editor', kind: 'game', scene: 'Editor', devOnly: true, alsoNeeds: ['mini-fish'] },
 ];
+
+/**
+ * 大厅要画的那张清单 —— `prod` 里滤掉开发工具（{@link CatalogEntry.devOnly}）。
+ *
+ * `env` 从 DI 里的 `APP` 取而不是 import `boot/app-config`：地基 import 主包虽然合法
+ *（7 > 6），但那会让「跨模块契约」这一层认识具体的启动配置。拿不到就按**开发**算 ——
+ * 单测和早于 App 注册的调用都走这条路，宁可多显示一个入口，也不要因为解析不到而静默藏掉模块。
+ */
+export function visibleCatalog(): readonly CatalogEntry[] {
+  const env = getRootContainer().tryResolve(APP)?.config.env;
+  return env === 'prod' ? MODULE_CATALOG.filter((e) => !e.devOnly) : MODULE_CATALOG;
+}
 
 /**
  * 登录界面的 uiId。**不在 `MODULE_CATALOG` 里** —— 它不是大厅的功能入口，

@@ -17,7 +17,7 @@
 | 了解选型依据（MCP / 框架 / 热更调研） | `docs/research/2026-07-24-cocos-ecosystem-survey.md` |
 | **接服务端 / 定协议 / 定更新策略** | **`docs/adr/0011-server-framework-split-and-protocol-contract.md`**（决策）→ `docs/research/2026-08-03-game-server-survey.md`（依据） |
 | **给玩法接 ECS / 做经济型子游戏** | **`docs/design/2026-08-28-mini-fish-design.md`**（捕鱼设计：四道接缝 + ECS 混合边界）→ `packages/ecs-bitecs/docs/modules/{ecs,spatial}.md`（底座与 system） |
-| **做子游戏的内容编辑器 / 接鱼阵投喂** | **`docs/design/2026-08-31-mini-fish-content-editor.md`**（路径+鱼阵编辑器：源码往返 · 分包优先级 · 预览复用 FishVM · waveFeeder） |
+| **做子游戏的内容编辑器 / 接鱼阵投喂** | **`docs/design/2026-08-31-mini-fish-content-editor.md`**（路径+鱼阵编辑器：源码往返 · 分包优先级 · 预览复用 FishVM · waveFeeder）→ 改造中：`docs/design/2026-09-01-mini-fish-editor-v2-proposal.md`（两个页签 · 多段贝塞尔 · 真弧长恒速 · 交互对齐） |
 | 判断「这段代码该做 npm 包还是住 assets」 | `docs/adr/0019-npm-package-aot-vs-assets-boundary.md`（npm 包 = AOT 重启生效；assets = bundle 免重启） |
 | 追溯某个重大技术决策 | `docs/adr/`（按需建立） |
 | 新建模块文档 | 复制 `docs/design/modules/_TEMPLATE.md` |

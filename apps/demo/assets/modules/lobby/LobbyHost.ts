@@ -28,7 +28,7 @@ import {
 import { loadScene } from '@cck/engine';
 import { GAME_HOST } from '../../foundation/game/host';
 import { GATEWAY_MIGRATION } from '../../foundation/net/migration';
-import { currentSkinBundle, MODULE_CATALOG, type CatalogEntry } from '../../foundation/catalog';
+import { currentSkinBundle, visibleCatalog, type CatalogEntry } from '../../foundation/catalog';
 import type { ModuleContext } from '../../foundation/ModuleContext';
 import { LOBBY_EVENTS, type LobbyEventMap } from '../../foundation/events';
 import { gridLayout } from './grid';
@@ -204,7 +204,7 @@ class LobbyNav {
     this.scroll = scroll;
     this.itemNodes = [];
 
-    MODULE_CATALOG.forEach((entry) => {
+    visibleCatalog().forEach((entry) => {
       const node = instantiate(itemPrefab);
       content.addChild(node);
       const label = node.getChildByName(N_ITEM_LABEL)?.getComponent(Label);

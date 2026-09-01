@@ -10,7 +10,7 @@
  */
 import { FISH_KINDS } from '../content/fish-kinds';
 import { PATHS } from '../content/paths';
-import type { FishContent } from '../content/content';
+import type { FishContent } from '../content/content-types';
 
 /** 放一条鱼进来：什么种、走哪条路、多快（像素/秒）。 */
 export interface FishSpawn {

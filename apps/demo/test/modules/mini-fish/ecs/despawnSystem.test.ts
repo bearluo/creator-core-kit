@@ -11,8 +11,8 @@ describe('despawnSystem', () => {
     const w = createEcsWorld();
     const done = spawnFish(w, { kind: 0, pathId: 0, speed: 100 });
     const swimming = spawnFish(w, { kind: 1, pathId: 1, speed: 100 });
-    PathFollow.t[done] = 1;
-    PathFollow.t[swimming] = 0.99;
+    PathFollow.progress[done] = 1;
+    PathFollow.progress[swimming] = 0.99;
 
     despawnSystem(w);
     expect(Array.from(fish(w))).toEqual([swimming]);
