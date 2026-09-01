@@ -23,6 +23,7 @@ demo 是 **kit 的接入方样例**：它不实现框架能力，它演示「拿
 | 出 Android 包（命令行） | skill `/demo-build` + [`../build-configs/README.md`](../build-configs/README.md) |
 | 加场景 / 调相机 / 做横竖屏适配 | [`scene-and-camera-architecture.md`](scene-and-camera-architecture.md) |
 | 做界面（配色、字号、间距） | [`ui-style-guide.md`](ui-style-guide.md)，效果图在 [`mockups/`](mockups/) |
+| **改鱼阵编辑器的界面 / 交互** | [`mockups/fish-editor-v2-prototype.html`](mockups/fish-editor-v2-prototype.html) — 浏览器直接打开的**可交互原型，它是验收单**；决策见 [图 #11](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/11) |
 
 ## 什么归这里，什么不归
 

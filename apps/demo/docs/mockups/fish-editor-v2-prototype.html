@@ -1,0 +1,1074 @@
+<!--
+  鱼阵编辑器 v2 —— **可交互原型 / 验收单**（2026-09-01 定稿）
+
+  这不是产品代码，是一份**用来对照的规格**：Cocos 那版编辑器做出来之后，
+  逐条对着它验收。原型少一样、或做出来跟它不一样，都算实施方的偏差。
+
+  怎么用：直接用浏览器打开（单文件、无构建、无依赖；只有 Google Fonts 一个外链，
+  离线时回退到系统字体，不影响任何功能）。只管**桌面 web**，触屏不在范围内。
+
+  它定死了什么：
+    · 路径 = 分段贝塞尔，数据是一维 6n+2 个数，相邻段共享接点坐标
+    · 拖锚点手柄默认镜像对面，按住 Alt 打断；折角接点画成红方块并报度数
+    · 手柄离锚点不许近于 MIN_HANDLE（归零会让导数退化 ⇒ 鱼突然朝右）
+    · 鱼按真弧长恒速（画布上等距的青色刻点就是证据）
+    · 路径页 / 鱼阵页两个页签，画布共用，走带只在鱼阵页
+    · 鱼阵页只画这一阵用到的路线；每条路径一个显影眼睛
+    · 框一律 border-radius:6px + 1px 描边（Cocos 侧 = 16×16 九宫格图染色）
+    · 数字能敲也能 ◀▶，非法值夹紧不拒绝；下拉是弹层；进度条能拖
+    · 三栏等高（高度由中栏画布定），列表与属性栏各自竖向滚动
+
+  决策出处（每一条都有票）：
+    图  鱼阵编辑器 v2  https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/11
+    #12 路径数据与运行时     #13 页签划分     #14 Cocos 控件     #15 本原型
+  在线版（同一份）：https://claude.ai/code/artifact/3b285af1-c600-4b7c-bc37-dc764a659f44
+-->
+<meta charset="utf-8">
+<title>鱼阵编辑器 v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* 单一深色主题 —— 地图 Notes 第 4 条：编辑器是内部工具，不跟 demo 的明亮卡通基线。
+   所以不写 prefers-color-scheme，但每个颜色都显式画出来，不借宿主的底。 */
+:root{
+  --abyss:#0a1620;      /* 页面底 */
+  --panel:#12242f;      /* 面板底 = 九宫格图染这个色 */
+  --sunk:#0d1c26;       /* 凹槽（输入框、画布外框） */
+  --line:#22404f;       /* 那 1px 描边 = 九宫格图染色后的亮边 */
+  --line-hi:#37627a;
+  --text:#cfe0ea; --dim:#7d9aab; --faint:#4d6b7d;
+  --amber:#f0a03c;      /* 手里正在动的东西：控制点、选中项 */
+  --amber-soft:#f0a03c26;
+  --aqua:#47c8c0;       /* 鱼、播放、曲线 */
+  --aqua-soft:#47c8c022;
+  --warn:#e0574f;
+  --sans:"IBM Plex Sans",-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --r:6px;              /* 圆角 —— 九宫格 PNG 就烘这个半径 */
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--abyss); color:var(--text);
+  font-family:var(--sans); font-size:13px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.app{max-width:1400px; margin:0 auto; padding:14px}
+
+/* ——— 公共条：页签 + rev + 导出 + 草稿横幅（地图 #13 第 5 条） ——— */
+.topbar{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:9px 12px; margin-bottom:10px;
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--r);
+}
+.tabs{display:flex; gap:2px; background:var(--sunk); padding:3px; border-radius:var(--r); border:1px solid var(--line)}
+.tabs button{
+  font-family:var(--sans); font-size:13px; font-weight:500; color:var(--dim);
+  background:none; border:none; border-radius:4px; padding:5px 16px; cursor:pointer;
+}
+.tabs button:hover{color:var(--text)}
+.tabs button.on{background:var(--amber-soft); color:var(--amber); box-shadow:inset 0 0 0 1px var(--amber)}
+.grow{flex:1}
+.rev{font-family:var(--mono); font-size:11px; color:var(--faint); letter-spacing:.06em}
+.rev b{color:var(--dim); font-weight:500}
+
+button,.btn{
+  font-family:var(--sans); font-size:12px; color:var(--text);
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--r);
+  padding:5px 11px; cursor:pointer; transition:border-color .12s,color .12s,background .12s;
+}
+button:hover{border-color:var(--line-hi)}
+button.go{background:var(--aqua-soft); border-color:var(--aqua); color:var(--aqua); font-weight:500}
+button.go:hover{background:#47c8c033}
+button.danger:hover{border-color:var(--warn); color:var(--warn)}
+button:disabled{opacity:.35; cursor:default}
+button:disabled:hover{border-color:var(--line)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--amber); outline-offset:1px}
+
+.banner{
+  display:flex; align-items:center; gap:10px; width:100%;
+  padding:7px 11px; border-radius:var(--r);
+  background:#f0a03c14; border:1px solid #f0a03c55; color:#f6c37e; font-size:12px;
+}
+
+/* ——— 三栏 ——— */
+/* `align-items:stretch`（默认）让三栏等高。行高由**中栏**定 —— 两侧栏用
+   `height:0; min-height:100%`：`height:0` 让它们不参与行高计算（否则队一多就把
+   整行撑到两千像素，画布跟着被拉长），`min-height:100%` 再让它们填满 `.stage` 撑出来的那一行。 */
+.body{display:grid; grid-template-columns:206px 1fr 244px; gap:10px}
+.col{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:11px}
+h2{
+  margin:0 0 9px; font-family:var(--mono); font-size:10px; font-weight:600;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--faint);
+}
+h2 + h2{margin-top:16px}
+
+/* ——— 列表 ——— */
+input.filter{
+  width:100%; margin-bottom:7px;
+  background:var(--sunk); color:var(--text);
+  border:1px solid var(--line); border-radius:4px; padding:4px 7px;
+  font-family:var(--mono); font-size:12px;
+}
+input.filter::placeholder{color:var(--faint)}
+input.filter:hover{border-color:var(--line-hi)}
+input.filter:focus{outline:none; border-color:var(--amber)}
+h2 span{color:var(--dim); letter-spacing:0}
+
+ul{list-style:none; margin:0 0 9px; padding:0; display:flex; flex-direction:column; gap:2px}
+/* 列表吃掉栏里剩下的全部高度并自己滚。`min-height:0` 不能省 ——
+   flex 子项默认 min-height:auto，会被内容撑破而不是出滚动条。 */
+ul.list{flex:1; min-height:0; overflow-y:auto; padding-right:3px}
+li.empty{
+  padding:8px 4px; color:var(--faint); font-size:11px;
+  font-family:var(--mono); text-align:center;
+}
+
+/* 深色下的滚动条 —— 默认那条亮灰在这套配色里像道裂缝 */
+ul.list,#left,#right,pre.out,.pop{scrollbar-width:thin; scrollbar-color:var(--line-hi) transparent}
+ul.list::-webkit-scrollbar,#left::-webkit-scrollbar,#right::-webkit-scrollbar,pre.out::-webkit-scrollbar,.pop::-webkit-scrollbar{width:9px; height:9px}
+ul.list::-webkit-scrollbar-track,#right::-webkit-scrollbar-track,pre.out::-webkit-scrollbar-track,.pop::-webkit-scrollbar-track{background:transparent}
+ul.list::-webkit-scrollbar-thumb,#right::-webkit-scrollbar-thumb,pre.out::-webkit-scrollbar-thumb,.pop::-webkit-scrollbar-thumb{
+  background:var(--line); border-radius:5px; border:2px solid var(--panel);
+}
+ul.list::-webkit-scrollbar-thumb:hover,#right::-webkit-scrollbar-thumb:hover,pre.out::-webkit-scrollbar-thumb:hover{background:var(--line-hi)}
+
+/* 两侧栏跟 `.stage` **等高**：高度由中栏（画布）定，内容多少都不改变栏的外形。
+   见上面 `.body` 那段注释里 `height:0 / min-height:100%` 的分工。 */
+#left,#right{height:0; min-height:100%}
+#left{display:flex; flex-direction:column}   /* 筛选框和底部按钮固定，中间列表自己滚 */
+#right{overflow-y:auto}
+li.row{
+  display:flex; align-items:center; gap:7px; padding:5px 8px; border-radius:4px;
+  cursor:pointer; font-family:var(--mono); font-size:12px; color:var(--dim);
+  border:1px solid transparent; transition:background .12s,color .12s,border-color .12s;
+}
+li.row:hover{background:var(--sunk); color:var(--text); border-color:var(--line)}
+li.row.on{background:var(--amber-soft); color:var(--text); border-color:var(--amber)}
+li.row.wave.on{background:var(--aqua-soft); border-color:var(--aqua)}
+li.row .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+li.row .meta{font-size:10px; color:var(--faint); font-variant-numeric:tabular-nums}
+li.row.on .meta{color:var(--dim)}
+li.row.off .nm{color:var(--faint); text-decoration:line-through; text-decoration-color:var(--line-hi)}
+li.row .eye{
+  flex:none; padding:0; width:16px; line-height:1; border:none; background:none;
+  color:var(--aqua); font-size:12px;
+}
+li.row.off .eye{color:var(--faint)}
+li.row .eye:hover{color:var(--text)}
+
+/* ——— 画布 ——— */
+.stage{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:11px}
+canvas{display:block; width:100%; height:auto; border-radius:4px; background:var(--sunk); cursor:crosshair}
+.hint{margin:8px 0 0; font-size:11px; color:var(--faint); line-height:1.6}
+.hint kbd{
+  font-family:var(--mono); font-size:10px; color:var(--dim);
+  background:var(--sunk); border:1px solid var(--line); border-radius:3px; padding:1px 5px;
+}
+
+.viewbar{display:flex; align-items:center; gap:9px; margin-top:9px; flex-wrap:wrap}
+
+/* ——— 走带（只在鱼阵页） ——— */
+.transport{display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line)}
+input[type=range]{
+  flex:1; -webkit-appearance:none; appearance:none; height:6px; border-radius:3px;
+  background:var(--sunk); border:1px solid var(--line); cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+  background:var(--aqua); border:2px solid var(--abyss); cursor:grab;
+}
+input[type=range]::-moz-range-thumb{
+  width:12px; height:12px; border-radius:50%; background:var(--aqua); border:2px solid var(--abyss); cursor:grab;
+}
+.clock{
+  font-family:var(--mono); font-size:12px; color:var(--dim);
+  font-variant-numeric:tabular-nums; min-width:92px; text-align:right;
+}
+.live{font-family:var(--mono); font-size:12px; color:var(--aqua); font-variant-numeric:tabular-nums; min-width:62px}
+
+/* ——— 字段 ——— */
+.field{display:flex; align-items:center; gap:6px; margin-bottom:6px}
+.field label{width:44px; flex:none; color:var(--dim); font-size:11px}
+.field .num{display:flex; align-items:center; gap:3px; flex:1; min-width:0}
+.field input[type=text],.field input[type=number]{
+  flex:1; min-width:0; width:100%;
+  background:var(--sunk); color:var(--text);
+  border:1px solid var(--line); border-radius:4px; padding:4px 6px;
+  font-family:var(--mono); font-size:12px; font-variant-numeric:tabular-nums;
+}
+.field input:hover{border-color:var(--line-hi)}
+.field input:focus{outline:none; border-color:var(--amber)}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
+.step{
+  font-family:var(--mono); font-size:11px; line-height:1; color:var(--dim);
+  padding:5px 6px; border-radius:4px; flex:none;
+}
+.step:hover{color:var(--amber); border-color:var(--amber)}
+
+/* 下拉：点当前值弹一张小列表（Cocos 侧 = ScrollView + 全屏遮罩，见 #14） */
+.pick{position:relative; flex:1; min-width:0}
+.pick > button{
+  width:100%; text-align:left; font-family:var(--mono); font-size:12px;
+  background:var(--sunk); padding:4px 22px 4px 6px; position:relative;
+}
+.pick > button::after{content:"▾"; position:absolute; right:7px; color:var(--faint)}
+.pick > button.bad{border-color:var(--warn); color:var(--warn)}
+/* 挂在 body 上用 fixed 定位：右栏有 overflow-y，弹层留在里面会被裁掉半截 */
+.pop{
+  position:fixed; z-index:20; max-height:186px; overflow:auto;
+  background:var(--panel); border:1px solid var(--line-hi); border-radius:var(--r);
+  padding:3px; box-shadow:0 8px 22px #0009;
+}
+.pop button{
+  display:block; width:100%; text-align:left; border:none; background:none;
+  font-family:var(--mono); font-size:12px; color:var(--dim); padding:4px 7px; border-radius:3px;
+}
+.pop button:hover{background:var(--amber-soft); color:var(--text)}
+.pop button.on{color:var(--amber)}
+.veil{position:fixed; inset:0; z-index:10}
+
+.group{
+  border:1px solid var(--line); border-radius:var(--r); padding:9px;
+  margin-bottom:8px; background:var(--sunk);
+}
+.ghead{display:flex; align-items:center; gap:6px; margin-bottom:7px}
+.ghead span{flex:1; font-family:var(--mono); font-size:10px; color:var(--faint); letter-spacing:.08em}
+.ghead button{padding:2px 7px; font-size:11px}
+.seg{display:flex; align-items:center; gap:6px; margin-bottom:8px}
+.seg .now{
+  flex:1; text-align:center; font-family:var(--mono); font-size:12px;
+  color:var(--amber); font-variant-numeric:tabular-nums;
+}
+.warnbox{
+  margin:8px 0 0; padding:7px 9px; border-radius:4px; font-size:11px; line-height:1.6;
+  background:#e0574f14; border:1px solid #e0574f55; color:#f0938c;
+}
+.warnbox b{color:#ffb3ad; font-weight:500}
+
+/* ——— 底部说明 ——— */
+.notes{
+  margin-top:12px; padding:13px 15px; background:var(--panel);
+  border:1px solid var(--line); border-radius:var(--r);
+}
+.notes h3{margin:0 0 8px; font-size:12px; font-weight:600; color:var(--text)}
+.notes ol{margin:0; padding-left:19px; color:var(--dim); font-size:12px; line-height:1.75}
+.notes b{color:var(--text); font-weight:500}
+.notes code{font-family:var(--mono); font-size:.92em; color:var(--amber)}
+pre.out{
+  margin:10px 0 0; padding:11px 13px; background:var(--sunk); border:1px solid var(--line);
+  border-radius:var(--r); font-family:var(--mono); font-size:11px; color:var(--dim);
+  white-space:pre; overflow-x:auto; max-height:210px;
+}
+@media (max-width:1080px){
+  .body{grid-template-columns:1fr}
+}
+</style>
+
+<div class="app">
+  <div class="topbar">
+    <div class="tabs">
+      <button id="tabPath" class="on">路径</button>
+      <button id="tabWave">鱼阵</button>
+    </div>
+    <span class="rev">rev <b id="rev">1</b></span>
+    <span class="grow"></span>
+    <button id="btnDraft">存草稿</button>
+    <button class="go" id="btnExport">⧉ 复制 content.ts 全文</button>
+    <div class="banner" id="banner" style="display:none">
+      <span class="grow">有一份未导出的草稿（rev 1 · 2 分钟前）—— <b>默认不自动恢复</b>，怕拿旧草稿盖掉别人贴回的内容</span>
+      <button id="btnRestore">恢复</button>
+      <button id="btnDiscard">丢弃</button>
+    </div>
+  </div>
+
+  <div class="body">
+    <aside class="col" id="left"></aside>
+
+    <div class="stage">
+      <canvas id="cv" width="1640" height="1046"></canvas>
+      <div id="transport" class="transport" style="display:none">
+        <button id="play">▶ 播放</button>
+        <button id="home">⏮</button>
+        <button id="stepB">−0.1s</button>
+        <button id="stepF">+0.1s</button>
+        <input type="range" id="scrub" min="0" max="10" step="0.05" value="0">
+        <span class="clock" id="clock">0.00 / 0.0 s</span>
+        <span class="live" id="live">场上 0</span>
+      </div>
+      <div class="viewbar">
+        <button id="fit">⤢ 适应内容</button>
+        <button id="lines" class="go">◉ 路线</button>
+        <span class="live" id="zoom" style="min-width:46px">100%</span>
+        <span class="grow"></span>
+        <span class="hint" style="margin:0">按住 <kbd>空格</kbd>（或中键）拖 = 平移 · 滚轮 = 缩放 · <kbd>Alt</kbd> + 拖手柄 = 打断镜像</span>
+      </div>
+      <p class="hint" id="hint"></p>
+    </div>
+
+    <aside class="col" id="right"></aside>
+  </div>
+
+  <div class="notes">
+    <h3>这份原型定死了什么（点头即验收单）</h3>
+    <ol>
+      <li><b>路径 = 分段贝塞尔</b>，数据是一维 <code>6n+2</code> 个数，相邻段共享接点坐标。右栏「接一段 / 删末段」改的就是它。八条老路径全是 <code>n=1</code>（8 个数），<b>零迁移</b>。</li>
+      <li><b>拖锚点手柄默认镜像对面那个</b>（拉出平滑），按住 <kbd>Alt</kbd> 打断、故意折。折角的接点画成<b>方块</b>并在右栏点名 —— 允许折，但别让人折了自己不知道。</li>
+      <li><b>鱼按真弧长恒速</b>。画布上那些等距的小刻点就是弧长采样，段长再不均、曲线再弯，鱼也不会忽快忽慢（现版本 <code>loop-left</code> 快慢比 4.01×，是个真 bug）。</li>
+      <li><b>画布两页共用</b>，变的只是画什么。<b>走带只在鱼阵页</b> —— 路径页不跑运行时；「恒速」由单测闸担保，不靠肉眼。</li>
+      <li><b>选中态跨页签保留</b>。鱼阵页每队鱼上的 <b>↗</b> 是「去改这条路」，切到路径页并选中它；反向不做。</li>
+      <li><b>控件形态</b>：框一律 <code>border-radius:6px</code> + <code>1px</code> 描边（Cocos 侧就是那张 16×16 九宫格图染色）；数字能敲也能 ◀▶ 微调，<b>非法值夹紧不拒绝</b>；选路径 / 选鱼种点开弹层；进度条能拖。所有能点的都有 hover。</li>
+    </ol>
+    <pre class="out" id="out"></pre>
+  </div>
+</div>
+
+<script>
+// ——————————————————————————————————————————————————————————————
+// 数据：8 条老路径原样（n=1，8 个数）+ 一条两段的示范（沿屏边跑一段再拐进来）
+// ——————————————————————————————————————————————————————————————
+const KINDS = ['fish_yellow','fish_red','fish_bigred','fish_hetun','fish_shayu','fish_denglongyu'];
+const state = {
+  rev: 1,
+  paths: [
+    { id:'cross-lr',      p:[-1160,0,-400,0,400,0,1160,0] },
+    { id:'cross-rl-high', p:[1160,260,400,260,-400,260,-1160,260] },
+    { id:'diag-up',       p:[-1160,-420,-400,-200,400,200,1160,420] },
+    { id:'diag-down',     p:[1160,420,400,200,-400,-200,-1160,-420] },
+    { id:'wave-lr',       p:[-1160,-300,-400,600,400,-600,1160,300] },
+    { id:'wave-rl',       p:[1160,-300,400,600,-400,-600,-1160,300] },
+    { id:'rise',          p:[-300,-740,-300,-200,-300,200,-300,740] },
+    { id:'loop-left',     p:[-1160,-200,600,-700,600,700,-1160,200] },
+    // 两段 + 故意折角：贴着下边直直跑一段，到右边 90° 拐上来（#12 里那个「鱼沿屏边跑再拐进来」的例子）
+    { id:'edge-run',      p:[-1160,-460, -600,-460, 200,-460, 760,-460,  760,-240, 980,-100, 980,420] },
+  ],
+  waves: [
+    { id:'yellow-cross', groups:[{at:0,path:'cross-lr',kind:'fish_yellow',count:8,gap:.3,speed:120}] },
+    { id:'red-cross',    groups:[
+      {at:0,  path:'diag-up',  kind:'fish_red',    count:6,gap:.35,speed:130},
+      {at:.8, path:'diag-down',kind:'fish_bigred', count:3,gap:.5, speed:130}] },
+    { id:'hetun-escort', groups:[
+      {at:0,  path:'wave-lr',  kind:'fish_hetun',  count:1,gap:0,  speed:80},
+      {at:.6, path:'wave-lr',  kind:'fish_yellow', count:5,gap:.25,speed:95}] },
+    { id:'edge-sweep',   groups:[{at:0,path:'edge-run',kind:'fish_denglongyu',count:5,gap:.4,speed:140}] },
+  ],
+};
+
+let tab = 'path';
+let selPath = 8, selWave = 3, selSeg = 0;
+let drag = null;           // {i} —— p 里第 i 对坐标
+let playing = false, clock = 0, last = 0;
+/**
+ * 被隐藏的路径 id。**视图状态，不进 `content.ts`** —— 显影是"我现在想看什么"，
+ * 不是内容的一部分；存进数据的话每个人的观看偏好都会变成一条 git diff。
+ * 用 id 不用下标：删一条路径之后下标会错位，隐藏状态会静默跳到别的路径上。
+ */
+const hidden = new Set();
+const visible = path => !hidden.has(path.id);
+/** 名称筛选。两页各记各的 —— 切页签不互相清掉；同样是视图状态，不进 `content.ts`。 */
+let filterPath = '', filterWave = '';
+
+// ——————————————————————————————————————————————————————————————
+// 几何：分段贝塞尔 + 弧长参数化（#12 的决议，128 采样/段）
+// ——————————————————————————————————————————————————————————————
+const SAMPLES = 128;
+const nSeg  = p => (p.length - 2) / 6;
+const seg   = (p,k) => p.slice(k*6, k*6+8);
+const bez   = (q,t,i) => { const u=1-t; return u*u*u*q[i] + 3*u*u*t*q[i+2] + 3*u*t*t*q[i+4] + t*t*t*q[i+6]; };
+const dbez  = (q,t,i) => { const u=1-t; return 3*u*u*(q[i+2]-q[i]) + 6*u*t*(q[i+4]-q[i+2]) + 3*t*t*(q[i+6]-q[i+4]); };
+
+/** 建「累计弧长 → 全局参数」表。派生量，不进数据 —— 载入时算。 */
+function buildLUT(p){
+  const n = nSeg(p), d = [0], g = [0];
+  let total = 0;
+  for (let k = 0; k < n; k++){
+    const q = seg(p,k);
+    let px = bez(q,0,0), py = bez(q,0,1);
+    for (let i = 1; i <= SAMPLES; i++){
+      const t = i/SAMPLES, x = bez(q,t,0), y = bez(q,t,1);
+      total += Math.hypot(x-px, y-py); px = x; py = y;
+      d.push(total); g.push(k + t);
+    }
+  }
+  return { d, g, length: total, n };
+}
+const lutCache = new Map();
+function lutOf(path){
+  const key = path.id + '|' + path.p.join(',');
+  let L = lutCache.get(key);
+  if (!L){ L = buildLUT(path.p); lutCache.set(key, L); }
+  return L;
+}
+/** 已走弧长比例 s∈[0,1] → 全局参数 g∈[0,n]。二分 + 线性插值。 */
+function locate(L, s){
+  const target = Math.max(0, Math.min(1, s)) * L.length;
+  let lo = 0, hi = L.d.length - 1;
+  while (lo < hi - 1){ const m = (lo+hi) >> 1; if (L.d[m] <= target) lo = m; else hi = m; }
+  const f = L.d[hi] === L.d[lo] ? 0 : (target - L.d[lo]) / (L.d[hi] - L.d[lo]);
+  return L.g[lo] + f * (L.g[hi] - L.g[lo]);
+}
+function ptAt(path, s){
+  const L = lutOf(path), g = locate(L, s);
+  const k = Math.min(L.n - 1, Math.floor(g)), t = g - k, q = seg(path.p, k);
+  return { x: bez(q,t,0), y: bez(q,t,1) };
+}
+function angAt(path, s){
+  const L = lutOf(path), g = locate(L, s);
+  const k = Math.min(L.n - 1, Math.floor(g)), t = g - k, q = seg(path.p, k);
+  const dx = dbez(q,t,0), dy = dbez(q,t,1);
+  return (dx === 0 && dy === 0) ? 0 : Math.atan2(dy, dx);
+}
+/** 接点 j（第 j 段末 = 第 j+1 段初）的两条切线是否共线 —— 不共线即折角。 */
+function corners(p){
+  const out = [], n = nSeg(p);
+  for (let k = 1; k < n; k++){
+    const i = k*6;                                   // 接点在 p 里的下标（对号 i/2）
+    const ax = p[i]-p[i-2], ay = p[i+1]-p[i-1];      // 进：前一段 P2 → 接点
+    const bx = p[i+2]-p[i], by = p[i+3]-p[i+1];      // 出：接点 → 后一段 P1
+    const la = Math.hypot(ax,ay), lb = Math.hypot(bx,by);
+    if (la < 1e-6 || lb < 1e-6) continue;
+    const cos = (ax*bx + ay*by) / (la*lb);
+    if (cos < 0.999) out.push({ seg:k, deg: Math.round(Math.acos(Math.max(-1,Math.min(1,cos))) * 180/Math.PI) });
+  }
+  return out;
+}
+
+// ——————————————————————————————————————————————————————————————
+// 画布
+// ——————————————————————————————————————————————————————————————
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const BASE = cv.width / 2480;                       // 缩放 1 时的世界→画布倍率
+/** 视野：画布中心对着世界哪一点、放大多少。控制点可以被拖到场地外面很远，没有它就够不着。 */
+const view = { cx: 0, cy: 0, z: 1 };
+const S = () => BASE * view.z;
+const toS = (x,y) => [cv.width/2 + (x-view.cx)*S(), cv.height/2 - (y-view.cy)*S()];
+const toW = (sx,sy) => [view.cx + (sx-cv.width/2)/S(), view.cy - (sy-cv.height/2)/S()];
+/** 画布坐标（不是 CSS 坐标）—— 画布被 CSS 缩放过，两者不等。 */
+function evToCanvas(e){
+  const r = cv.getBoundingClientRect();
+  return [(e.clientX-r.left)*cv.width/r.width, (e.clientY-r.top)*cv.height/r.height];
+}
+
+/** 把所有路径 + 场地一起装进视野。点被甩飞之后靠它一键找回。 */
+function fitView(){
+  let x0 = -960, y0 = -540, x1 = 960, y1 = 540;     // 场地兜底，免得只剩一条短路径时贴脸
+  for (const path of state.paths)
+    for (let i = 0; i < path.p.length; i += 2){
+      x0 = Math.min(x0, path.p[i]);   x1 = Math.max(x1, path.p[i]);
+      y0 = Math.min(y0, path.p[i+1]); y1 = Math.max(y1, path.p[i+1]);
+    }
+  const pad = 150;
+  view.cx = (x0+x1)/2; view.cy = (y0+y1)/2;
+  view.z = Math.min(cv.width / (BASE*((x1-x0)+pad*2)), cv.height / (BASE*((y1-y0)+pad*2)));
+  draw(); showZoom();
+}
+const showZoom = () => { const el = $('zoom'); if (el) el.textContent = Math.round(view.z*100) + '%'; };
+
+function draw(){
+  ctx.fillStyle = '#0d1c26'; ctx.fillRect(0,0,cv.width,cv.height);
+  // 场地框
+  const [fx,fy] = toS(-960, 540);
+  ctx.strokeStyle = '#22404f'; ctx.lineWidth = 2;
+  ctx.strokeRect(fx, fy, 1920*S(), 1080*S());
+  ctx.fillStyle = '#4d6b7d'; ctx.font = '20px "IBM Plex Mono",monospace';
+  ctx.fillText('1920 × 1080 场地', fx + 10, fy + 26);
+
+  // 鱼阵页只画**这一阵用到的**路线 —— 别的九条跟这阵没关系，画出来全是干扰
+  const used = tab === 'wave'
+    ? new Set((state.waves[selWave]?.groups ?? []).map(g => g.path))
+    : null;
+
+  state.paths.forEach((path, i) => {
+    const on = i === selPath;
+    if (!visible(path)) return;              // 眼睛关掉的不画（选中被隐藏的那条会自动显影）
+    if (used && !used.has(path.id)) return;  // 这一阵没用到的不画
+    // 曲线
+    ctx.strokeStyle = on ? (tab === 'path' ? '#f0a03c' : '#47c8c0') : '#243f4f';
+    ctx.lineWidth = on ? 4 : 2;
+    ctx.beginPath();
+    for (let s = 0; s <= 160; s++){
+      const q = ptAt(path, s/160), [x,y] = toS(q.x, q.y);
+      s ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+    }
+    ctx.stroke();
+
+    if (!on) return;
+    ctx.fillStyle = on ? '#7d9aab' : '#4d6b7d';
+    ctx.font = '19px "IBM Plex Mono",monospace';
+    const head = ptAt(path, 0.02); const [hx,hy] = toS(head.x, head.y);
+    ctx.fillText(path.id, hx + 8, hy - 10);
+
+    // 弧长刻点：等距 = 恒速的可视证据
+    ctx.fillStyle = '#47c8c088';
+    for (let s = 0; s <= 24; s++){
+      const q = ptAt(path, s/24), [x,y] = toS(q.x,q.y);
+      ctx.beginPath(); ctx.arc(x,y,2.6,0,7); ctx.fill();
+    }
+
+    if (tab !== 'path') return;
+    const p = path.p, n = nSeg(p), cs = corners(p), cornerAt = new Set(cs.map(c => c.seg));
+
+    // 选中段加粗一层
+    ctx.strokeStyle = '#ffc987'; ctx.lineWidth = 6; ctx.beginPath();
+    for (let s = 0; s <= 40; s++){
+      const t = s/40, q = seg(p, selSeg);
+      const [x,y] = toS(bez(q,t,0), bez(q,t,1));
+      s ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+    }
+    ctx.stroke();
+
+    // 手柄连线
+    ctx.strokeStyle = '#f0a03c77'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let k = 0; k < n; k++){
+      const b = k*6;
+      for (const [a,c] of [[b,b+2],[b+4,b+6]]){
+        const [ax,ay] = toS(p[a],p[a+1]), [cx,cy] = toS(p[c],p[c+1]);
+        ctx.moveTo(ax,ay); ctx.lineTo(cx,cy);
+      }
+    }
+    ctx.stroke();
+
+    // 控制点：锚点大圆（折角接点画方块）、手柄小圆
+    for (let i2 = 0; i2 < p.length/2; i2++){
+      const isAnchor = (i2 % 3) === 0;
+      const k = i2/3;                                  // 锚点序号
+      const isCorner = isAnchor && cornerAt.has(k);
+      const [x,y] = toS(p[i2*2], p[i2*2+1]);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = isCorner ? '#e0574f' : '#f0a03c';
+      ctx.fillStyle = isAnchor ? (isCorner ? '#e0574f' : '#ffe0b0') : '#0d1c26';
+      ctx.beginPath();
+      if (isCorner) ctx.rect(x-9, y-9, 18, 18);
+      else ctx.arc(x, y, isAnchor ? 10 : 7.5, 0, 7);
+      ctx.fill(); ctx.stroke();
+    }
+  });
+
+  if (tab === 'wave') drawFish();
+}
+
+function fishOf(wave){
+  const out = [];
+  for (const g of wave.groups){
+    const path = pathById(g.path); if (!path) continue;
+    const L = lutOf(path), travel = L.length / Math.max(1, g.speed);
+    for (let i = 0; i < g.count; i++) out.push({ born: g.at + i*(g.gap||0), path, travel, kind: g.kind });
+  }
+  return out;
+}
+function drawFish(){
+  const w = state.waves[selWave]; if (!w) return;
+  let live = 0;
+  for (const f of fishOf(w)){
+    const age = clock - f.born;
+    if (age < 0 || age > f.travel) continue;
+    live++;
+    const s = age / f.travel;
+    const q = ptAt(f.path, s), a = angAt(f.path, s);
+    const [x,y] = toS(q.x, q.y);
+    ctx.save(); ctx.translate(x,y); ctx.rotate(-a); ctx.scale(view.z, view.z);
+    ctx.fillStyle = '#47c8c0';
+    ctx.beginPath(); ctx.ellipse(0,0,17,10,0,0,7); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-15,0); ctx.lineTo(-27,-9); ctx.lineTo(-27,9); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#0d1c26'; ctx.beginPath(); ctx.arc(7,-3,2.6,0,7); ctx.fill();
+    ctx.restore();
+  }
+  document.getElementById('live').textContent = '场上 ' + live;
+}
+
+const pathById = id => state.paths.find(p => p.id === id);
+
+// ——————————————————————————————————————————————————————————————
+// 拖拽：镜像手柄，Alt 打断
+// ——————————————————————————————————————————————————————————————
+// —— 小手平移：空格 + 拖，或中键拖（Photoshop / Figma 的通用手势） ——
+let pan = null, space = false;
+addEventListener('keydown', e => {
+  if (e.code !== 'Space' || space) return;
+  if (/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) return;  // 输入框里空格要打空格
+  space = true; cv.style.cursor = 'grab'; e.preventDefault();
+});
+addEventListener('keyup', e => {
+  if (e.code !== 'Space') return;
+  space = false; if (!pan) cv.style.cursor = 'crosshair';
+});
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const [sx,sy] = evToCanvas(e);
+  const [wx,wy] = toW(sx,sy);
+  view.z = clamp(view.z * (e.deltaY < 0 ? 1.12 : 1/1.12), .15, 6);
+  const [nx,ny] = toW(sx,sy);                       // 光标底下那个世界点保持不动
+  view.cx += wx - nx; view.cy += wy - ny;
+  draw(); showZoom();
+}, { passive:false });
+
+cv.addEventListener('pointerdown', e => {
+  if (space || e.button === 1){                     // 平移优先于选点
+    e.preventDefault();
+    pan = { sx:e.clientX, sy:e.clientY, cx:view.cx, cy:view.cy };
+    cv.style.cursor = 'grabbing'; cv.setPointerCapture(e.pointerId);
+    return;
+  }
+  if (tab !== 'path') return;
+  const [wx,wy] = toW(...evToCanvas(e));
+  const p = state.paths[selPath].p;
+  let best = -1, bestD = 24 / S();                  // 命中半径在**屏幕上**恒定，缩放后不变难点
+  for (let i = 0; i < p.length/2; i++){
+    const d = Math.hypot(wx - p[i*2], wy - p[i*2+1]);
+    if (d <= bestD){ best = i; bestD = d; }
+  }
+  if (best < 0) return;
+  drag = best;
+  // 第 k 段吃下标 3k..3k+3 ⇒ 锚点和手柄都是 floor(i/3)，末锚点夹回最后一段
+  selSeg = Math.min(nSeg(p) - 1, Math.floor(best / 3));
+  cv.setPointerCapture(e.pointerId);
+  renderAll();
+});
+cv.addEventListener('pointermove', e => {
+  if (pan){
+    const r = cv.getBoundingClientRect(), k = cv.width/r.width / S();
+    view.cx = pan.cx - (e.clientX - pan.sx)*k;
+    view.cy = pan.cy + (e.clientY - pan.sy)*k;
+    draw();
+    return;
+  }
+  if (drag === null) return;
+  const [wx,wy] = toW(...evToCanvas(e));
+  movePoint(drag, Math.round(wx), Math.round(wy), !e.altKey);
+  // 拖的时候只重画布 + 回填那两个坐标框：整栏重建会每帧抢走输入焦点
+  lutCache.clear(); draw();
+  const p2 = state.paths[selPath].p;
+  if ($('cx')) $('cx').value = p2[drag*2];
+  if ($('cy')) $('cy').value = p2[drag*2+1];
+});
+addEventListener('pointerup', () => {
+  if (pan){ pan = null; cv.style.cursor = space ? 'grab' : 'crosshair'; }
+  if (drag !== null){ drag = null; renderAll(); }
+});
+
+/**
+ * 手柄离锚点的最小距离（世界像素）。**不许为零**：P1 压在 P0 上时贝塞尔导数
+ * `3(P1−P0)` 退化成 0，`angleAt` 那道守卫会返回 0 ⇒ 鱼游到那儿突然朝右，不崩不报错。
+ * 顺带也保证手柄在画面上跟锚点分得开（≈21 屏幕像素），抓得住。
+ * 60px 相对 2300px 的路径长度是 2.6%，对形状几乎没有约束。
+ */
+const MIN_HANDLE = 60;
+
+/** 挪第 i 对坐标。`mirror` 时：拖锚点带走两侧手柄；拖手柄把接点对面那个镜像过去。 */
+function movePoint(i, x, y, mirror){
+  const p = state.paths[selPath].p;
+
+  if ((i % 3) === 0){
+    // 锚点：两侧手柄刚性跟随，相对长度不变（不然形状会被拽变）
+    const dx = x - p[i*2], dy = y - p[i*2+1];
+    p[i*2] = x; p[i*2+1] = y;
+    for (const j of [i-1, i+1]){
+      if (j < 0 || j >= p.length/2) continue;
+      p[j*2] += dx; p[j*2+1] += dy;
+    }
+    return;
+  }
+
+  // 手柄：先把落点从锚点上推开
+  const anchor = (i % 3 === 1) ? i - 1 : i + 1;
+  const ax = p[anchor*2], ay = p[anchor*2+1];
+  let vx = x - ax, vy = y - ay, d = Math.hypot(vx, vy);
+  if (d < MIN_HANDLE){
+    if (d < 1e-6){
+      // 正好落在锚点上 ⇒ 方向未定义。沿用它**原来**的方向，别凭空造一个
+      vx = p[i*2] - ax; vy = p[i*2+1] - ay; d = Math.hypot(vx, vy);
+      if (d < 1e-6){ vx = 1; vy = 0; d = 1; }   // 连原来都退化了（旧数据修复）
+    }
+    x = Math.round(ax + vx/d * MIN_HANDLE);
+    y = Math.round(ay + vy/d * MIN_HANDLE);
+    vx = x - ax; vy = y - ay; d = MIN_HANDLE;
+  }
+  p[i*2] = x; p[i*2+1] = y;
+
+  if (!mirror) return;
+  const opp = (i % 3 === 1) ? anchor - 1 : anchor + 1;
+  if (opp < 0 || opp >= p.length/2) return;             // 首尾锚点没有对面
+  // 对面保持原长（拖一边不该把另一段也拉变形），但同样不许短于最小值 —— 否则一旦
+  // 塌到零就再也回不来（len 恒为 0，镜像永远把它算回锚点）
+  const len = Math.max(MIN_HANDLE, Math.hypot(p[opp*2]-ax, p[opp*2+1]-ay));
+  p[opp*2]   = Math.round(ax - vx/d * len);
+  p[opp*2+1] = Math.round(ay - vy/d * len);
+}
+
+// ——————————————————————————————————————————————————————————————
+// 左右两栏
+// ——————————————————————————————————————————————————————————————
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/**
+ * 只重画列表行，**不碰筛选框** —— 整栏 `innerHTML` 重建会每敲一个字就抢走焦点和光标位置。
+ * 行的点击回调闭包捕获的是**原始下标** `i`，筛选后行少了也不会指错。
+ */
+function renderRows(){
+  const q = (tab === 'path' ? filterPath : filterWave).trim().toLowerCase();
+  const hit = id => !q || id.toLowerCase().includes(q);
+  const ul = $(tab === 'path' ? 'plist' : 'wlist');
+  if (!ul) return;
+  const keepTop = ul.scrollTop;
+  ul.innerHTML = '';
+  let shownCount = 0;
+
+  if (tab === 'path'){
+    state.paths.forEach((p,i) => {
+      if (!hit(p.id)) return;
+      shownCount++;
+      const li = document.createElement('li');
+      const shown = visible(p);
+      li.className = 'row' + (i === selPath ? ' on' : '') + (shown ? '' : ' off');
+      li.innerHTML = '<button class="eye" title="显影">' + (shown ? '◉' : '○') + '</button>'
+        + '<span class="nm">' + esc(p.id) + '</span><span class="meta">' + nSeg(p.p) + ' 段</span>';
+      li.querySelector('.eye').onclick = e => {
+        e.stopPropagation();                       // 点眼睛只切显影，不改选中
+        shown ? hidden.add(p.id) : hidden.delete(p.id);
+        renderRows(); draw(); syncLinesBtn();
+      };
+      // 选中一条被隐藏的 ⇒ 自动显影：编看不见的东西没有意义
+      li.onclick = () => { selPath = i; selSeg = 0; hidden.delete(p.id); renderAll(); };
+      ul.appendChild(li);
+    });
+    $('pcount').textContent = q ? shownCount + ' / ' + state.paths.length : String(state.paths.length);
+  } else {
+    state.waves.forEach((w,i) => {
+      if (!hit(w.id)) return;
+      shownCount++;
+      const li = document.createElement('li');
+      li.className = 'row wave' + (i === selWave ? ' on' : '');
+      const n = w.groups.reduce((a,g) => a + g.count, 0);
+      li.innerHTML = '<span class="nm">' + esc(w.id) + '</span><span class="meta">' + n + ' 条</span>';
+      li.onclick = () => { selWave = i; seek(0); renderAll(); };
+      ul.appendChild(li);
+    });
+    $('wcount').textContent = q ? shownCount + ' / ' + state.waves.length : String(state.waves.length);
+  }
+  ul.scrollTop = keepTop;
+  if (!shownCount){
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = '没有名字含「' + q + '」的';
+    ul.appendChild(li);
+  }
+}
+
+function renderLeft(){
+  const el = $('left');
+  if (tab === 'path'){
+    el.innerHTML = '<h2>路径 <span id="pcount"></span></h2>'
+      + '<input class="filter" id="pfilter" type="text" placeholder="筛选名称…" value="' + esc(filterPath) + '">'
+      + '<ul id="plist" class="list"></ul>'
+      + '<button id="copyPath" style="width:100%;margin-bottom:5px">＋ 复制这条</button>'
+      + '<button class="danger" id="delPath" style="width:100%">－ 删掉这条</button>';
+    $('pfilter').oninput = e => { filterPath = e.target.value; renderRows(); };
+    renderRows();
+    $('copyPath').onclick = () => {
+      const src = state.paths[selPath];
+      state.paths.push({ id: uniq(src.id), p: src.p.slice() });
+      selPath = state.paths.length - 1; selSeg = 0; renderAll();
+      const nl = document.getElementById('plist'); if (nl) nl.scrollTop = nl.scrollHeight;
+    };
+    $('delPath').onclick = () => {
+      if (state.paths.length < 2) return;
+      state.paths.splice(selPath,1); selPath = Math.max(0, selPath-1); selSeg = 0; renderAll();
+    };
+  } else {
+    el.innerHTML = '<h2>鱼阵 <span id="wcount"></span></h2>'
+      + '<input class="filter" id="wfilter" type="text" placeholder="筛选名称…" value="' + esc(filterWave) + '">'
+      + '<ul id="wlist" class="list"></ul>'
+      + '<button id="addWave" style="width:100%;margin-bottom:5px">＋ 新阵</button>'
+      + '<button class="danger" id="delWave" style="width:100%">－ 删掉这阵</button>';
+    $('wfilter').oninput = e => { filterWave = e.target.value; renderRows(); };
+    renderRows();
+    $('addWave').onclick = () => {
+      state.waves.push({ id: uniqW('wave'), groups:[{at:0,path:state.paths[selPath].id,kind:KINDS[0],count:4,gap:.3,speed:120}] });
+      selWave = state.waves.length - 1; seek(0); renderAll();
+    };
+    $('delWave').onclick = () => {
+      if (state.waves.length < 2) return;
+      state.waves.splice(selWave,1); selWave = Math.max(0, selWave-1); seek(0); renderAll();
+    };
+  }
+}
+
+function renderRight(){
+  const el = $('right');
+  // ⚠️ 重建 innerHTML 会把 scrollTop 打回 0 —— 于是「加一队鱼」之后视图跳回顶部、
+  //    新那队在下面看不见，看起来就像根本没滚动。改完先把位置存下来。
+  const keepTop = el.scrollTop;
+  if (tab === 'path'){
+    const path = state.paths[selPath], p = path.p, n = nSeg(p), cs = corners(p);
+    let h = '<h2>路径</h2>'
+      + fieldText('id', path.id, 'pid')
+      + '<h2>段 ' + n + '</h2>'
+      + '<div class="seg"><button class="step" id="segPrev">◀</button>'
+      + '<span class="now">第 ' + (selSeg+1) + ' / ' + n + ' 段</span>'
+      + '<button class="step" id="segNext">▶</button></div>'
+      + '<button id="addSeg" style="width:100%;margin-bottom:5px">＋ 在尾巴接一段</button>'
+      + '<button class="danger" id="delSeg" style="width:100%"' + (n < 2 ? ' disabled' : '') + '>－ 删掉末段</button>';
+    const sel = drag !== null ? drag : selSeg*3;
+    h += '<h2>控制点 ' + (sel+1) + '</h2>'
+      + fieldNum('x', p[sel*2], 10, 'cx') + fieldNum('y', p[sel*2+1], 10, 'cy');
+    h += '<p class="hint">拖锚点：两侧手柄跟着走。<br>拖手柄：对面自动镜像 —— 按住 <kbd>Alt</kbd> 打断、故意折。</p>';
+    if (cs.length) h += '<div class="warnbox">这条路有 <b>' + cs.length + ' 个折角</b>：'
+      + cs.map(c => '第 ' + c.seg + '↔' + (c.seg+1) + ' 段 <b>' + c.deg + '°</b>').join('、')
+      + '。鱼到那里会瞬间转头 —— 想要就留着，不想要按住 Alt 之外拖一下手柄即可拉平。</div>';
+    el.innerHTML = h; el.scrollTop = keepTop;
+
+    $('pid').oninput = e => { path.id = e.target.value; renderLeft(); };
+    $('segPrev').onclick = () => { selSeg = (selSeg - 1 + n) % n; renderAll(); };
+    $('segNext').onclick = () => { selSeg = (selSeg + 1) % n; renderAll(); };
+    $('addSeg').onclick = () => {
+      const L = p.length, ax = p[L-2], ay = p[L-1];
+      const vx = ax - p[L-4], vy = ay - p[L-3], vl = Math.hypot(vx,vy) || 1;
+      const ux = vx/vl, uy = vy/vl;                               // 顺着末端切线接出去，天然平滑
+      p.push(Math.round(ax+ux*260), Math.round(ay+uy*260),
+             Math.round(ax+ux*520), Math.round(ay+uy*520),
+             Math.round(ax+ux*780), Math.round(ay+uy*780));
+      selSeg = nSeg(p) - 1; renderAll();
+    };
+    $('delSeg').onclick = () => {
+      if (nSeg(p) < 2) return;
+      p.length -= 6; selSeg = Math.min(selSeg, nSeg(p)-1); renderAll();
+    };
+    bindNum('cx', v => { movePoint(sel, v, p[sel*2+1], true); renderAll(); }, 10);
+    bindNum('cy', v => { movePoint(sel, p[sel*2], v, true); renderAll(); }, 10);
+  } else {
+    const w = state.waves[selWave];
+    let h = '<h2>鱼阵</h2>' + fieldText('id', w.id, 'wid') + '<h2>队 ' + w.groups.length + '</h2>';
+    w.groups.forEach((g,i) => {
+      const bad = !pathById(g.path);
+      h += '<div class="group"><div class="ghead"><span>队 ' + (i+1) + '</span>'
+        + '<button class="step" data-jump="' + i + '" title="去改这条路">↗</button>'
+        + '<button class="step danger" data-del="' + i + '">✕</button></div>'
+        + fieldPick('路径', g.path, 'gp'+i, bad)
+        + fieldPick('鱼种', g.kind.replace('fish_',''), 'gk'+i, false)
+        + fieldNum('入场', g.at, .1, 'ga'+i, 's')
+        + fieldNum('条数', g.count, 1, 'gc'+i)
+        + fieldNum('间隔', g.gap, .05, 'gg'+i, 's')
+        + fieldNum('速度', g.speed, 10, 'gs'+i)
+        + '</div>';
+    });
+    h += '<button id="addGroup" style="width:100%">＋ 加一队鱼</button>';
+    el.innerHTML = h; el.scrollTop = keepTop;
+
+    $('wid').oninput = e => { w.id = e.target.value; renderLeft(); };
+    el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { w.groups.splice(+b.dataset.del,1); renderAll(); });
+    el.querySelectorAll('[data-jump]').forEach(b => b.onclick = () => {
+      const id = w.groups[+b.dataset.jump].path, k = state.paths.findIndex(p => p.id === id);
+      if (k >= 0){ selPath = k; selSeg = 0; }
+      setTab('path');
+    });
+    $('addGroup').onclick = () => {
+      w.groups.push({at:0,path:state.paths[selPath].id,kind:KINDS[0],count:4,gap:.3,speed:120});
+      renderAll();
+      el.scrollTop = el.scrollHeight;   // 新那队在最下面，滚过去让人看见
+    };
+    w.groups.forEach((g,i) => {
+      pick('gp'+i, state.paths.map(p => p.id), g.path, v => { g.path = v; renderAll(); });
+      pick('gk'+i, KINDS.map(k => k.replace('fish_','')), g.kind.replace('fish_',''),
+           v => { g.kind = 'fish_' + v; renderAll(); });
+      bindNum('ga'+i, v => { g.at = clamp(v,0,120); renderAll(); }, .1);
+      bindNum('gc'+i, v => { g.count = Math.round(clamp(v,1,60)); renderAll(); }, 1);
+      bindNum('gg'+i, v => { g.gap = clamp(v,0,10); renderAll(); }, .05);
+      bindNum('gs'+i, v => { g.speed = clamp(v,10,600); renderAll(); }, 10);
+    });
+  }
+}
+
+// —— 控件工厂 ——————————————————————————————————————————————
+const clamp = (v,lo,hi) => Math.max(lo, Math.min(hi, v));
+function fieldText(label, val, id){
+  return '<div class="field"><label>' + label + '</label>'
+    + '<input type="text" id="' + id + '" value="' + esc(val) + '"></div>';
+}
+function fieldNum(label, val, step, id, unit){
+  return '<div class="field"><label>' + label + '</label><div class="num">'
+    + '<button class="step" data-dec="' + id + '">◀</button>'
+    + '<input type="number" id="' + id + '" value="' + val + '" step="' + step + '">'
+    + '<button class="step" data-inc="' + id + '">▶</button></div></div>';
+}
+function fieldPick(label, val, id, bad){
+  return '<div class="field"><label>' + label + '</label>'
+    + '<div class="pick" id="' + id + '"><button class="' + (bad?'bad':'') + '">' + esc(val) + '</button></div></div>';
+}
+/** 数字：能敲也能 ◀▶；**夹紧不拒绝** —— 失焦解析，NaN 回退原值。 */
+function bindNum(id, apply, step){
+  const el = $(id); if (!el) return;
+  const orig = el.value;
+  const fire = () => { const v = parseFloat(el.value); apply(Number.isFinite(v) ? v : parseFloat(orig)); };
+  el.onchange = fire;
+  el.onkeydown = e => { if (e.key === 'Enter') fire(); };
+  const root = el.closest('.field');
+  root.querySelector('[data-dec]').onclick = () => apply(round(parseFloat(el.value) - step));
+  root.querySelector('[data-inc]').onclick = () => apply(round(parseFloat(el.value) + step));
+}
+const round = v => Math.round(v * 1000) / 1000;
+/** 下拉：点当前值弹一张小列表 + 全屏遮罩关闭（Cocos 侧 = ScrollView + 遮罩 Button，#14）。 */
+function pick(id, options, cur, apply){
+  const box = $(id); if (!box) return;
+  box.firstElementChild.onclick = () => {
+    closePop();
+    const r = box.getBoundingClientRect();
+    const veil = document.createElement('div'); veil.className = 'veil';
+    const pop = document.createElement('div'); pop.className = 'pop';
+    pop.style.left = r.left + 'px'; pop.style.width = r.width + 'px'; pop.style.top = (r.bottom + 3) + 'px';
+    veil.onclick = closePop;
+    options.forEach(o => {
+      const b = document.createElement('button');
+      b.textContent = o; if (o === cur) b.className = 'on';
+      b.onclick = () => { closePop(); apply(o); };
+      pop.appendChild(b);
+    });
+    document.body.appendChild(veil); document.body.appendChild(pop);
+    // 下面塞不下就翻到触发按钮上方
+    const h = pop.getBoundingClientRect().height;
+    if (r.bottom + 3 + h > innerHeight) pop.style.top = Math.max(6, r.top - 3 - h) + 'px';
+  };
+}
+const closePop = () => document.querySelectorAll('.pop,.veil').forEach(n => n.remove());
+// fixed 定位跟不上滚动/缩放，那就关掉它 —— 比让它飘在错的位置强
+addEventListener('scroll', closePop, true);
+addEventListener('resize', closePop);
+function uniq(base){
+  const taken = new Set(state.paths.map(p => p.id));
+  if (!taken.has(base)) return base;
+  for (let n = 2;; n++) if (!taken.has(base + '-' + n)) return base + '-' + n;
+}
+function uniqW(base){
+  const taken = new Set(state.waves.map(w => w.id));
+  if (!taken.has(base)) return base;
+  for (let n = 2;; n++) if (!taken.has(base + '-' + n)) return base + '-' + n;
+}
+
+// ——————————————————————————————————————————————————————————————
+// 走带（只在鱼阵页）
+// ——————————————————————————————————————————————————————————————
+function duration(){
+  const w = state.waves[selWave]; if (!w) return 8;
+  let end = 2;
+  for (const f of fishOf(w)) end = Math.max(end, f.born + f.travel);
+  return Math.ceil((end + .4) * 10) / 10;
+}
+function setPlay(v){
+  playing = v; $('play').textContent = v ? '⏸ 暂停' : '▶ 播放';
+  if (v) last = performance.now();
+}
+function seek(t){
+  const D = duration();
+  clock = clamp(t, 0, D);
+  $('scrub').max = D; $('scrub').value = clock;
+  $('clock').textContent = clock.toFixed(2) + ' / ' + D.toFixed(1) + ' s';
+  draw();
+}
+function loop(now){
+  if (playing && tab === 'wave'){
+    const dt = Math.min(.05, (now - last)/1000); last = now;
+    const D = duration();
+    if (clock + dt >= D){ seek(D); setPlay(false); }   // 放到头停在头，不循环
+    else seek(clock + dt);
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+$('play').onclick  = () => { if (!playing && clock >= duration()) clock = 0; setPlay(!playing); };
+$('home').onclick  = () => { setPlay(false); seek(0); };
+$('stepB').onclick = () => { setPlay(false); seek(clock - .1); };
+$('stepF').onclick = () => { setPlay(false); seek(clock + .1); };
+$('scrub').oninput = () => { setPlay(false); seek(+$('scrub').value); };
+
+// ——————————————————————————————————————————————————————————————
+// 页签 + 导出
+// ——————————————————————————————————————————————————————————————
+function setTab(t){
+  tab = t;
+  $('tabPath').className = t === 'path' ? 'on' : '';
+  $('tabWave').className = t === 'wave' ? 'on' : '';
+  $('transport').style.display = t === 'wave' ? 'flex' : 'none';
+  if (t === 'path') setPlay(false);
+  renderAll();
+}
+$('tabPath').onclick = () => setTab('path');
+$('tabWave').onclick = () => setTab('wave');
+
+function exportText(){
+  state.rev++;
+  const q = s => "'" + s + "'";
+  const L = [];
+  L.push('import type { FishContent } from ' + q('./content-types') + ';', '');
+  L.push('export const CONTENT = {');
+  L.push('  rev: ' + state.rev + ',');
+  L.push('  paths: [');
+  for (const p of state.paths) L.push('    { id: ' + q(p.id) + ', p: [' + p.p.join(', ') + '] },');
+  L.push('  ],', '  waves: [');
+  for (const w of state.waves){
+    L.push('    {');
+    L.push('      id: ' + q(w.id) + ',');
+    L.push('      groups: [');
+    for (const g of w.groups){
+      const bits = ['at: ' + g.at, 'path: ' + q(g.path), 'kind: ' + q(g.kind), 'count: ' + g.count];
+      if (g.gap) bits.push('gap: ' + g.gap);           // 默认值不占一行 diff
+      bits.push('speed: ' + g.speed);
+      L.push('        { ' + bits.join(', ') + ' },');
+    }
+    L.push('      ],', '    },');
+  }
+  L.push('  ],', '} as const satisfies FishContent;', '');
+  return L.join('\n');
+}
+$('btnExport').onclick = () => {
+  const text = exportText();
+  $('out').textContent = text;
+  $('rev').textContent = state.rev;
+  const done = ok => {
+    $('btnExport').textContent = ok ? '已复制 rev ' + state.rev : '⚠ 复制不了 → 看下面';
+    setTimeout(() => $('btnExport').textContent = '⧉ 复制 content.ts 全文', 1800);
+  };
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => done(true), () => done(false));
+  else done(false);
+};
+$('btnDraft').onclick = () => { $('banner').style.display = 'flex'; };
+$('btnRestore').onclick = () => { $('banner').style.display = 'none'; };
+$('btnDiscard').onclick = () => { $('banner').style.display = 'none'; };
+
+function renderAll(){
+  lutCache.clear();
+  renderLeft(); renderRight(); draw();
+  $('rev').textContent = state.rev;
+  syncLinesBtn();
+  $('hint').innerHTML = tab === 'path'
+    ? '画布两页共用。灰线是别的路径 —— 排新路时要对照着看挤不挤，用左边每行的 <b>◉</b> 单独收起来。<b style="color:#47c8c0">青色小点</b>是弧长等距采样：它们均匀，就是鱼恒速的证据。'
+    : '<b>只画这一阵用到的</b>路线，别的跟这阵无关。走带只在这一页 —— 路径页不跑运行时。';
+  if (tab === 'wave') seek(clock);
+}
+$('fit').onclick = fitView;
+/** 「路线」按钮管的那一批：鱼阵页 = 这一阵用到的，路径页 = 全部（但正在编的那条不许被批量隐掉）。 */
+function poolPaths(){
+  if (tab === 'wave'){
+    const used = new Set((state.waves[selWave]?.groups ?? []).map(g => g.path));
+    return state.paths.filter(p => used.has(p.id));
+  }
+  return state.paths.filter((_,i) => i !== selPath);
+}
+function syncLinesBtn(){
+  const pool = poolPaths(), anyShown = pool.some(visible);
+  const b = $('lines');
+  b.textContent = (anyShown ? '◉' : '○') + ' 路线';
+  b.className = anyShown ? 'go' : '';
+  b.title = anyShown ? '全部隐藏' : '全部显示';
+}
+$('lines').onclick = () => {
+  const pool = poolPaths(), anyShown = pool.some(visible);
+  pool.forEach(p => anyShown ? hidden.add(p.id) : hidden.delete(p.id));
+  renderLeft(); draw(); syncLinesBtn();
+};
+setTab('path');
+showZoom();
+$('out').textContent = '（点上面「复制 content.ts 全文」，导出的文本会出现在这里 —— 剪贴板在非安全上下文用不了时的兜底）';
+</script>
