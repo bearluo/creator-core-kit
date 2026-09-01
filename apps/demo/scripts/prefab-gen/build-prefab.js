@@ -18,6 +18,10 @@
  *  3. **跑之前先停掉编辑器预览**（Game View 在播放中时 `create-prefab` **静默失败**：
  *     返回 null、不抛错、不落盘）。返回结果里 `created` 是 null 就是这个。
  *  4. **同名资源已存在也是静默失败**（同样返回 null）。重新生成前先删掉旧的。
+ *  5. ⚠️ **ScrollView 要三层节点**：`scroll`（挂 ScrollView）→ `view`（挂 Mask，裁剪就是它）
+ *     → `content`（真正装列表项、Layout 挂这儿）。本脚本按**约定名**接线：带 `scroll` 的节点
+ *     其子节点必须叫 `view`，`view` 的子节点必须叫 `content`，缺一个就抛 —— 静默接不上的话
+ *     表现是「列表画出来了但滚不动」，那种 bug 极难从现象反推。
  *
  * 描述 schema（够用即可，缺什么加什么）：
  *   { url, root: Node }
@@ -28,6 +32,14 @@
  *                fillStart?: 0..1, fillRange?: 0..1, color?: [r,g,b,a?], sizeMode?: 'custom'|'trimmed'|'raw' },
  *     editBox?: { placeholder?, string?, password?: bool, maxLength?, fontSize?,
  *                 color?: [r,g,b,a?], placeholderColor?: [r,g,b,a?], frame?: <uuid>, bgColor?: [r,g,b,a?] },
+ *     button?:  { transition?: 'color'|'none', normal?, hover?, pressed?, disabled?: [r,g,b,a?] },
+ *     toggle?:  { checked?: bool },        // 父节点自动挂 ToggleContainer（页签互斥全靠它）
+ *     slider?:  { progress?: 0..1, direction?: 'horizontal'|'vertical', handle?: <子节点名> },
+ *     layout?:  { type?: 'horizontal'|'vertical'|'grid', spacing?, padding?: [l,r,t,b],
+ *                 resize?: 'none'|'container'|'children', cell?: [w,h] },
+ *     scroll?:  { vertical?: bool, horizontal?: bool, inertia?: bool },  // 见下「⚠️ ScrollView」
+ *     widget?:  { left?, right?, top?, bottom?, hCenter?: bool, vCenter?: bool },
+ *     graphics?: true,                     // 画布：Graphics 组件（曲线 / 控制点由代码画）
  *     comp?: '<@ccclass 名>',   // 挂一个项目脚本组件（如 'LoginView'）
  *     children?: Node[],
  *   }
@@ -41,6 +53,9 @@ const _pgHAlign = { left: cc.Label.HorizontalAlign.LEFT, center: cc.Label.Horizo
 const _pgType = { simple: cc.Sprite.Type.SIMPLE, sliced: cc.Sprite.Type.SLICED, filled: cc.Sprite.Type.FILLED };
 const _pgFill = { horizontal: cc.Sprite.FillType.HORIZONTAL, vertical: cc.Sprite.FillType.VERTICAL };
 const _pgSizeMode = { custom: cc.Sprite.SizeMode.CUSTOM, trimmed: cc.Sprite.SizeMode.TRIMMED, raw: cc.Sprite.SizeMode.RAW };
+const _pgLayoutType = { none: cc.Layout.Type.NONE, horizontal: cc.Layout.Type.HORIZONTAL, vertical: cc.Layout.Type.VERTICAL, grid: cc.Layout.Type.GRID };
+const _pgResize = { none: cc.Layout.ResizeMode.NONE, container: cc.Layout.ResizeMode.CONTAINER, children: cc.Layout.ResizeMode.CHILDREN };
+const _pgSliderDir = { horizontal: cc.Slider.Direction.Horizontal, vertical: cc.Slider.Direction.Vertical };
 
 /** 按 uuid 取资源（scene 进程走 editor 的资源管线，缓存没有就异步拉一次）。 */
 const _pgLoad = (uuid) =>
@@ -123,6 +138,78 @@ async function _pgBuild(desc, parent) {
     if (desc.size) ui.setContentSize(desc.size[0], desc.size[1]); // 背景图会重设尺寸，设完压回去
   }
 
+  if (desc.graphics) node.addComponent(cc.Graphics);
+
+  if (desc.layout) {
+    const l = desc.layout;
+    const layout = node.addComponent(cc.Layout);
+    layout.type = _pgLayoutType[l.type ?? 'vertical'];
+    if (l.spacing !== undefined) {
+      layout.spacingX = l.spacing;
+      layout.spacingY = l.spacing;
+    }
+    if (l.padding) {
+      layout.paddingLeft = l.padding[0];
+      layout.paddingRight = l.padding[1];
+      layout.paddingTop = l.padding[2];
+      layout.paddingBottom = l.padding[3];
+    }
+    layout.resizeMode = _pgResize[l.resize ?? 'none'];
+    if (l.cell) {
+      layout.cellSize = new cc.Size(l.cell[0], l.cell[1]);
+    }
+  }
+
+  if (desc.widget) {
+    const w = desc.widget;
+    const widget = node.addComponent(cc.Widget);
+    for (const k of ['left', 'right', 'top', 'bottom']) {
+      if (w[k] === undefined) continue;
+      widget['isAlign' + k[0].toUpperCase() + k.slice(1)] = true;
+      widget[k] = w[k];
+    }
+    if (w.hCenter) widget.isAlignHorizontalCenter = true;
+    if (w.vCenter) widget.isAlignVerticalCenter = true;
+    widget.alignMode = cc.Widget.AlignMode.ALWAYS; // ONCE 只在第一帧算，父节点后来改尺寸就对不上了
+  }
+
+  if (desc.button) {
+    const b = desc.button;
+    const btn = node.addComponent(cc.Button);
+    btn.transition = b.transition === 'none' ? cc.Button.Transition.NONE : cc.Button.Transition.COLOR;
+    btn.target = node; // 不指就是 null ⇒ 点了没有任何反馈，且不报错
+    if (b.normal) btn.normalColor = _pgColor(b.normal);
+    if (b.hover) btn.hoverColor = _pgColor(b.hover);
+    if (b.pressed) btn.pressedColor = _pgColor(b.pressed);
+    if (b.disabled) btn.disabledColor = _pgColor(b.disabled);
+  }
+
+  if (desc.toggle) {
+    const tg = node.addComponent(cc.Toggle);
+    tg.isChecked = !!desc.toggle.checked;
+    // 互斥归**父节点**的 ToggleContainer 管：谁都不挂的话两个页签能同时选中
+    const box = parent.getComponent(cc.ToggleContainer) ?? parent.addComponent(cc.ToggleContainer);
+    box.allowSwitchOff = false;
+  }
+
+  if (desc.slider) {
+    const s = desc.slider;
+    const sl = node.addComponent(cc.Slider);
+    sl.direction = _pgSliderDir[s.direction ?? 'horizontal'];
+    sl.progress = s.progress ?? 0;
+    // handle 得等子节点建完才拿得到，记下来最后接（下面 children 循环之后）
+    node._pgSliderHandle = s.handle ?? 'Handle';
+  }
+
+  if (desc.scroll) {
+    const s = desc.scroll;
+    const sv = node.addComponent(cc.ScrollView);
+    sv.vertical = s.vertical ?? true;
+    sv.horizontal = s.horizontal ?? false;
+    sv.inertia = s.inertia ?? true;
+    node._pgScroll = sv;
+  }
+
   // 项目脚本组件（界面薄壳）。名字是 @ccclass 注册名——编辑器已编译项目脚本，取不到就是名字写错了。
   if (desc.comp) {
     if (!cc.js.getClassByName(desc.comp)) throw new Error(`build-prefab: 找不到组件类 '${desc.comp}'`);
@@ -130,6 +217,25 @@ async function _pgBuild(desc, parent) {
   }
 
   for (const child of desc.children ?? []) await _pgBuild(child, node);
+
+  // —— 要等子节点存在才接得上的两处 ——
+  if (node._pgSliderHandle) {
+    const handle = node.getChildByName(node._pgSliderHandle);
+    if (!handle) throw new Error(`build-prefab: '${desc.name}' 的 slider 找不到 handle 子节点 '${node._pgSliderHandle}'`);
+    const sl = node.getComponent(cc.Slider);
+    sl.handle = handle.getComponent(cc.Button) ?? handle.addComponent(cc.Button);
+    sl.handle.transition = cc.Button.Transition.NONE;
+    delete node._pgSliderHandle;
+  }
+  if (node._pgScroll) {
+    const view = node.getChildByName('view');
+    const content = view && view.getChildByName('content');
+    if (!content) throw new Error(`build-prefab: '${desc.name}' 的 scroll 缺 view/content 子节点（约定名，见文件头约束 5）`);
+    if (!view.getComponent(cc.Mask)) view.addComponent(cc.Mask); // 不裁剪的话列表会画到面板外面
+    node._pgScroll.content = content;
+    delete node._pgScroll;
+  }
+
   return node;
 }
 

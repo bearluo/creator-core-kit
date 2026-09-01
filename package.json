@@ -20,6 +20,7 @@
     "check:graph": "node packages/tools/dist/cli.cjs check-graph --assets apps/demo/assets",
     "gen:masks": "node apps/demo/scripts/gen-collision-mask.mjs",
     "gen:noise": "node apps/demo/scripts/gen-noise.mjs",
+    "gen:ui-slice": "node apps/demo/scripts/gen-ui-slice.mjs",
     "check:masks": "node apps/demo/scripts/gen-collision-mask.mjs --check",
     "proto:sync": "node scripts/sync-proto.mjs",
     "docs:api": "typedoc",
