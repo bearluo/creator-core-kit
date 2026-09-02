@@ -1,4 +1,5 @@
 import { sys } from 'cc';
+import { PREVIEW } from 'cc/env';
 import type { AppConfig } from '@cck/core';
 import { loadScene } from '@cck/engine';
 import { buildValue } from './build-config';
@@ -94,5 +95,13 @@ export const APP_CONFIG: AppConfig = {
   //
   // **native 明确不配**：那条走 AssetsManager + manifest，压根没有 bundleVers 这回事。配了
   // 每次启动都会去拉一个 CDN 上不存在的文件，而拉不到是**启动失败**——等于自己把 native 锁死。
-  versionUrl: sys.isNative ? undefined : 'cck-versions.json',
+  // **编辑器预览也明确不配**：这张表是 `cck-manifest web-versions` 从**产物**的 settings.json
+  // 抽出来的，预览服务器（`localhost:7456`）上根本没有这个文件 → 404 → 拉不到 = **启动失败**。
+  // 症状是「开发模式预览打不开」，而报错指向一个只有出包才存在的文件，很难往这儿想。
+  // 预览的 bundle 直接从预览服务器取，压根没有热更这回事。
+  //
+  // ⚠️ 判据用 `PREVIEW` **不用 `env`**：两份 `build-configs/*.json` 里 `env` 都是 `''`，
+  // 而空串按 `buildValue` 的约定 = 没配 ⇒ **正式产物跑起来也是 `env==='dev'`**。
+  // 拿 `env` 当判据会把 web 热更一起关掉，且悄无声息。
+  versionUrl: sys.isNative || PREVIEW ? undefined : 'cck-versions.json',
 };

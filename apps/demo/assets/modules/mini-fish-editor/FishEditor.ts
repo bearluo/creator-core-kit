@@ -23,6 +23,7 @@ import {
   _decorator,
   input,
   instantiate,
+  view,
 } from 'cc';
 import { effect, type Disposer } from '@cck/core';
 import {
@@ -49,6 +50,8 @@ const BUNDLE = 'mini-fish-editor';
 /** 鱼的图集在**捕鱼**包里 —— 动态取，所以本包的 `deps` 保持为空（见设计文档 §3）。 */
 const FISH_BUNDLE = 'mini-fish';
 
+/** 面板 prefab 的设计尺寸 —— **横屏桌面工具**，不做移动端适配（见地图「不做什么」）。 */
+const PANEL = { width: 1920, height: 1080 };
 /** 画布节点（prefab 里 `Body/Stage/Board`）的尺寸，缩放的分母。 */
 const BOARD = { width: 1240, height: 872 };
 /** `z = 1` 时一屏看多大一片世界：比场地大一圈，因为控制点故意伸到屏外。 */
@@ -153,6 +156,10 @@ export class FishEditor extends Component {
     const root = instantiate(panel);
     this.node.addChild(root);
     this.root = root;
+    // 面板是**固定 1920×1080 的绝对布局**（横屏桌面工具，见地图「不做移动端适配」）。
+    // 整块等比装进可见区，剩下的留黑 —— 不这么做的话竖着开就被挤扁，而且挤扁**不报错**。
+    this.fitPanel();
+    view.on('canvas-resize', this.fitPanel, this);
     this.pathPage = instantiate(pathPage);
     this.wavePage = instantiate(wavePage);
     at(root, 'Body/PathPageMount')?.addChild(this.pathPage);
@@ -177,6 +184,7 @@ export class FishEditor extends Component {
 
   onDestroy(): void {
     this.stop?.();
+    view.off('canvas-resize', this.fitPanel, this);
     input.off(Input.EventType.KEY_DOWN, this.onKey, this);
     input.off(Input.EventType.KEY_UP, this.onKey, this);
     // FishVM 没有 dispose —— 它只持 ECS world 和几个纯对象，丢掉引用就完了
@@ -818,6 +826,14 @@ export class FishEditor extends Component {
   }
 
   // —— 视野 ————————————————————————————————————————————————————————
+
+  /** 整块面板等比装进可见区（`contain`，不裁不拉），余下留黑。 */
+  private fitPanel(): void {
+    if (!this.root) return;
+    const size = view.getVisibleSize();
+    const k = Math.min(size.width / PANEL.width, size.height / PANEL.height);
+    this.root.setScale(k, k, 1);
+  }
 
   private scale(): number {
     return BASE * this.view.z;
