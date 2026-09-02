@@ -25,6 +25,8 @@ packages/core     纯 TS，零 cc，发 npm，vitest 在 node 直接测
 packages/engine   cc 适配 + UI/资源/热更基建，作为可移植 Asset Bundle 源码
 packages/tools    (可选) Excel→JSON、manifest 生成、脚手架
 apps/demo         真实 Cocos Creator 3.8 工程，挂 MCP 实测
+apps/fish-editor  鱼阵编辑器（纯 web 内部工具，vite，`pnpm editor`）——**不进任何游戏包**
+                  只在浏览器跑的工具用 HTML，会进客户端的界面才用 prefab（ADR-0020）
 docs/design       设计文档
 ```
 
@@ -35,7 +37,7 @@ docs/design       设计文档
 纵向 = 「改它要付什么代价」：
 
 ```
-boot/        ① AOT：Boot.scene / Bootstrap / app-config(VEST) / 启动界面 / foundation-api → 热更、重启
+boot/        ① base：Boot.scene / Bootstrap / app-config(VEST) / 启动界面 / foundation-api → 热更、重启
 foundation/  ② 地基 bundle：协议 / 连接 / 登录与认证 / 网关搬家 / 模块清单 / 模块契约    → 热更，不重启
              一个功能一个目录（net/ login/ …），**只有逻辑、没有脸**
 modules/*/   ③ 功能 bundle：lobby / mail / shop / mini-clicker / mini-dodge / mini-plane → 按需 load/release
@@ -46,9 +48,9 @@ shared/      跨模块共享资源（所有马甲都一样的那些）
 只做归类——bundle 不能嵌套）。**皮的分包边界 = 它跟随者的分包边界，一个跟随者一个皮包**：
 
 ```
-skins/base/foundation/ → bundle `skin-base-foundation`  login/Login.prefab   随 shared 装，常驻
-skins/base/lobby/      → bundle `skin-base-lobby`       LobbyPanel · LobbyItem   进大厅时装
-skins/base/mail/       → bundle `skin-base-mail`        Mail.prefab          开邮件时装、关时卸
+skins/default/foundation/ → bundle `skin-default-foundation`  login/Login.prefab   随 shared 装，常驻
+skins/default/lobby/      → bundle `skin-default-lobby`       LobbyPanel · LobbyItem   进大厅时装
+skins/default/mail/       → bundle `skin-default-mail`        Mail.prefab          开邮件时装、关时卸
 skins/vest/…           → `skin-vest-*`（示例马甲）      同名同路径，各画各的
 ```
 
@@ -63,13 +65,13 @@ skins/vest/…           → `skin-vest-*`（示例马甲）      同名同路�
 完整判据与开放项见 [`docs/design/2026-08-07-demo-assets-layout-v2-proposal.md`](docs/design/2026-08-07-demo-assets-layout-v2-proposal.md)。
 
 - 地基**必须在 `hotupdate` 之后加载**（`shared` 阶段），否则更新下来的要等下次启动才生效。长连接与认证跟着后移。
-- **主包不得 `import` 地基的任何值**——那段代码会被判给主包 → 地基进 AOT → 热更失效。唯一接缝是 `boot/foundation-api.ts`（`import type` + `js.getClassByName`）。
+- **主包不得 `import` 地基的任何值**——那段代码会被判给主包 → 地基进 base → 热更失效。唯一接缝是 `boot/foundation-api.ts`（`import type` + `js.getClassByName`）。
 - 模块**可以**正常 `import` 地基的函数：`foundation` 的 bundle 优先级（6）高于所有业务包，被多包引用的资源归属优先级最高者，同级才各复制一份。**改优先级前先读 [`ADR-0014`](docs/adr/0014-foundation-bundle-and-priority-sharing.md)**。
 - **子游戏（`kind:'game'`）跟外面的往来只经 `foundation/game/`**。panel 类的上下文是大厅**递进去**的（`ModuleContext` = `open` 的 args）；game 类是 `loadScene` 切过去的、递不进任何东西，所以它自己去取 `getGameHost()`：玩家是谁 / `exit()` 回大厅 / `best(id)` / `submit(id, score)`。**契约住地基不住大厅** —— 模块 → 大厅（3）虽合法但方向反了，子游戏不该依赖「大厅」这个具体实现。VM 拿到的是更小的 `GameScoreboard`（零依赖，单测塞 `memoryScoreboard()`），因为 VM 零 `cc`、node 直跑，不该认识一条挂到 DI 容器和 `IStorage` 的链子。接一款新游戏 = 建 bundle + `catalog.ts` 加一行 + View 里三句（`scoreboardFor` / `exitButton` / `releaseGameArt`）+ 镜像单测，**大厅代码零改**。完整流程见 [`lobby-modular-framework-overview`](docs/design/lobby-modular-framework-overview.md#3-模块契约--生命周期) 与 [`apps/demo/README.md`](apps/demo/README.md)。
-- **跨包资源依赖只许指向声明过的共享仓**（只管**资源**；跨包 `import` 走下一条的拓扑规则）。**能当共享仓的条件是 priority 严格高于所有引用者**（同级会被抢），所以仓可以有多个——跨模块共用的图集 / 字体放地基皮包就是一个；产物闸的白名单默认只有 `resources`，多开要 `--allow-deps` 声明。Creator 把被多包引用的资源判给**优先级最高**的引用者（`resources` 8 > `main` 7 > `foundation` 6 > `shared` 5 > `lobby` 3 > 地基皮包 2 > 其余 1），其余包降级成 `cc.config` 的 `deps` + `redirect`。**归属会漂，且漂了是静默的**——构建全绿、热更下发成功，运行时才在 `redirect` 指向的包里找不到资源。demo 实测出过两种：共用图漂进 `main`（AOT，只随 APK 换 → 热更下去的包引用旧 APK 没有的 uuid 就炸，而改的还不是那个包、是 `boot`），以及两个马甲的地基皮包同优先级抢同一张图 → vest 的皮包依赖 base 马甲的包。所以：**① 用到的每个内置资源在 `assets/resources/internal-pin.prefab` 里挂个节点「钉」一次**——`resources` priority 8 是工程内最高的，归属被它吸走后谁也抢不动，而**工程各处照常引用 `db://internal`、一行都不用改**；**② 没有天然归属的外部资源一律经这个仓**；③ 代价是它们跟 AOT 同寿命，要用钉子里没有的内置图 = 热更整个 base 并重启——这正确，AOT 什么代价它就什么代价。两道闸：**源码期** `pnpm check:pins`（不用构建，「引用了外部资源却没钉」当场报）＋ **产物期** `cck-manifest --split`（写 manifest 前扫 `deps`/`redirect`）。判据见 [`hotupdate-pipeline`](apps/demo/docs/hotupdate-pipeline.md#资源归属一个共享仓别的都不许借)。
+- **跨包资源依赖只许指向声明过的共享仓**（只管**资源**；跨包 `import` 走下一条的拓扑规则）。**能当共享仓的条件是 priority 严格高于所有引用者**（同级会被抢），所以仓可以有多个——跨模块共用的图集 / 字体放地基皮包就是一个；产物闸的白名单默认只有 `resources`，多开要 `--allow-deps` 声明。Creator 把被多包引用的资源判给**优先级最高**的引用者（`resources` 8 > `main` 7 > `foundation` 6 > `shared` 5 > `lobby` 3 > 地基皮包 2 > 其余 1），其余包降级成 `cc.config` 的 `deps` + `redirect`。**归属会漂，且漂了是静默的**——构建全绿、热更下发成功，运行时才在 `redirect` 指向的包里找不到资源。demo 实测出过两种：共用图漂进 `main`（base 层，改它要热更 base 并重启 → 免重启的皮包先到一步，那段窗口里引用的 uuid 在旧 `main` 里不存在就炸，而改的还不是那个包、是 `boot`），以及两个马甲的地基皮包同优先级抢同一张图 → vest 的皮包依赖 default 马甲的包。所以：**① 用到的每个内置资源在 `assets/resources/internal-pin.prefab` 里挂个节点「钉」一次**——`resources` priority 8 是工程内最高的，归属被它吸走后谁也抢不动，而**工程各处照常引用 `db://internal`、一行都不用改**；**② 没有天然归属的外部资源一律经这个仓**；③ 代价是它们跟 base 同寿命，要用钉子里没有的内置图 = 热更整个 base 并重启——这正确，base 什么代价它就什么代价。两道闸：**源码期** `pnpm check:pins`（不用构建，「引用了外部资源却没钉」当场报）＋ **产物期** `cck-manifest --split`（写 manifest 前扫 `deps`/`redirect`）。判据见 [`hotupdate-pipeline`](apps/demo/docs/hotupdate-pipeline.md#资源归属一个共享仓别的都不许借)。
 - **加载顺序与资源边界声明在依赖表里**（demo：`assets/foundation/bundles.ts` 的 `BUNDLE_GRAPH`，`Foundation.boot` 第一件事 `setGraph` 装上）。`needs` **一表两用**：① 装它之前先装好这些（`load`/`release` 各加减一次引用，**装卸对称**，共享依赖不误卸）；② 它能碰哪些包的资源（`mayUse`）。**动态引用只能靠它**——`assets.load(path,{bundle})` / `loadScene` / `registerUI` 的 resolver / `js.getClassByName` 在构建期一条记录都不产生，静态闸看不见。表外的包一 `load` 就抛（`env !== 'prod'`）。**启动那一段（`APP_CONFIG.shared`）不归它管**——表住在地基包里，地基自己是被启动序列装上来的。加模块仍只改 `catalog.ts` 一行（模块段按 `MODULE_CATALOG` 现推）。对账在 `apps/demo/test/foundation/bundles.test.ts`（随 `pnpm test`）。
 - **跨包 `import` 只许指向优先级更高的包**（`priority(被依赖) > priority(依赖方)`，严格递增 ⇒ 拓扑序天然存在 ⇒ **循环依赖不可能出现**）。排名不另立表，就用上一条那串 Creator 优先级。一条规则同时守住三件事：**倒挂**（`main` 7 → `foundation` 6，即「主包不得 import 地基的值」）、**同级互引**（两个模块 / 两个马甲的皮包彼此拽住，谁都卸不干净）、**成环**。`import type` 不算边（编译期擦除，主包拿地基的唯一合法缝就是它），动态 `bundle.load()` + `js.getClassByName` 也不算（故意绕开静态依赖）。闸是 `pnpm check:graph`；**产物侧那两道对代码边完全瞎** —— Creator 的 `cc.config.deps` 只记资源依赖，脚本 `import` 一条都不写。实况拓扑图（现扫现画）见 [`bundle-layout`](apps/demo/docs/bundle-layout.md#依赖拓扑与防环)。
-- **马甲换皮走 UI 变体，不进代码分支**：登记了换皮的界面，prefab **一律**从 `skin-<马甲>-<跟随者>` 包取（`foundation/catalog.ts` 的 `skinBundle(owner)`），**原层里不留脸**——脸留在地基意味着别的马甲白下、改它还要热更整个地基包；脚本仍归原层（地基 6 / 模块 1），一套逻辑配任意一张脸。马甲标识 `VEST` 是打包期常量（`boot/app-config.ts`），demo 自己的地基皮是 `skin-base-foundation`。**给哪几种登录方式也由 prefab 决定**——节点在就接线、不在就没有这条路。存储 key 一律带 `appId` 前缀（Web / 小游戏同域名共用 localStorage，不隔离两个马甲会共用同一个游客号）。
+- **马甲换皮走 UI 变体，不进代码分支**：登记了换皮的界面，prefab **一律**从 `skin-<马甲>-<跟随者>` 包取（`foundation/catalog.ts` 的 `skinBundle(owner)`），**原层里不留脸**——脸留在地基意味着别的马甲白下、改它还要热更整个地基包；脚本仍归原层（地基 6 / 模块 1），一套逻辑配任意一张脸。马甲标识 `VEST` 是打包期常量（`boot/app-config.ts`），demo 自己的地基皮是 `skin-default-foundation`。**给哪几种登录方式也由 prefab 决定**——节点在就接线、不在就没有这条路。存储 key 一律带 `appId` 前缀（Web / 小游戏同域名共用 localStorage，不隔离两个马甲会共用同一个游客号）。
 
 ---
 
@@ -159,8 +161,11 @@ packages/core/docs/api/                      **typedoc 生成物，勿手改**�
 
 ## 三种"热"
 
+> **三个层名**：**引擎层**（`libcocos.so` · 引擎 JS · `main.js`，发 APK）→ **base 层**（业务代码 · `assets/boot` · `main`/`resources`，热更后重启生效）→ **分包层**（`foundation` · `shared` · `skin-*` · `modules/*`，热更免重启）。
+> 代码里的 `cck-base.json` / `baseStamp` / `DEFAULT_BASE_BUNDLES` 都指 base 层。马甲是另一维度：demo 的两个是 `default` 与 `vest`，皮包 `skin-<马甲>-<跟随者>`。
+
 - **线上热更(hotfix)**：`HotUpdateService` 统一入口。原生走官方 `AssetsManager` + manifest；Web/小游戏走远程 Asset Bundle 版本化加载。
-  native 的边界：**AOT 层（boot + 主包 + 业务代码）热更后重启生效，只有引擎指纹（`cc.<md5>.js`）变才必须发 APK**——靠 `main.js` 读固定名入口指针实现，见 [`ADR-0017`](docs/adr/0017-aot-hotupdate-via-fixed-name-pointer.md)。
+  native 的边界：**base 层（boot + 主包 + 业务代码）热更后重启生效，只有引擎指纹（`cc.<md5>.js`）变才必须发 APK**——靠 `main.js` 读固定名入口指针实现，见 [`ADR-0017`](docs/adr/0017-base-hotupdate-via-fixed-name-pointer.md)。
 - **运行时按需分包**：`BundleManager.load/release(name)`，一模块一 bundle。
 - **开发期热重载**：Cocos 无原生脚本 HMR。逻辑层用 `vitest --watch` 秒级反馈（不必开 Creator）；引擎层维持 Creator 预览。
 

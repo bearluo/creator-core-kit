@@ -18,10 +18,14 @@ export default tseslint.config(
       '**/build/**',
       '**/library/**',
       '**/temp/**',
-      // apps/* 是 Cocos Creator 工程（自带 Creator 编译基线 + 第三方编辑器扩展如
+      // apps/demo 是 Cocos Creator 工程（自带 Creator 编译基线 + 第三方编辑器扩展如
       // funplay-cocos-mcp 的 Node/CJS 代码），不进 monorepo 根 lint 契约；根 lint 只管
       // packages/core+engine 的铁律与风格。demo 脚本若需 lint，另在 apps/demo 自配。
-      'apps/**',
+      // ⚠️ **逐个列 Cocos 工程**而不是 `apps/**`：apps/fish-editor 是普通 vite 工程，没有
+      // Creator 那套基线，本来就该受根契约管（少维护一份 lint 配置）。以后新增的普通 TS 工程
+      // 默认被管，是想要的；再来一个 Creator 工程才往这儿加一行。
+      'apps/demo/**',
+      'apps/ecs-lab/**',
     ],
   },
   js.configs.recommended,

@@ -157,7 +157,7 @@ export function manifestAssetKeys(content: string): readonly string[] {
 
 /**
  * 从一份 manifest JSON 文本里取 `version` —— 看门狗隔离时用它记下「哪一版起不来」
- * （{@link aotQuarantineVerdict} 拿这个号拦重下）。
+ * （{@link baseQuarantineVerdict} 拿这个号拦重下）。
  *
  * 读不出来 → `undefined`，**不抛**：拦不住只是退回「隔离 → 重下 → 又隔离」的振荡，
  * 而此刻正在做的是把玩家从黑屏里捞出来，不该在这里再失败一次。
@@ -182,9 +182,9 @@ export function manifestVersion(content: string): string | undefined {
  * 冷启动还原），**不是**「有没有 seed」—— 随包发的分包也没有 seed。这条要是搞错，隔离的那个
  * 版本号会把**分包**一起拦住：base 与分包共用同一个 `--version`（`buildSplitManifests`），
  * 内容没变的分包在 `--prev` 下还会沿用旧号，于是一次 base 隔离能把一批分包永久钉死在包内版本。
- * 分包与包内 AOT 兼不兼容自有 `coreApiHash` 闸管，那正是它的活。
+ * 分包与包内 base 兼不兼容自有 `coreApiHash` 闸管，那正是它的活。
  */
-export function aotQuarantineVerdict(
+export function baseQuarantineVerdict(
   isBase: boolean,
   version: string,
   bad: string | null | undefined,
@@ -194,34 +194,34 @@ export function aotQuarantineVerdict(
 }
 
 /**
- * `main.js` 启动时挂上来的**包内 AOT 入口名**（`build-templates/native/index.ejs` 里那句
- * `window.__cckAotEntry = '<%= applicationJs %>'`）—— 构建期插值，**热更改不了**。
+ * `main.js` 启动时挂上来的**包内 base 入口名**（`build-templates/native/index.ejs` 里那句
+ * `window.__cckBaseEntry = '<%= applicationJs %>'`）—— 构建期插值，**热更改不了**。
  *
- * 它与运行时真正加载的入口不是一回事：AOT 热更之后 `main.js` 会改从 `src/cck-aot.json` 指针
+ * 它与运行时真正加载的入口不是一回事：base 热更之后 `main.js` 会改从 `src/cck-base.json` 指针
  * 解析出新入口，而这个全局仍是出包那天烘进去的那个名字。正因如此它才等于「这个 APK 的身份」。
  */
-export function packagedAotEntry(): string | undefined {
-  const v = (globalThis as { __cckAotEntry?: unknown }).__cckAotEntry;
+export function packagedBaseEntry(): string | undefined {
+  const v = (globalThis as { __cckBaseEntry?: unknown }).__cckBaseEntry;
   return typeof v === 'string' && v !== '' ? v : undefined;
 }
 
 /**
- * 本次启动是不是被 **AOT 启动看门狗**隔离了 —— `main.js` 判定后挂上来的
+ * 本次启动是不是被 **base 启动看门狗**隔离了 —— `main.js` 判定后挂上来的
  * （`build-templates/native/index.ejs` 里那句 `window.__cckAotQuarantined = ...`）。
  *
- * 隔离态 =「连续 N 次用热更 AOT 都没跑到 Bootstrap」→ 这一次跑**包内** AOT，连搜索路径都不还原。
- * 它兜的是 AOT 解锁带来的唯一一种**玩家自己救不回来**的失败：下发的 AOT 起不来，而作废缓存的
+ * 隔离态 =「连续 N 次用热更 base 都没跑到 Bootstrap」→ 这一次跑**包内** base，连搜索路径都不还原。
+ * 它兜的是 base 解锁带来的唯一一种**玩家自己救不回来**的失败：下发的 base 起不来，而作废缓存的
  * 代码在 Bootstrap 里、永远轮不到 —— 实测重启与覆盖装 APK 都无效，只有清应用数据。见 ADR-0018。
  *
- * 老模板没挂这个全局 → 恒 `false`（看门狗休眠，行为与 AOT 解锁前一致）。
+ * 老模板没挂这个全局 → 恒 `false`（看门狗休眠，行为与 base 解锁前一致）。
  */
-export function aotQuarantined(): boolean {
+export function baseQuarantined(): boolean {
   return (globalThis as { __cckAotQuarantined?: unknown }).__cckAotQuarantined === true;
 }
 
 /**
- * APK 换了没有 —— 判据是**包内 AOT 入口的 md5**：`./application.56453.js` → `56453`，
- * 取自 {@link packagedAotEntry}。
+ * APK 换了没有 —— 判据是**包内 base 入口的 md5**：`./application.56453.js` → `56453`，
+ * 取自 {@link packagedBaseEntry}。
  *
  * 返回 `undefined` 表示「判不了」（产物没开 `md5Cache`，入口就叫 `application.js`；或老模板没挂
  * 这个全局）：调用方应当**什么也不做**，别把「判不了」当成「换了」而去清缓存——那会让每次冷启动
@@ -229,9 +229,9 @@ export function aotQuarantined(): boolean {
  *
  * ## 为什么必须取包内那份，不能取运行时的 `settings.bundleVers.main`
  *
- * AOT 解锁之前 `bundleVers` 是安全的：`settings` 只随 APK 换，所以它答的就是「APK 换没换」。
+ * base 解锁之前 `bundleVers` 是安全的：`settings` 只随 APK 换，所以它答的就是「APK 换没换」。
  * 解锁之后 `settings.<md5>.json` 本身也随热更走了，于是 `bundleVers` 答的变成「**跑的是哪一版
- * AOT**」——每成功热更一次 AOT，它就与上一轮存下的指纹不同，缓存被判成「上一版 APK 攒的」而
+ * base**」——每成功热更一次 base，它就与上一轮存下的指纹不同，缓存被判成「上一版 APK 攒的」而
  * **整个删掉**，下一轮冷启动重下、再删，死循环。而 `main.js` 换不了（它自己就是那段搜索路径还原），
  * 热更够不着，烘在里面的入口名因此是唯一不可伪造的 APK 身份。
  *
@@ -239,12 +239,12 @@ export function aotQuarantined(): boolean {
  *
  * - **拿得到**。这一步必须跑在 kit 装配之前（`AssetsManagerEx` 一 `create` 就前插搜索路径了），
  *   而 app 戳在 `resources` bundle 里、要异步 load，那时还没到；全局是同步可取的。
- * - **口径更保守且正确**。`coreApiHash` 只描述 core 的 API 面，AOT 业务代码改了它不变；而热更
- *   下来的模块代码是对着**整个 AOT** 编译的，AOT 的字节变了就该重新拉一遍。
+ * - **口径更保守且正确**。`coreApiHash` 只描述 core 的 API 面，base 业务代码改了它不变；而热更
+ *   下来的模块代码是对着**整个 base** 编译的，base 的字节变了就该重新拉一遍。
  * - 入口名随 `settings` md5 走，而 `settings` 含全部 `bundleVers` → 任何内容变动都会翻它。
- *   代价是「新出的 APK 只改了个日志文案也重下」，换来的是不会出现「新 AOT 配旧模块」。
+ *   代价是「新出的 APK 只改了个日志文案也重下」，换来的是不会出现「新 base 配旧模块」。
  */
-export function aotStamp(packagedEntry: string | null | undefined): string | undefined {
+export function baseStamp(packagedEntry: string | null | undefined): string | undefined {
   if (typeof packagedEntry !== 'string') return undefined;
   const file = packagedEntry.split('?')[0].split('/').pop() ?? '';
   if (!file.startsWith('application.') || !file.endsWith('.js')) return undefined;
@@ -286,9 +286,9 @@ export function engineHashFromUrl(url: string | null | undefined): string | unde
  * 反过来 hash `.so` 既要挑 ABI 又要区分 debug/release，还读不出「JS API 面变没变」。
  * 唯一漏网的是只改 `native/engine/` 的 C++ 而不动 JS —— 那种改动本来也只能发包。
  *
- * ## 为什么不用 `aotStamp` / `coreApiHash`
+ * ## 为什么不用 `baseStamp` / `coreApiHash`
  *
- * 三个指纹管三件事，别混用：`aotStamp`（包内 AOT 入口 md5）答「APK 换没换」，业务代码一改就翻，
+ * 三个指纹管三件事，别混用：`baseStamp`（包内 base 入口 md5）答「APK 换没换」，业务代码一改就翻，
  * 敏感是它的特性；`coreApiHash` 答「core 的 API 面变没变」，换引擎时一动不动；本函数答
  * 「引擎换没换」，只在换 Creator 版本或改引擎模块勾选时变 —— 那时 `.so` 必须重编。
  *

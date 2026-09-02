@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>鱼阵编辑器</title>
+<!--
+  鱼阵编辑器 —— 捕鱼的路径与鱼阵内容工具。**内部工具，纯 web，不进任何游戏包。**
+
+  跑法：仓库根 `pnpm editor`。导出 = 复制 content.ts 全文 → 覆盖
+  apps/demo/assets/modules/mini-fish/content/content.ts → `git diff` 看改了什么。
+
+  它跟游戏共用的是**逻辑**（@game/* 那些零 cc 的模块）：路径求值、弧长恒速、鱼阵投喂、
+  帧号与朝向、场地 cover 裁剪。共用逻辑不需要 Cocos —— 那些本来就是普通 TS。
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+
+<div class="app">
+  <div class="topbar">
+    <div class="tabs">
+      <button id="tabPath" class="on">路径</button>
+      <button id="tabWave">鱼阵</button>
+    </div>
+    <span class="rev">rev <b id="rev">1</b></span>
+    <span class="grow"></span>
+    <button id="btnDraft">存草稿</button>
+    <button class="go" id="btnExport">⧉ 复制 content.ts 全文</button>
+    <div class="banner" id="banner" style="display:none">
+      <span class="grow" id="bannerText"></span>
+      <button id="btnRestore">恢复</button>
+      <button id="btnDiscard">丢弃</button>
+    </div>
+  </div>
+
+  <div class="body">
+    <aside class="col" id="left"></aside>
+
+    <div class="stage">
+      <canvas id="cv" width="1640" height="1046"></canvas>
+      <div id="transport" class="transport" style="display:none">
+        <button id="play">▶ 播放</button>
+        <button id="home">⏮</button>
+        <button id="stepB">−0.1s</button>
+        <button id="stepF">+0.1s</button>
+        <input type="range" id="scrub" min="0" max="10" step="0.05" value="0">
+        <span class="clock" id="clock">0.00 / 0.0 s</span>
+        <span class="live" id="live">场上 0</span>
+      </div>
+      <div class="viewbar">
+        <button id="fit">⤢ 适应内容</button>
+        <button id="lines" class="go">◉ 路线</button>
+        <button id="safe">▣ 可见区</button>
+        <span class="live" id="zoom" style="min-width:46px">100%</span>
+        <span class="grow"></span>
+        <span class="hint" style="margin:0">按住 <kbd>空格</kbd>（或中键）拖 = 平移 · 滚轮 = 缩放 · <kbd>Alt</kbd> + 拖手柄 = 打断镜像</span>
+      </div>
+      <p class="hint" id="hint"></p>
+    </div>
+
+    <aside class="col" id="right"></aside>
+  </div>
+
+  <div class="notes">
+    <h3>导出：复制走剪贴板；下面这份是兜底，可以全选手动复制</h3>
+    <pre class="out" id="out"></pre>
+  </div>
+</div>
+
+<script type="module" src="./src/main.ts"></script>
+</body>
+</html>

@@ -24,7 +24,7 @@ const FULL = {
       resources: 'dd229',
       lobby: 'ef2c3',
       shop: '50149',
-      'skin-base-mail': '8cf1a',
+      'skin-default-mail': '8cf1a',
     },
   },
 };
@@ -50,9 +50,9 @@ describe('readBundleVers', () => {
 });
 
 describe('buildWebVersions', () => {
-  it('剔掉 AOT 三件套 —— 它们的版本是页面自己的 settings.json 说了算', () => {
+  it('剔掉 base 三件套 —— 它们的版本是页面自己的 settings.json 说了算', () => {
     const v = buildWebVersions(makeRoot(FULL), { version: '1.0.1' });
-    expect(Object.keys(v.bundles).sort()).toEqual(['lobby', 'shop', 'skin-base-mail']);
+    expect(Object.keys(v.bundles).sort()).toEqual(['lobby', 'shop', 'skin-default-mail']);
     expect(v.version).toBe('1.0.1');
   });
 
@@ -62,8 +62,8 @@ describe('buildWebVersions', () => {
     expect('minAppVersion' in v).toBe(false);
   });
 
-  it('aotBundles 可覆盖', () => {
-    const v = buildWebVersions(makeRoot(FULL), { version: '1', aotBundles: ['lobby'] });
+  it('baseBundles 可覆盖', () => {
+    const v = buildWebVersions(makeRoot(FULL), { version: '1', baseBundles: ['lobby'] });
     expect(v.bundles['lobby']).toBeUndefined();
     expect(v.bundles['main']).toBe('3cc4b');
   });

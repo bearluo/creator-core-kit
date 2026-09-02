@@ -23,7 +23,7 @@ native 侧多两件配套事，`scripts/build.mjs` 已经做进流程，改配�
 - **base manifest 只丢引擎绑定的那几类**（`cck-manifest --md5`）：`src/cocos-js/**`、
   `src/effect.bin`、`jsb-adapter/**`（与 `libcocos.so` 是同一次引擎构建的两半）与
   `src/system.bundle.*` / `src/polyfills.*` / `src/import-map*`（名字写死在 `main.js` 里）。
-  **AOT 整条链照发**，`main.js` 改读固定名指针 `src/cck-aot.json` 拿入口名（ADR-0017），
+  **base 整条链照发**，`main.js` 改读固定名指针 `src/cck-base.json` 拿入口名（ADR-0017），
   所以改 `assets/boot` 只要热更 + 重启，不必发 APK。
 
 怎么用见 skill `/demo-build`（两条路：Creator 面板导入，或关掉编辑器走命令行）。

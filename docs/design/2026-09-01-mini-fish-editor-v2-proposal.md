@@ -1,5 +1,5 @@
 ---
-状态: 已定稿
+状态: 已实施（2026-09-02 · 封存）
 日期: 2026-09-01
 依赖: docs/design/2026-08-31-mini-fish-content-editor.md, docs/design/2026-08-28-mini-fish-design.md, docs/design/testing-strategy-overview.md, apps/demo/docs/ui-style-guide.md
 ---
@@ -9,8 +9,16 @@
 > 摘要：编辑器从「一屏 + 单段贝塞尔 + 缩水控件」改成「**两个页签 + 分段贝塞尔链 + 按原型对齐的完整交互**」。
 > 顺带修掉一个**现存 bug**：`PathFollow.t` 被当弧长比例推、`pointAt` 却按贝塞尔参数求值，实测最弯那条路
 > 快慢比 **4.01×** —— 文档里写的「恒速像素前进」对弯路一直不成立。
-> 何时读：动 `mini-fish/content/` 或 `mini-fish-editor/` 之前；给编辑器加交互之前。
-> 验收单是[**可交互原型**](../../apps/demo/docs/mockups/fish-editor-v2-prototype.html)（浏览器直接打开），不是本文。
+> 何时读：**基本不用读了** —— 这是一份过程文档，现状见
+> [`2026-08-31-mini-fish-content-editor.md`](2026-08-31-mini-fish-content-editor.md)。只在想知道
+> 「当时为什么这么改」时翻它。
+
+> ⚠️ **实施结果与本文有一处大出入**：本文假定编辑器留在 Cocos 里（prefab、bundle、`Editor.scene`）。
+> 界面按本文做完之后重新问了一次「它为什么得在 Cocos 里」，结论是不必 —— 编辑器整个搬去了
+> `apps/fish-editor/`（纯 web，vite），Cocos 那套 prefab 与 bundle 全部删除。判据见
+> [`ADR-0020`](../adr/0020-internal-tools-in-html.md)。本文里**交互与数据格式那部分照旧成立**
+> （两个页签、分段贝塞尔、真弧长恒速、控件形态），只有「宿主与装配」那部分作废。
+> 当时的可交互原型不再单独留一份 —— 它**就是**现在那个工具的界面。
 
 **决策出处**：[图 · 鱼阵编辑器 v2](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/11)。
 每条决策住在它自己的票里，本文只**引用**并补上「怎么落地」那一半 —— 改哪些文件、什么顺序、每步的闸。
@@ -140,7 +148,7 @@ corners(): readonly { seg: number; deg: number }[];
 | [#13](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/13) | prefab 拆五张 | 切页签用 `active` 不换 prefab（同包内动态加载省不了下载、只换来闪烁） |
 | [#14](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/14) | 框 = 一张 16×16 九宫格 | 圆角 6px、1px 描边、**灰底 180 + 白边 255** ⇒ 染色后边比底亮 43%，一个节点拿到深底亮边 |
 | [#14](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/14) | 控件对应物 | 下拉自绘弹层 · hover 统一走 `Button`（**列表行也是 Button**）· 数字 `EditBox` **夹紧不拒绝** · 进度条 `Slider` · 不塞等宽字体 · `Layout` 只用在一维列表 |
-| [#15](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/15) | 验收单 = 原型 | 存在 `apps/demo/docs/mockups/fish-editor-v2-prototype.html`，**少一样就是偏差** |
+| [#15](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/15) | 验收单 = 原型 | 当时存在 `apps/demo/docs/mockups/fish-editor-v2-prototype.html`，**少一样就是偏差**。⚠️ 它现在**就是** `apps/fish-editor/` 的界面（同一份 DOM 与 CSS），不再单独留一份对照物 —— 留着必漂 |
 | [图 Notes 4](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/11) | 视觉风格 | **不跟** `ui-style-guide.md` 的明亮卡通 —— 内部工具，深色才看得清曲线；要在风格文档里补上这个边界 |
 
 ### 原型试用逮到的四条，必须带进实施

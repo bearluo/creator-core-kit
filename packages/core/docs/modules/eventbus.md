@@ -132,7 +132,7 @@ export function getEventBus<E extends EventMap = EventMap>(): IEventBus<E>;
 ## Platform considerations（全平台 / 小游戏兼容）
 
 - 纯 TS（Map/数组/函数），node/web/所有小游戏/原生**无差异**，无平台分支。
-- 与三种「热」：EventBus 实例随 core 代码；跨 bundle 共享须走**全局 `EVENT_BUS` token**（ADR-0001：普通出包 npm 代码在 AOT 共享层单份，全局注册表跨 bundle 唯一）——各 bundle `getEventBus()` 拿到同一实例，事件互通。
+- 与三种「热」：EventBus 实例随 core 代码；跨 bundle 共享须走**全局 `EVENT_BUS` token**（ADR-0001：普通出包 npm 代码在 base 共享层单份，全局注册表跨 bundle 唯一）——各 bundle `getEventBus()` 拿到同一实例，事件互通。
 - 场景切换：约定切场景时对将销毁对象 `offAll(this)`；或全局 `clear()` 重置（谨慎，会清掉常驻订阅）。
 
 ## Testable seams + test plan（可测接缝 + vitest 用例）

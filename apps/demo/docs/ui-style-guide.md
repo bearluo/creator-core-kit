@@ -54,6 +54,35 @@
 
 **一处待对齐**：代码里 `onFailure` 会把状态文字染红（`C_ERR = (255,120,110)`），但参考稿的失败态文字仍是「白字 + 深蓝描边」，靠角色表情和 `CONNECTION LOST` 措辞传达失败，不靠变色。本风格下红字会显脏。真正接美术资源时，把 `C_ERR` 去掉、或换成同色系的暗调。
 
+## 半透明是给整棵子树的，不是给这个节点自己的（引擎坑）
+
+**`Sprite.color` 的 alpha 一律写 255。** 想要半透明观感就把它**烘进 RGB**，别靠 alpha。
+
+`Batcher2D.walk` 里这一句是全部原因：
+
+```ts
+const selfOpacity = render && render.color ? render.color.a / 255 : 1;
+this._pOpacity = opacity *= selfOpacity * uiProps.localOpacity;
+const visable = !approx(opacity, 0, EPSILON);
+if (visable) { …画自己…；…递归 children… }   // ← 归零那一支连递归都不进
+```
+
+节点自身 `UIRenderer` 的 alpha 会乘进**整棵子树**。于是「半透明底 + 子节点放文字」这个到处都在用的
+写法，实际效果是**文字跟着一起变淡**；alpha 归零则文字**彻底消失**。而 `active`、`enabled`、
+`Label.color` 在检查器里全是对的 —— 一个能查的地方都不异常，只是不画。鱼阵编辑器的「鱼阵」页签
+就是这么丢的（`TAB_OFF` alpha=0），同一份底图上另有 6 处按钮 / 横幅的文字被压到 43%~47% 而没人发现。
+（那批界面后来整个搬去了 `apps/fish-editor/`，但这条坑跟它无关 —— 它是 Cocos UI 的通性。）
+
+两条写法：
+
+| 想要 | 怎么写 |
+|---|---|
+| 半透明底色 | 烘进 RGB：`baked = a×色 + (1−a)×背后那层的填充色`（九宫格底图填充 = 描边 × 0.706） |
+| 「这块没有底」 | `sprite.enabled = false`。**关组件不影响子树** —— `uiComp` 在 `__preload` 就挂上、只有 destroy 才摘，disable 只让它自己不画，alpha 照样按 255 往下乘。命中判定看 `UITransform`，关了照样点得到 |
+
+闸在 `apps/demo/test/prefab-alpha.test.ts`：扫 `assets/` 下**全部** prefab，有子节点的 `UIRenderer`
+一律不许带半透明。
+
 ## 当前能落地到什么程度
 
 demo 里的 prefab 目前**只用引擎内置的两张图**（纯白块 + 九宫格圆角按钮底），靠染色和堆叠出层次：

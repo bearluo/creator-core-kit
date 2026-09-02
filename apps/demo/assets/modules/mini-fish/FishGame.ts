@@ -36,6 +36,7 @@ import { DEAD_FRAMES, fishKind } from './content/fish-kinds';
 import { netRadius } from './ecs/netSystem';
 import { accountWallet } from './seams/wallet-storage';
 import { FIELD } from './content/paths';
+import { ART_FPS, fieldScale, fishFacing, fishFrame } from './render-map';
 
 const { ccclass } = _decorator;
 const TAG = '[CCK-FISH]';
@@ -43,8 +44,6 @@ const TAG = '[CCK-FISH]';
 /** 本模块的 bundle 名（= `modules/mini-fish` 目录名），也是这批资源的释放组。 */
 const BUNDLE = 'mini-fish';
 
-/** 序列帧速度（游动与死亡共用）。 */
-const ART_FPS = 12;
 /** 死亡动画时长：4 帧刚好放完一轮。 */
 const DEATH_TIME = DEAD_FRAMES / ART_FPS;
 /** 网张开到消失。逻辑上网只活一帧，这是**表现**时长。 */
@@ -357,7 +356,7 @@ export class FishGame extends Component {
     if (portrait) return;
     this.layoutWater(size.width, size.height);
 
-    this.scale = Math.max(size.width / FIELD.width, size.height / FIELD.height);
+    this.scale = fieldScale(size.width, size.height);
     this.field?.setScale(this.scale, this.scale, 1);
 
     const halfW = size.width / 2;
@@ -437,21 +436,20 @@ export class FishGame extends Component {
       if (this.waterLayer) node.layer = this.waterLayer; // 新生的鱼也得沉到水下层
       const sprite = node.addComponent(Sprite);
       sprite.sizeMode = Sprite.SizeMode.TRIMMED;
-      sprite.spriteFrame = this.frame(`${fishKind(Fish.kind[eid]).id}_run_0`);
+      sprite.spriteFrame = this.frame(fishFrame(fishKind(Fish.kind[eid]), 0));
       this.fishNodes.set(eid, node);
     }
 
-    const step = Math.floor(this.elapsed * ART_FPS);
     for (const eid of alive) {
       const node = this.fishNodes.get(eid);
       if (!node) continue;
       const kind = fishKind(Fish.kind[eid]);
       node.setPosition(Position.x[eid], Position.y[eid]);
-      // 鱼头朝 +x（图集实测），所以直接转到路径切线方向；朝左时**上下翻**，别让它肚皮朝天。
-      const angle = Angle.v[eid];
-      node.setRotationFromEuler(0, 0, (angle * 180) / Math.PI);
-      node.setScale(1, Math.abs(angle) > Math.PI / 2 ? -1 : 1, 1);
-      node.getComponent(Sprite)!.spriteFrame = this.frame(`${kind.id}_run_${step % kind.frames}`);
+      // 朝向与帧号都归 `render-map`，编辑器读的是同一份 —— 两边各写一份就是它们漂开的起点。
+      const facing = fishFacing(Angle.v[eid]);
+      node.setRotationFromEuler(0, 0, facing.deg);
+      node.setScale(1, facing.flipY ? -1 : 1, 1);
+      node.getComponent(Sprite)!.spriteFrame = this.frame(fishFrame(kind, this.elapsed));
     }
   }
 
@@ -548,8 +546,9 @@ export class FishGame extends Component {
     const node = gameNode(this.effectLayer!, prefix || first);
     node.setPosition(x, y);
     if (angle !== 0) {
-      node.setRotationFromEuler(0, 0, (angle * 180) / Math.PI);
-      node.setScale(1, Math.abs(angle) > Math.PI / 2 ? -1 : 1, 1);
+      const facing = fishFacing(angle);
+      node.setRotationFromEuler(0, 0, facing.deg);
+      node.setScale(1, facing.flipY ? -1 : 1, 1);
     }
     const sprite = node.addComponent(Sprite);
     sprite.spriteFrame = this.frame(first);

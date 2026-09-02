@@ -17,8 +17,8 @@ describe('bundleVersionFromAssetKeys', () => {
   });
 
   it('4. bundle 名里的连字符按字面匹配（不当正则元字符）', () => {
-    const keys = ['assets/skin-base-lobby/index.c0ffe.js'];
-    expect(bundleVersionFromAssetKeys('skin-base-lobby', keys)).toBe('c0ffe');
+    const keys = ['assets/skin-default-lobby/index.c0ffe.js'];
+    expect(bundleVersionFromAssetKeys('skin-default-lobby', keys)).toBe('c0ffe');
   });
 
   it('5. 名字前缀相同的别的包不误命中（shop vs shop-vip）', () => {

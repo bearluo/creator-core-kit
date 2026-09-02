@@ -5,7 +5,7 @@
 摘要: 出包期 node 工具——从 web 构建产物的 `settings.<md5>.json` 抽 `bundleVers`，落成一张 core `RemoteVersions` 认的版本表 JSON，跟产物一起部署。
 何时读: 要给 web / 小游戏发热更、或搭 web 出包流水线时。
 日期: 2026-08-19
-依赖: 同包 [[compat-stamp]]（`coreApiHash` 现算）与 [[hot-update-manifest]]（共用 `DEFAULT_AOT_BUNDLES`）。下游消费方 = core `App` 的 `hotupdate` 启动步。
+依赖: 同包 [[compat-stamp]]（`coreApiHash` 现算）与 [[hot-update-manifest]]（共用 `DEFAULT_BASE_BUNDLES`）。下游消费方 = core `App` 的 `hotupdate` 启动步。
 ---
 
 # web-versions 设计文档
@@ -13,7 +13,7 @@
 ## TL;DR
 
 `buildWebVersions(root, opts)` 读 web 构建产物的 `src/settings.<md5>.json`，取出 `assets.bundleVers`
-（Creator 写的 bundle → 出包 md5），剔掉 AOT 包，盖上 `version` / `coreApiHash` / `minAppVersion`，
+（Creator 写的 bundle → 出包 md5），剔掉 base 包，盖上 `version` / `coreApiHash` / `minAppVersion`，
 产出一张版本表；`writeWebVersions` 落盘。CLI 子命令 `cck-manifest web-versions`。
 
 ## Purpose（目标与定位）
@@ -28,7 +28,7 @@
 
 ```ts
 interface WebVersions {
-  readonly bundles: Record<string, string>;   // 不含 AOT 包
+  readonly bundles: Record<string, string>;   // 不含 base 包
   readonly version: string;
   readonly coreApiHash?: string;
   readonly minAppVersion?: string;
@@ -38,7 +38,7 @@ interface WebVersionsOptions {
   readonly version: string;
   readonly core?: string;                     // core dist 或 index.d.ts，给了就现算 coreApiHash
   readonly minAppVersion?: string;
-  readonly aotBundles?: readonly string[];    // 默认 DEFAULT_AOT_BUNDLES
+  readonly baseBundles?: readonly string[];    // 默认 DEFAULT_BASE_BUNDLES
 }
 
 function readBundleVers(root: string): Record<string, string>;
@@ -69,7 +69,7 @@ cck-manifest web-versions --root build/web-mobile --version 1.0.1 \
 ```
 Creator web 构建（md5Cache: true）
   → build/web-mobile/src/settings.<md5>.json   assets.bundleVers = {lobby: 'ef2c3', …}
-  → cck-manifest web-versions                  剔 AOT + 盖 version/coreApiHash
+  → cck-manifest web-versions                  剔 base + 盖 version/coreApiHash
   → cck-versions.json                          跟产物一起部署（同源）
   → 客户端 hotupdate 步 loadRemote              过 compat 闸 → BundleManager.setVersions
   → 之后 load 的 bundle 都带新 md5
@@ -85,7 +85,7 @@ Creator web 构建（md5Cache: true）
 - **改任何一个 bundle 都会连带改掉 `index.html`**（bundleVers 变 → settings 的 md5 变 → application.js 变 →
   html 引用变）。所以版本表的价值不在「html 没变」，而在**绕过 html 的缓存**：玩家手里那份 html
   可能是 CDN / 浏览器缓存的旧版，版本表用 no-store 拉、永远最新，于是旧页面也能加载新 bundle。
-  AOT 那层仍是旧的 —— 这正是 `coreApiHash` 闸要挡的情况（新 bundle 要新 AOT 时拒掉，让玩家刷新）。
+  base 那层仍是旧的 —— 这正是 `coreApiHash` 闸要挡的情况（新 bundle 要新 base 时拒掉，让玩家刷新）。
 
 ## 验证（2026-08-19 · 浏览器双向 e2e PASS）
 

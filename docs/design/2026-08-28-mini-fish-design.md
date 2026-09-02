@@ -1,7 +1,7 @@
 ---
 状态: 已定稿
 日期: 2026-08-28
-依赖: docs/design/lobby-modular-framework-overview.md, docs/design/testing-strategy-overview.md, packages/ecs-bitecs/docs/modules/ecs.md, packages/ecs-bitecs/docs/modules/spatial.md, docs/adr/0019-npm-package-aot-vs-assets-boundary.md, docs/adr/0014-foundation-bundle-and-priority-sharing.md
+依赖: docs/design/lobby-modular-framework-overview.md, docs/design/testing-strategy-overview.md, packages/ecs-bitecs/docs/modules/ecs.md, packages/ecs-bitecs/docs/modules/spatial.md, docs/adr/0019-npm-package-base-vs-assets-boundary.md, docs/adr/0014-foundation-bundle-and-priority-sharing.md
 ---
 
 # mini-fish：捕鱼，也是 ECS 进 demo 的第一个消费者
@@ -120,7 +120,7 @@ createNetSystem(hash, arbiter, tickets, events)   // 而不是往 world 里塞�
 全是给「**涌向玩家的群体**」（肉鸽 / 幸存者）设计的，而捕鱼的鱼**不涌向任何人**、走的是投喂进来的
 预设路径，鱼之间也不需要推开（互相穿过是这个品类的正常观感）。别指望整套复用。
 
-本模块自己的组件（住 `assets/modules/mini-fish/`，理由见 [`ADR-0019`](../adr/0019-npm-package-aot-vs-assets-boundary.md)）：
+本模块自己的组件（住 `assets/modules/mini-fish/`，理由见 [`ADR-0019`](../adr/0019-npm-package-base-vs-assets-boundary.md)）：
 
 ```ts
 Fish       { kind: ui8 }                          // 种类下标，倍率查表
@@ -361,7 +361,7 @@ export interface FishFeeder {
 | E | 鱼的表现 | **静态 PNG + 代码游动** | spine 是**另一件事**（新资源类型 + 新运行时 + 释放路径没验过），混进来会让「捕鱼跑通了」说不清是哪件事跑通了 |
 | F | 横屏怎么办 | **横屏玩法 + 靠玩家转手机**，竖屏时「请横屏」 | 竖屏捕鱼等于 F 白验；给 kit 加强制方向 = 扩 kit 边界（`resolution.ts` 明确表过态不做），且 web / native / 小游戏三套坑 |
 | G | 规模 | **100~200 条鱼** | 30~50 条 ECS 是纯仪式；1000+ 不是这个品类的密度，且必然要上自定义渲染，那是另一个课题 |
-| H | 玩法代码住哪 | **`assets/modules/mini-fish/`** | 判据见 [`ADR-0019`](../adr/0019-npm-package-aot-vs-assets-boundary.md)：npm 包 = AOT（重启生效），玩法字段恰恰最常改 |
+| H | 玩法代码住哪 | **`assets/modules/mini-fish/`** | 判据见 [`ADR-0019`](../adr/0019-npm-package-base-vs-assets-boundary.md)：npm 包 = AOT（重启生效），玩法字段恰恰最常改 |
 | I | 验到哪算做完 | **web e2e + 真机帧率** | 只做 web e2e ⇒ ECS 的性能主张一字没验；再加 native 热更下发是独立老账，绑一起会互相拖延 |
 | J | 美术来源 | **CCFish 的图集** | 见 §8 —— 授权表如实标注，**不标 CC0** |
 | K | 档位 | **全用**：11 种鱼 + 7 级炮 + 7 级网 | 鱼种多是纯换图换数、逻辑零增量；素材现成不用白不用 |

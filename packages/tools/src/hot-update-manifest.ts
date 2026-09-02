@@ -38,8 +38,8 @@ export interface ManifestOptions {
   dirs?: string[];
   /**
    * 额外收进来的**散文件**，相对 root（不存在的跳过）。给产物根上那些不在任何子目录里、
-   * 却必须随 base 一起更新的文件用 —— 目前只有 AOT 入口 `application.<md5>.js`
-   * （`main.js` 经 `src/cck-aot.json` 指针找到它，见 hotupdate-pipeline「AOT 入口」一节）。
+   * 却必须随 base 一起更新的文件用 —— 目前只有 base 入口 `application.<md5>.js`
+   * （`main.js` 经 `src/cck-base.json` 指针找到它，见 hotupdate-pipeline「base 入口」一节）。
    *
    * ⚠️ 别把 `main.js` 放进来：它跑在搜索路径还原**之前**，还原本身就是它干的，下发了也没人读。
    */
@@ -161,8 +161,8 @@ export function writeManifests(opts: ManifestOptions & { outDir?: string }): Wri
  * 归入 base 的 `assets/<name>/`：Cocos native 产物里的主包与内置包，和 `src/` 同属「换了要重启」层，
  * 本就该跟 base 同批更新。其余 `assets/<name>/` 各自成包。
  */
-/** 归 AOT 的内建包：随主包走，不独立成热更单元（native 归 base manifest，web 不进版本表）。 */
-export const DEFAULT_AOT_BUNDLES = ['main', 'internal', 'resources'];
+/** 归 base 的内建包：随主包走，不独立成热更单元（native 归 base manifest，web 不进版本表）。 */
+export const DEFAULT_BASE_BUNDLES = ['main', 'internal', 'resources'];
 
 /**
  * 与引擎绑死、或名字被 `main.js` 写死的产物 —— **一个都不下发**（见 {@link SplitManifestOptions.contentHashed}）。
@@ -183,8 +183,8 @@ export function isEngineBound(key: string): boolean {
 }
 
 export interface SplitManifestOptions extends ManifestOptions {
-  /** 归入 base 的 assets 子目录名。默认 {@link DEFAULT_AOT_BUNDLES}。 */
-  aotBundles?: readonly string[];
+  /** 归入 base 的 assets 子目录名。默认 {@link DEFAULT_BASE_BUNDLES}。 */
+  baseBundles?: readonly string[];
   /**
    * **上一次发布**的 manifest 所在目录（通常就是 CDN 目录）。给了之后，内容与上一版逐字节相同的
    * manifest **沿用上一版的 version**，只有真改了的包才涨版本 → 没动的 bundle 客户端直接
@@ -197,9 +197,9 @@ export interface SplitManifestOptions extends ManifestOptions {
   prevDir?: string;
   /**
    * 产物是**内容寻址**的（Creator 构建开了 `md5Cache`）。开了之后 base manifest 丢掉
-   * {@link isEngineBound} 那几类 —— **只丢引擎那一半，AOT 照发**。
+   * {@link isEngineBound} 那几类 —— **只丢引擎那一半，base 照发**。
    *
-   * AOT 之所以发得出去，是因为 `main.js` 不再写死入口名：它读固定名指针 `src/cck-aot.json`
+   * base 之所以发得出去，是因为 `main.js` 不再写死入口名：它读固定名指针 `src/cck-base.json`
    * 拿到 `application.<md5>.js`，而那一段跑在搜索路径**还原之后**。于是
    * `application.<md5>.js` → `settings.<md5>.json` → `chunks/**` + `assets/{main,resources,internal}`
    * 整条链都随 base 更新走、重启生效。见 `docs/design/2026-08-20-aot-hotupdate-unlock-proposal.md`。
@@ -280,7 +280,7 @@ function sameContent(a: Manifest, b: Manifest): boolean {
  */
 export function buildSplitManifests(opts: SplitManifestOptions): SplitManifests {
   const whole = buildManifest(opts);
-  const aot = new Set(opts.aotBundles ?? DEFAULT_AOT_BUNDLES);
+  const base = new Set(opts.baseBundles ?? DEFAULT_BASE_BUNDLES);
   const packageUrl = withSlash(opts.packageUrl);
 
   const baseAssets: Record<string, AssetEntry> = {};
@@ -288,13 +288,13 @@ export function buildSplitManifests(opts: SplitManifestOptions): SplitManifests 
   for (const [key, entry] of Object.entries(whole.assets)) {
     // 只有 assets/<name>/… 才可能独立成包；assets/ 下的散文件与其它顶层目录归 base。
     const name = /^assets\/([^/]+)\//.exec(key)?.[1];
-    if (name !== undefined && !aot.has(name)) {
+    if (name !== undefined && !base.has(name)) {
       let table = byBundle.get(name);
       if (!table) byBundle.set(name, (table = {}));
       table[key] = entry;
       continue;
     }
-    // 内容寻址产物：只把引擎那一半挡在外面，AOT 照发。见 contentHashed。
+    // 内容寻址产物：只把引擎那一半挡在外面，base 照发。见 contentHashed。
     if (opts.contentHashed && isEngineBound(key)) continue;
     baseAssets[key] = entry;
   }

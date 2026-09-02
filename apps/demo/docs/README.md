@@ -18,12 +18,13 @@ demo 是 **kit 的接入方样例**：它不实现框架能力，它演示「拿
 | **往 `assets/` 加目录 / 加一个功能模块** | [`bundle-layout.md`](bundle-layout.md) — 分层 × 分包总图、bundle 全表、优先级阶梯、归位判据 |
 | **加一条跨包 `import` / `check:graph` 报了倒挂** | [`bundle-layout.md`](bundle-layout.md#依赖拓扑与防环) — 实况拓扑图、`priority` 递增判据、防环 |
 | **加一个马甲 / 给一个界面加换皮** | [`vest-and-skin.md`](vest-and-skin.md) — 马甲接缝、皮包边界、加一个马甲的清单 |
+| **先弄懂热更是怎么回事**（架构图 + 流程图） | [`hotupdate-at-a-glance.md`](hotupdate-at-a-glance.md) — 三档代价、一图看懂、native/web 对照 |
 | **发一次热更 / 排查更新没生效** | [`hotupdate-pipeline.md`](hotupdate-pipeline.md) — 架构图、启动时序、发版流程、三档更新代价 |
 | **出包时要改 VEST / 服务器地址 / 版本号** | [`build-plugin.md`](build-plugin.md) — `extensions/cck-build` 注入的六个打包期常量 |
 | 出 Android 包（命令行） | skill `/demo-build` + [`../build-configs/README.md`](../build-configs/README.md) |
 | 加场景 / 调相机 / 做横竖屏适配 | [`scene-and-camera-architecture.md`](scene-and-camera-architecture.md) |
 | 做界面（配色、字号、间距） | [`ui-style-guide.md`](ui-style-guide.md)，效果图在 [`mockups/`](mockups/) |
-| **改鱼阵编辑器的界面 / 交互** | [`mockups/fish-editor-v2-prototype.html`](mockups/fish-editor-v2-prototype.html) — 浏览器直接打开的**可交互原型，它是验收单**；决策见 [图 #11](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/11) |
+| **改鱼阵编辑器** | 它**不在这个工程里** —— 纯 web 内部工具，在 [`apps/fish-editor/`](../../fish-editor/README.md)，仓库根 `pnpm editor` 跑。为什么不放 Cocos 里见 [`ADR-0020`](../../../docs/adr/0020-internal-tools-in-html.md) |
 
 ## 什么归这里，什么不归
 

@@ -1,10 +1,10 @@
 /**
- * 内容编辑器的逻辑层 —— **零 `cc`，node 直跑**。设计见
+ * 鱼阵编辑器的逻辑层 —— **零 `cc`，node 直跑**。设计见
  * `docs/design/2026-08-31-mini-fish-content-editor.md` §4。
  *
- * View（`FishEditor.ts`）只做仓规允许的四件事：instantiate prefab、建绑定、把屏幕坐标转成
- * 世界坐标后转发、转发生命周期。**命中判定和拖拽落点算逻辑不算 View** —— 它们是世界坐标上的
- * 纯数学，放 View 里就没法在 node 里问「点这儿抓不抓得到把手」。
+ * View（`main.ts`）只管 DOM 与画布：建绑定、把屏幕坐标转成世界坐标后转发、把 `draft` 画出来。
+ * **命中判定和拖拽落点算逻辑不算 View** —— 它们是世界坐标上的纯数学，放 View 里就没法在 node
+ * 里问「点这儿抓不抓得到把手」。
  *
  * **收成一个 VM 而不是三个**（PathListVM / WaveVM / DraftVM）：编辑器的状态互相牵连 ——
  * 删一条路径要让引用它的 group 进未解析态，拆开就得在 VM 之间再造一套同步，而那正是最容易
@@ -14,8 +14,8 @@
  * system，见 §5）。混进来本 VM 就得认识 ECS 世界，而它本该只是一坨纯数据操作。
  */
 import { signal, type Signal } from '@cck/core';
-import type { FishContent, FishGroup } from '../mini-fish/content/content-types';
-import { MIN_HANDLE, segmentCount } from '../mini-fish/content/paths';
+import type { FishContent, FishGroup } from '@game/content/content-types';
+import { MIN_HANDLE, segmentCount } from '@game/content/paths';
 
 /** 草稿态的一条路径。跟 {@link FishContent} 的区别只有一个：可变。 */
 export interface DraftPath {
@@ -409,7 +409,7 @@ export class EditorVM {
     lines.push('/**');
     lines.push(' * 捕鱼的内容数据：路径几何 + 鱼阵编排。');
     lines.push(' *');
-    lines.push(' * ⚠️ **这个文件是编辑器导出的全文**（`mini-fish-editor`：复制 → 人 `Ctrl+V` 覆盖 → `git diff`');
+    lines.push(' * ⚠️ **这个文件是编辑器导出的全文**（`apps/fish-editor`：复制 → 人 `Ctrl+V` 覆盖 → `git diff`');
     lines.push(' * 看得见改了什么）。别往里写说明或手写代码 —— 下一次导出会整份盖掉。字段含义、为什么这么设计、');
     lines.push(' * 联网之后怎么办，都在 `content-types.ts` 和');
     lines.push(' * `docs/design/2026-08-31-mini-fish-content-editor.md`。');

@@ -15,7 +15,7 @@
       "embedWebDebugger": false
     },
     "cck-build": {
-      "vest": "base",
+      "vest": "default",
       "appId": "",
       "version": "1.3.0",
       "channel": "",

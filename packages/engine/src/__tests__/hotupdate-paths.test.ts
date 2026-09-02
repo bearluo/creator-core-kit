@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  aotQuarantined,
-  aotQuarantineVerdict,
-  aotStamp,
+  baseQuarantined,
+  baseQuarantineVerdict,
+  baseStamp,
   bundleManifestName,
   bundleStoragePath,
   bundleVersionName,
   manifestAssetKeys,
   manifestVersion,
   normalizeSearchPaths,
-  packagedAotEntry,
+  packagedBaseEntry,
   rebaseManifest,
   retiredBundleDirs,
   searchPathsWithout,
@@ -225,73 +225,73 @@ describe('manifestAssetKeys（反推该加载哪个 md5 的输入）', () => {
   });
 });
 
-describe('aotStamp（APK 换没换的判据 = 包内 AOT 入口的 md5）', () => {
+describe('baseStamp（APK 换没换的判据 = 包内 base 入口的 md5）', () => {
   it('从 main.js 烘的入口名抠 md5，前缀形态不挑', () => {
-    expect(aotStamp('./application.56453.js')).toBe('56453');
-    expect(aotStamp('application.56453.js')).toBe('56453');
+    expect(baseStamp('./application.56453.js')).toBe('56453');
+    expect(baseStamp('application.56453.js')).toBe('56453');
   });
 
   it('没开 md5Cache（application.js）→ undefined = 判不了，调用方原样不动', () => {
-    expect(aotStamp('./application.js')).toBeUndefined();
+    expect(baseStamp('./application.js')).toBeUndefined();
   });
 
   it('老模板没挂全局 / 形状不认识 → undefined 而不是抛', () => {
-    expect(aotStamp(undefined)).toBeUndefined();
-    expect(aotStamp(null)).toBeUndefined();
-    expect(aotStamp('')).toBeUndefined();
-    expect(aotStamp('./main.js')).toBeUndefined();
-    expect(aotStamp('./application.a.b.js')).toBeUndefined();
+    expect(baseStamp(undefined)).toBeUndefined();
+    expect(baseStamp(null)).toBeUndefined();
+    expect(baseStamp('')).toBeUndefined();
+    expect(baseStamp('./main.js')).toBeUndefined();
+    expect(baseStamp('./application.a.b.js')).toBeUndefined();
   });
 
-  it('AOT 热更换了入口，这个判据也不该跟着翻 —— 它读的是包内那份', () => {
+  it('base 热更换了入口，这个判据也不该跟着翻 —— 它读的是包内那份', () => {
     // 同一个 APK 里 main.js 烘的名字恒定；运行时真正加载的入口是另一回事（指针解析出来的）。
     const packaged = './application.56453.js';
-    expect(aotStamp(packaged)).toBe(aotStamp(packaged));
-    expect(aotStamp('./application.99999.js')).not.toBe(aotStamp(packaged)); // 换了 APK 才翻
+    expect(baseStamp(packaged)).toBe(baseStamp(packaged));
+    expect(baseStamp('./application.99999.js')).not.toBe(baseStamp(packaged)); // 换了 APK 才翻
   });
 });
 
-describe('aotQuarantined（main.js 的启动看门狗判定）', () => {
+describe('baseQuarantined（main.js 的启动看门狗判定）', () => {
   const g = globalThis as { __cckAotQuarantined?: unknown };
   afterEach(() => {
     delete g.__cckAotQuarantined;
   });
 
   it('没挂全局（老模板 / web）→ false，看门狗休眠', () => {
-    expect(aotQuarantined()).toBe(false);
+    expect(baseQuarantined()).toBe(false);
   });
 
   it('main.js 判定隔离 → true', () => {
     g.__cckAotQuarantined = true;
-    expect(aotQuarantined()).toBe(true);
+    expect(baseQuarantined()).toBe(true);
   });
 
   it('main.js 判定没隔离 → false', () => {
     g.__cckAotQuarantined = false;
-    expect(aotQuarantined()).toBe(false);
+    expect(baseQuarantined()).toBe(false);
   });
 
   it('只认布尔 true —— truthy 的字符串不算（别让脏值把缓存删了）', () => {
     g.__cckAotQuarantined = 'true';
-    expect(aotQuarantined()).toBe(false);
+    expect(baseQuarantined()).toBe(false);
   });
 });
 
-describe('packagedAotEntry（main.js 挂上来的包内入口名）', () => {
-  const g = globalThis as { __cckAotEntry?: unknown };
-  afterEach(() => delete g.__cckAotEntry);
+describe('packagedBaseEntry（main.js 挂上来的包内入口名）', () => {
+  const g = globalThis as { __cckBaseEntry?: unknown };
+  afterEach(() => delete g.__cckBaseEntry);
 
   it('挂了就取到', () => {
-    g.__cckAotEntry = './application.56453.js';
-    expect(packagedAotEntry()).toBe('./application.56453.js');
+    g.__cckBaseEntry = './application.56453.js';
+    expect(packagedBaseEntry()).toBe('./application.56453.js');
   });
 
   it('没挂 / 空串 / 不是字符串 → undefined（闸休眠，别当成换了 APK）', () => {
-    expect(packagedAotEntry()).toBeUndefined();
-    g.__cckAotEntry = '';
-    expect(packagedAotEntry()).toBeUndefined();
-    g.__cckAotEntry = 42;
-    expect(packagedAotEntry()).toBeUndefined();
+    expect(packagedBaseEntry()).toBeUndefined();
+    g.__cckBaseEntry = '';
+    expect(packagedBaseEntry()).toBeUndefined();
+    g.__cckBaseEntry = 42;
+    expect(packagedBaseEntry()).toBeUndefined();
   });
 });
 
@@ -369,22 +369,22 @@ describe('manifestVersion', () => {
   });
 });
 
-describe('aotQuarantineVerdict（隔离过的版本要不要拦）', () => {
+describe('baseQuarantineVerdict（隔离过的版本要不要拦）', () => {
   it('没有隔离标记 → proceed', () => {
-    expect(aotQuarantineVerdict(true, '1.2.1', null)).toBe('proceed');
-    expect(aotQuarantineVerdict(true, '1.2.1', '')).toBe('proceed');
+    expect(baseQuarantineVerdict(true, '1.2.1', null)).toBe('proceed');
+    expect(baseQuarantineVerdict(true, '1.2.1', '')).toBe('proceed');
   });
 
   it('base + 同号 → skip（不再下载起不来的那一版）', () => {
-    expect(aotQuarantineVerdict(true, '1.2.1', '1.2.1')).toBe('skip');
+    expect(baseQuarantineVerdict(true, '1.2.1', '1.2.1')).toBe('skip');
   });
 
   it('base + 别的号 → clear（发布方翻篇了，标记作废）', () => {
-    expect(aotQuarantineVerdict(true, '1.2.2', '1.2.1')).toBe('clear');
+    expect(baseQuarantineVerdict(true, '1.2.2', '1.2.1')).toBe('clear');
   });
 
   it('**分包一律 proceed** —— 分包与 base 共用同一个版本号，拿 base 的隔离结论挡分包会误伤一批', () => {
-    expect(aotQuarantineVerdict(false, '1.2.1', '1.2.1')).toBe('proceed');
-    expect(aotQuarantineVerdict(false, '1.2.2', '1.2.1')).toBe('proceed');
+    expect(baseQuarantineVerdict(false, '1.2.1', '1.2.1')).toBe('proceed');
+    expect(baseQuarantineVerdict(false, '1.2.2', '1.2.1')).toBe('proceed');
   });
 });

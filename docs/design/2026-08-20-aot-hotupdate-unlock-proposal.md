@@ -101,7 +101,7 @@ main.js                       L0  搜索路径还原本身 → 永远只能随 A
 
 ## 实施结果（2026-08-20）
 
-全部按提案落地，无偏离。决策沿革封存进 [`ADR-0017`](../adr/0017-aot-hotupdate-via-fixed-name-pointer.md)，
+全部按提案落地，无偏离。决策沿革封存进 [`ADR-0017`](../adr/0017-base-hotupdate-via-fixed-name-pointer.md)，
 现状描述在 [`hotupdate-pipeline`](../../apps/demo/docs/hotupdate-pipeline.md) 与
 [`hotupdate-service`](../../packages/core/docs/modules/hotupdate-service.md)。
 

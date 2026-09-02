@@ -162,17 +162,17 @@ if (settingsMtime() === before) {
 }
 console.log(`✓ Creator 构建完成 → ${OUT_REL}`);
 
-// —— AOT 入口指针：AOT 能热更的那把钥匙 ——
+// —— base 入口指针：base 层能热更的那把钥匙 ——
 //
 // `main.js` 不再写死 `application.<md5>.js`，改读这个固定名文件（见 build-templates/native/index.ejs）。
-// 它跟着 base manifest 热更下发 → AOT 整条链（application → settings → chunks →
+// 它跟着 base manifest 热更下发 → base 整条链（application → settings → chunks →
 // assets/{main,resources,internal}）都能换，重启生效。落 `src/` 下才进得了 manifest 的遍历集合。
 // 必须夹在 Creator 构建与 manifest / gradle **之间**：Creator 每次清空 data/，gradle 打包 data/。
-let aotEntry;
+let baseEntry;
 if (isNative) {
-  aotEntry = readdirSync(DATA).find((f) => /^application\..+\.js$/.test(f)) ?? 'application.js';
-  writeFileSync(join(DATA, 'src', 'cck-aot.json'), `${JSON.stringify({ application: `./${aotEntry}` }, null, 2)}\n`);
-  console.log(`▶ AOT 入口指针 src/cck-aot.json → ./${aotEntry}`);
+  baseEntry = readdirSync(DATA).find((f) => /^application\..+\.js$/.test(f)) ?? 'application.js';
+  writeFileSync(join(DATA, 'src', 'cck-base.json'), `${JSON.stringify({ application: `./${baseEntry}` }, null, 2)}\n`);
+  console.log(`▶ base 入口指针 src/cck-base.json → ./${baseEntry}`);
 }
 
 // 热更 manifest 必须夹在 Creator 构建与 gradle **之间**：Creator 每次都会清空 data/，
@@ -215,11 +215,11 @@ if (flag('manifest')) {
   // → `se::AutoHandleScope` SIGSEGV。见 hotupdate-service.md「坑」。
   const prev = cdnDir && existsSync(cdnDir) ? ['--prev', cdnDir] : [];
   // 内容寻址产物（md5Cache）：base manifest 只丢与引擎绑死 / 名字被 main.js 写死的那几类
-  // （cocos-js、effect.bin、jsb-adapter、system.bundle、import-map），AOT 照发 —— 入口名现在
-  // 由 src/cck-aot.json 指针运行时解析，下发的新 AOT 有人念了。
+  // （cocos-js、effect.bin、jsb-adapter、system.bundle、import-map），base 照发 —— 入口名现在
+  // 由 src/cck-base.json 指针运行时解析，下发的新 base 有人念了。
   const md5 = cfg.md5Cache ? ['--md5'] : [];
-  // `--files`：AOT 入口躺在产物**根**上，不在 src|assets|jsb-adapter 里，子目录遍历够不着它。
-  const files = ['--files', aotEntry];
+  // `--files`：base 入口躺在产物**根**上，不在 src|assets|jsb-adapter 里，子目录遍历够不着它。
+  const files = ['--files', baseEntry];
   spawnSync(process.execPath, [CLI, '--root', DATA, '--url', cdnUrl, '--version', version, '--split', ...prev, ...md5, ...files, '--out', DATA], {
     stdio: ['ignore', 'ignore', 'inherit'],
   });
@@ -243,21 +243,21 @@ if (flag('manifest')) {
 
   const baseManifest = read(join(DATA, 'project.manifest'));
   if (baseManifest.packageUrl !== cdnUrl) throw new Error(`manifest 基址不对：${baseManifest.packageUrl}`);
-  // AOT 热更的两个必要条件，缺一就**静默失效**（构建全绿、下发成功、玩家跑的还是包内旧 AOT）：
+  // base 热更的两个必要条件，缺一就**静默失效**（构建全绿、下发成功、玩家跑的还是包内旧 base）：
   // 入口本体要下得来，指针要能被换掉。
-  for (const k of [aotEntry, 'src/cck-aot.json']) {
+  for (const k of [baseEntry, 'src/cck-base.json']) {
     if (!baseManifest.assets[k])
-      throw new Error(`base manifest 里没有 ${k} —— AOT 热更会静默失效，查 --files / --md5 的排除清单`);
+      throw new Error(`base manifest 里没有 ${k} —— base 热更会静默失效，查 --files / --md5 的排除清单`);
   }
   // 看门狗那个计数键在 main.js 模板与 engine 里各写了一份（模板跑在 SystemJS 之前，import 不到
-  // engine 的常量）。改一处漏另一处 = 握手永远不成立 = 每套热更 AOT 跑两次就被隔离，六道门全绿、
+  // engine 的常量）。改一处漏另一处 = 握手永远不成立 = 每套热更 base 跑两次就被隔离，六道门全绿、
   // 只在真机上几个版本之后才发作。所以在这里对一次字面量。见 ADR-0018。
   for (const [f, why] of [
     [join(DEMO, 'build-templates', 'native', 'index.ejs'), 'main.js 模板'],
     [join(DEMO, '..', '..', 'packages', 'engine', 'src', 'hotupdate-backend.ts'), 'engine 后端'],
   ]) {
-    if (!readFileSync(f, 'utf8').includes("'cck.aotTry'"))
-      throw new Error(`${why}里找不到 'cck.aotTry'（${f}）—— AOT 看门狗的握手会静默失效`);
+    if (!readFileSync(f, 'utf8').includes("'cck.baseTry'"))
+      throw new Error(`${why}里找不到 'cck.baseTry'（${f}）—— base 看门狗的握手会静默失效`);
   }
 
   if (cdnDir) {

@@ -9,7 +9,7 @@
 
 ## TL;DR
 
-**纵向 = 改它要付什么代价**（AOT → 地基 → 模块），**横向 = 哪个马甲**（收进 `skins/`）。
+**纵向 = 改它要付什么代价**（base → 地基 → 模块），**横向 = 哪个马甲**（收进 `skins/`）。
 两个维度正交，不许压在一层。`skins/` 与 `skins/<马甲>/` **不是** bundle，只做目录归类 ——
 bundle 不能嵌套；真正的皮包是 `skins/<马甲>/<跟随者>/`，**一个跟随者一个皮包**。
 
@@ -17,7 +17,7 @@ bundle 不能嵌套；真正的皮包是 `skins/<马甲>/<跟随者>/`，**一�
 
 ```mermaid
 flowchart TB
-  boot["<b>① boot/ — AOT 主包</b><br/>Boot.scene · Bootstrap · app-config 含 VEST · foundation-api<br/><i>改它 = 发新包 + 玩家重装</i>"]
+  boot["<b>① boot/ — base 层（归 main 包）</b><br/>Boot.scene · Bootstrap · app-config 含 VEST · foundation-api<br/><i>改它 = 热更下发，重启生效</i>"]
   foundation["<b>② foundation/ — 地基 bundle</b> · priority 6<br/>net · login · catalog<br/><i>改它 = 热更，不重启</i>"]
   modules["<b>③ modules/* — 功能 bundle</b> · priority 1~3<br/>lobby · shop · mail · 八款 mini-*（clicker / dodge / plane / brick / shooter / hop / cards / fish）<br/><i>按需 load / release</i>"]
   shared["<b>shared — 共享资源</b> · priority 5<br/>i18n · 图集 · 音效"]
@@ -33,7 +33,7 @@ flowchart TB
 
 **依赖方向单向向下**，两条铁律：
 
-1. **主包不得 `import` 地基的任何值** —— 那段代码会被判给主包（优先级最高者赢）→ 地基进 AOT
+1. **主包不得 `import` 地基的任何值** —— 那段代码会被判给主包（优先级最高者赢）→ 地基进 base
    → 热更失效。唯一接缝是 `boot/foundation-api.ts`：`import type` + `js.getClassByName`。
 2. **模块可以正常 `import` 地基的函数与常量** —— `foundation` 优先级（6）高于所有业务包，
    被多包引用的资源归属优先级最高者，同级才各复制一份。不必为了怕复制而全走 DI。
@@ -51,7 +51,7 @@ graph BT
   foundation["foundation · 6"]
   shared["shared · 5"]
   lobby["lobby · 3"]
-  skin_base_foundation["skin-base-foundation · 2"]
+  skin_base_foundation["skin-default-foundation · 2"]
   skin_vest_foundation["skin-vest-foundation · 2"]
   mail["mail · 1"]
   mini_clicker["mini-clicker · 1"]
@@ -61,10 +61,10 @@ graph BT
   mini_shooter["mini-shooter · 1"]
   mini_hop["mini-hop · 1"]
   mini_cards["mini-cards · 1"]
-  mini_fish["mini-fish · 1"]
+  mini_fish["mini-fish · 2"]
   shop["shop · 1"]
-  skin_base_lobby["skin-base-lobby · 1"]
-  skin_base_mail["skin-base-mail · 1"]
+  skin_base_lobby["skin-default-lobby · 1"]
+  skin_base_mail["skin-default-mail · 1"]
   skin_vest_lobby["skin-vest-lobby · 1"]
   skin_vest_mail["skin-vest-mail · 1"]
   lobby --> foundation
@@ -83,7 +83,7 @@ graph BT
 
 | | 例 | 不守会怎样 |
 |---|---|---|
-| **倒挂** | `main`(7) → `foundation`(6) | 就是上面第 1 条铁律。地基那段代码被判给主包 → 地基进 AOT → 热更失效 |
+| **倒挂** | `main`(7) → `foundation`(6) | 就是上面第 1 条铁律。地基那段代码被判给主包 → 地基进 base → 热更失效 |
 | **同级互引** | `shop`(1) ↔ `mail`(1) · 两个马甲的皮包互借 | 两个包彼此拽住，谁都卸不干净；马甲隔离也一起破 |
 | **循环** | 任意长的环 | 卸载顺序无解，且哪个先加载都缺东西 |
 
@@ -136,13 +136,13 @@ graph BT
 | `mini-dodge` | `assets/modules/mini-dodge/` | 1 | 打开时（`kind:'game'`，自带场景） | 关闭时 |
 | `mini-plane` | `assets/modules/mini-plane/` | 1 | 打开时（`kind:'game'`，自带场景 + 自带贴图） | 关闭时 |
 | `mini-brick` / `mini-shooter` / `mini-hop` / `mini-cards` | `assets/modules/<id>/` | 1 | 同上 | 关闭时 |
-| `mini-fish` | `assets/modules/mini-fish/` | 1 | 同上（自带 **2MB 图集**：`art/textures.{png,plist}`） | 关闭时 |
+| `mini-fish` | `assets/modules/mini-fish/` | **2** | 同上（自带 **2MB 图集**：`art/textures.{png,plist}`） | 关闭时 |
 | `skin-<马甲>-foundation` | `assets/skins/<马甲>/foundation/` | 2 | 启动 `shared` 阶段（在 `APP_CONFIG.shared` 里） | 不卸，常驻 |
 | `skin-<马甲>-lobby` | `assets/skins/<马甲>/lobby/` | 1 | 进大厅时 | 不卸 |
 | `skin-<马甲>-mail` | `assets/skins/<马甲>/mail/` | 1 | 打开邮件时，与 `mail` 并行 | 关闭时，与 `mail` 一起 |
 
 包名靠目录 `.meta` 的 `bundleName` 覆盖（皮包目录本身不重复 `skin-` 前缀）。
-内置的 `main`(7) / `resources`(8) 优先级都高于 `foundation`，所以地基**不会**反过来把 AOT
+内置的 `main`(7) / `resources`(8) 优先级都高于 `foundation`，所以地基**不会**反过来把 base
 框架代码吸进热更包。
 
 ## 归位判据：新东西放哪一层
@@ -151,8 +151,9 @@ graph BT
 
 | 答案 | 归属 | 例子 |
 |---|---|---|
-| 必须重装 App | ① `boot/` | 启动编排、`VEST`、dispatcher 地址、引擎模块裁剪 |
-| 热更后重启一次 | ② `foundation/` | 协议映射、连接与重连、登录与认证、模块清单 |
+| 必须发 APK | **不在 `assets/` 里** —— 引擎模块勾选 / Creator 版本 | 换引擎、改模块裁剪 |
+| 热更下发，重启一次 | ① `boot/` | 启动编排、`VEST`、dispatcher 地址 |
+| 热更，不重启 | ② `foundation/` | 协议映射、连接与重连、登录与认证、模块清单 |
 | 打开这个功能时才需要 | ③ `modules/<id>/` | 商城的商品列表、邮件的读取逻辑 |
 | 所有模块都要，且**没有逻辑** | `shared/` | i18n 表、公共图集、音效 |
 | 只是「哪张脸」 | `skins/<马甲>/<跟随者>/` | 所有换皮界面的 prefab 与图 |

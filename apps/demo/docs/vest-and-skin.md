@@ -61,7 +61,7 @@ demo 当前给**登录、大厅骨架、邮件**登记了换皮；商城与两�
 
 ```mermaid
 flowchart TB
-  A["1 复制 skins/base/ → skins/&lt;新马甲&gt;/<br/>目录结构与 prefab 名<b>逐个对齐</b>"] --> B
+  A["1 复制 skins/default/ → skins/&lt;新马甲&gt;/<br/>目录结构与 prefab 名<b>逐个对齐</b>"] --> B
   B["2 每个目录 .meta 勾 Asset Bundle<br/>bundleName 改成 skin-&lt;新马甲&gt;-&lt;跟随者&gt;"] --> C
   C["3 画脸 —— 只改 prefab 与图，不碰脚本"] --> D
   D["4 出包时 --vest &lt;新马甲&gt;<br/>或构建面板填"] --> E

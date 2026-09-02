@@ -3,7 +3,7 @@
  * 首个模块：热更 manifest 生成/校验（对齐 Cocos 官方 version_generator.js）。
  */
 export {
-  DEFAULT_AOT_BUNDLES,
+  DEFAULT_BASE_BUNDLES,
   isEngineBound,
   buildManifest,
   buildSplitManifests,

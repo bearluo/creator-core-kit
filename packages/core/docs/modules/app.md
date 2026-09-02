@@ -5,7 +5,7 @@
 摘要: 启动编排层——`createApp(config, {steps})` 把「读戳 → 服务器握手 → 热更 → 装 shared 包 → 进大厅」串成一条可插拔（`LaunchStep`）、可上报（`onProgress`）、可分类失败（network / needFullUpdate / maintenance / fatal）、可从失败那一步续跑（`retry`）的序列；compat 闸摆在加载第一个业务 bundle 之前。
 何时读: 接入 kit 写启动流程时；要往启动里插登录 / SDK 初始化 / 公告时；要接服务端 dispatcher 或 web/native 线上热更时；排查「启动卡在某阶段 / 启动失败该给用户看什么」时。
 日期: 2026-08-04
-依赖: [[hotupdate-service]]（check/update/restart + VersionGate）、[[bundle-manager]]（load / setVersions / BundleScope）、[[asset-manager]]（读 app 戳、拉版本表）、[[network]]（`IHttp`：dispatch 步打握手请求）、[[di-container]]（APP token）、[[adr-0001]]（跨 bundle 单例 + AOT 缺代码）、[[adr-0007]]（compat 戳运行时读入）、[[adr-0011]]（服务端分仓 + 协议契约）。提案封存于 `docs/design/2026-07-31-app-layer-and-bundle-lifecycle-proposal.md`。
+依赖: [[hotupdate-service]]（check/update/restart + VersionGate）、[[bundle-manager]]（load / setVersions / BundleScope）、[[asset-manager]]（读 app 戳、拉版本表）、[[network]]（`IHttp`：dispatch 步打握手请求）、[[di-container]]（APP token）、[[adr-0001]]（跨 bundle 单例 + 主包裁剪缺代码）、[[adr-0007]]（compat 戳运行时读入）、[[adr-0011]]（服务端分仓 + 协议契约）。提案封存于 `docs/design/2026-07-31-app-layer-and-bundle-lifecycle-proposal.md`。
 ---
 
 # App 设计文档
@@ -19,7 +19,7 @@
 - **做什么**：零件（HotUpdateService / BundleManager / compat 闸 / UIManager / DI）本就齐备，App 是把它们**按序装起来并对失败分类**的那一层。没有它，每个项目都要在 `Bootstrap.ts` 里手写一遍启动顺序，热更也就永远接不进主流程。
 - **为什么可插拔**：各项目的差异**全部**落在这段——登录、SDK 初始化、公告、隐私协议、资源预热。固定序列必然不够用，所以序列本身是入参：`defaultLaunchSteps()` 返回数组，项目 `[...默认]` 后按名字定位插队，或整体替换。
 - **为什么失败要分四类**：网络失败要给「重试」按钮、版本不兼容要引导去商店整包更新、停服维护要显示公告、代码 bug 只能兜底提示——四者给用户看的东西完全不同，糊成一个 `Error` 就只能弹「启动失败」。
-- **compat 闸为什么摆在 lobby 之前**：[[adr-0001]] 的 AOT 缺代码真正暴雷的时刻是**第一个业务 bundle 加载时**（热更下来的新 bundle 引用主包 AOT 里已被裁掉的符号 → 跑到那一行才崩）。闸守在 `apply` 之前拦不住 web 路径（web 没有 apply）。
+- **compat 闸为什么摆在 lobby 之前**：[[adr-0001]] 的 主包裁剪缺代码真正暴雷的时刻是**第一个业务 bundle 加载时**（热更下来的新 bundle 引用主包 base 里已被裁掉的符号 → 跑到那一行才崩）。闸守在 `apply` 之前拦不住 web 路径（web 没有 apply）。
 - **YAGNI（本版砍）**：kit 内置 loading UI（只出 `onProgress` 事件，样式是项目的事）；灰度 / AB / 分渠道版本表；`pendingRestart` 标志（见「与提案的偏差」）。
 
 ## Public API（TypeScript 精确签名）

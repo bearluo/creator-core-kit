@@ -1,0 +1,21 @@
+{
+  // 鱼阵编辑器（纯 web 工具）的类型视图。跟 `apps/demo/tsconfig.check.json` 的关系：
+  // 那份要兜 Creator 的 cc 类型，这份**完全不认识 cc** —— 编辑器只吃游戏里零 `cc` 的那部分。
+  // 路径别名与 `vite.config.ts` / `vitest.config.ts` 三处必须一致。
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "sourceMap": false,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // vite/client 提供 `*.png` / `?raw` 之类的模块声明（图集就是这么进来的）
+    "types": ["vite/client", "node"],
+    "paths": {
+      "@cck/core": ["../../packages/core/src/index.ts"],
+      "@cck/ecs-bitecs": ["../../packages/ecs-bitecs/src/index.ts"],
+      "@game/*": ["../demo/assets/modules/mini-fish/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vite.config.ts"]
+}

@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   EditorVM,
   memoryEditorStorage,
-} from '../../../assets/modules/mini-fish-editor/EditorVM';
-import type { FishContent } from '../../../assets/modules/mini-fish/content/content-types';
-import { waveFeeder } from '../../../assets/modules/mini-fish/seams/feeder';
-import { MIN_HANDLE } from '../../../assets/modules/mini-fish/content/paths';
+} from '../src/EditorVM';
+import type { FishContent } from '@game/content/content-types';
+import { waveFeeder } from '@game/seams/feeder';
+import { MIN_HANDLE } from '@game/content/paths';
 
 const SRC: FishContent = {
   rev: 3,
@@ -318,5 +318,31 @@ describe('EditorVM · 多段路径', () => {
     expect(vm.corners()).toEqual([]); // 共线 = 不是折角
     vm.dragPoint(4, 600, 300, { mirror: false });
     expect(vm.corners()).toEqual([{ seg: 1, deg: 90 }]);
+  });
+});
+
+/**
+ * **往返闸**：拿仓库里那份 `content.ts` 原样导出一遍，除 `rev` 那一行外必须**逐字节相同**。
+ *
+ * 它挡的是一类特别阴的漂：导出文本的**头注释在两处**（这份文件里的字符串 + `content.ts` 本身），
+ * 改了其中一处，下一次导出会把另一处**静默盖掉** —— 而人只会看 `git diff` 里那几行数据，
+ * 不会注意到头注释被换了。顺带也钉住字段顺序、缩进、`gap` 省略规则这些格式约定。
+ */
+describe('EditorVM · 导出与 content.ts 往返一致', () => {
+  it('原样导出仓库里的 content.ts，除 rev 外逐字节相同', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { CONTENT } = await import('@game/content/content');
+
+    const file = fileURLToPath(
+      new URL('../../demo/assets/modules/mini-fish/content/content.ts', import.meta.url),
+    );
+    const onDisk = readFileSync(file, 'utf8').split('\r\n').join('\n').trimEnd();
+    const exported = new EditorVM(CONTENT).exportText().trimEnd();
+
+    // `rev` 只在导出时 +1，那一行本来就该不同；其余必须一模一样
+    const strip = (s: string): string => s.replace(/^ {2}rev: \d+,$/m, '  rev: <REV>,');
+    expect(strip(exported)).toBe(strip(onDisk));
+    expect(exported).toContain(`  rev: ${CONTENT.rev + 1},`);
   });
 });

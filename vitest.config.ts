@@ -12,6 +12,9 @@ export default defineConfig({
       '@cck/ecs-bitecs': fileURLToPath(
         new URL('./packages/ecs-bitecs/src/index.ts', import.meta.url),
       ),
+      // 鱼阵编辑器（apps/fish-editor，纯 web 工具）跟游戏共用的那份零 `cc` 逻辑。
+      // 三处别名必须一致：这里、apps/fish-editor/vite.config.ts、apps/fish-editor/tsconfig.json。
+      '@game': fileURLToPath(new URL('./apps/demo/assets/modules/mini-fish', import.meta.url)),
     },
   },
   // 固定 esbuild 的 TS 选项，**顺带关掉 tsconfig 自动查找**——apps/demo/tsconfig.json

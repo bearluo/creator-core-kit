@@ -65,7 +65,7 @@
 
 ## 3. 模块契约 + 生命周期
 
-panel 类模块**就是一个注册进 UIManager 的界面**。框架不定义 mount/unmount 契约，也不自建工厂注册表——prefab 里存的就是组件类，bundle 加载执行脚本时 `@ccclass` 已把它注册进 cc 类表（**引擎原生的跨 bundle 桥接**，无反射、AOT 友好）。
+panel 类模块**就是一个注册进 UIManager 的界面**。框架不定义 mount/unmount 契约，也不自建工厂注册表——prefab 里存的就是组件类，bundle 加载执行脚本时 `@ccclass` 已把它注册进 cc 类表（**引擎原生的跨 bundle 桥接**，无反射、base 友好）。
 
 ```ts
 /** 框架注入给模块的运行上下文 —— 它就是 open(uiId, args) 的 args。 */

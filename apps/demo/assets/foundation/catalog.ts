@@ -36,6 +36,9 @@ export interface CatalogEntry {
   /**
    * 开发工具：**`env === 'prod'` 时不进大厅清单**（见 {@link visibleCatalog}）。
    *
+   * ⚠️ **当前没有条目用它** —— 唯一用过的鱼阵编辑器已经搬去 `apps/fish-editor/`（纯 web 工具，
+   * 不进任何游戏包）。字段留着是因为「开发工具进不进大厅」是接入方要的能力，不是它的遗迹。
+   *
    * ⚠️ 它删的是**入口**，不是产物：Creator 按目录 meta 的 `isBundle` 收 bundle，与可达性无关
    *（实测：连这一行都还没写时，编辑器包照样出现在 `build/web-mobile/assets/` 里）。web / 小游戏
    * 按需下载 ⇒ 玩家不点就不下；native 目前所有 bundle 随 APK 走，等出包期「按包选是否随 APK」
@@ -63,8 +66,6 @@ export const MODULE_CATALOG: readonly CatalogEntry[] = [
   { id: 'mini-hop', title: '平台跳跃', bundle: 'mini-hop', kind: 'game', scene: 'Hop' },
   { id: 'mini-cards', title: '骰子卡牌', bundle: 'mini-cards', kind: 'game', scene: 'Cards' },
   { id: 'mini-fish', title: '捕鱼', bundle: 'mini-fish', kind: 'game', scene: 'Fish' },
-  // 内容编辑器：路径 + 鱼阵。开发工具，正式包里看不见入口；图集从 mini-fish 动态取。
-  { id: 'mini-fish-editor', title: '鱼阵编辑器', bundle: 'mini-fish-editor', kind: 'game', scene: 'Editor', devOnly: true, alsoNeeds: ['mini-fish'] },
 ];
 
 /**
@@ -106,7 +107,7 @@ export const LOGIN_UI = 'login';
  *
  * 地基是所有马甲共用的那一层，混一张只有某个包会用的脸进去 = 别的马甲白下载它，
  * 改这张脸还要热更整个地基包。全进皮包之后，出一版新马甲 = **只发它自己那几个皮包**。
- * demo 自己也是个马甲，它的地基皮就是 `skin-base-foundation`。
+ * demo 自己也是个马甲，它的地基皮就是 `skin-default-foundation`。
  *
  * **同名 prefab 放不同 bundle 是 Cocos 3.x 唯一干净的整包换皮路径**（引擎没有
  * Prefab Variant / AB Variant）。界面**脚本仍归原层**（地基 6 / 模块 1，都不在皮包里），

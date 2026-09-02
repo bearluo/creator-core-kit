@@ -2,27 +2,27 @@
 模块: compat-stamp
 所在包: packages/tools
 状态: 已实现          # 草案 → 评审中 → 已定稿 → 已实现
-摘要: 出包期「打戳/校验」——算 core 公共 API 表面 hash（coreApiHash）+ 造兼容戳 + 出包期主动 verifyCompat。是 hotupdate 版本闸的另一半：运行时闸只比对，coreApiHash/minAppVersion 的产生在这里，把 ADR-0001 的「AOT 缺代码跑一半才崩」提前到 CI。
+摘要: 出包期「打戳/校验」——算 core 公共 API 表面 hash（coreApiHash）+ 造兼容戳 + 出包期主动 verifyCompat。是 hotupdate 版本闸的另一半：运行时闸只比对，coreApiHash/minAppVersion 的产生在这里，把 ADR-0001 的「主包裁剪缺代码跑一半才崩」提前到 CI。
 何时读: 要给热更接版本兼容打戳、或在 CI 加「热更包 vs 已部署 app 兼容」门禁时。
 日期: 2026-07-29
-依赖: 无（纯 node stdlib：crypto/fs/path/util）。契约对接 [[hotupdate-service]] 的 core 版本闸（AppInfo/UpdateInfo 字段）+ [[adr-0001]]（AOT 缺代码 → 版本绑定）。同包姊妹 [[hot-update-manifest]]（同一 cck-manifest CLI 的另一组子命令）。
+依赖: 无（纯 node stdlib：crypto/fs/path/util）。契约对接 [[hotupdate-service]] 的 core 版本闸（AppInfo/UpdateInfo 字段）+ [[adr-0001]]（主包裁剪缺代码 → 版本绑定）。同包姊妹 [[hot-update-manifest]]（同一 cck-manifest CLI 的另一组子命令）。
 ---
 
 # compat-stamp（出包期打戳 / 兼容校验）设计文档
 
 ## TL;DR
 
-`computeCoreApiHash(coreDist)` 读 core 的 rolled-up `dist/index.d.ts`、**按行首特征剥注释 + 去空白**后 md5 取前 12 位 → core 公共 **API 表面 hash**（纯实现改动/改注释不变、增删导出/改签名才变）。`writeStamp` 把兼容戳 `{version, minAppVersion?, coreApiHash}`（字段对齐 core `AppInfo`/`UpdateInfo`）落盘：出整包写 app 戳、出热更包写更新戳。`verifyCompat(app, update)` 是**出包期主动校验**——与运行时 `createSemverVersionGate` 同语义、shift-left 到 CI：coreApiHash 不一致或 app 版本 < `minAppVersion` 即判不兼容、CLI 退出非 0，把 [[adr-0001]] 那种「热更包引用了被 AOT 裁掉的 core 符号、跑一半才崩」的事故**在构建期拦下**。挂进现有 `cck-manifest` CLI 的 `stamp` / `verify-compat` 子命令。纯 node、零 cc。
+`computeCoreApiHash(coreDist)` 读 core 的 rolled-up `dist/index.d.ts`、**按行首特征剥注释 + 去空白**后 md5 取前 12 位 → core 公共 **API 表面 hash**（纯实现改动/改注释不变、增删导出/改签名才变）。`writeStamp` 把兼容戳 `{version, minAppVersion?, coreApiHash}`（字段对齐 core `AppInfo`/`UpdateInfo`）落盘：出整包写 app 戳、出热更包写更新戳。`verifyCompat(app, update)` 是**出包期主动校验**——与运行时 `createSemverVersionGate` 同语义、shift-left 到 CI：coreApiHash 不一致或 app 版本 < `minAppVersion` 即判不兼容、CLI 退出非 0，把 [[adr-0001]] 那种「热更包引用了被构建裁掉的 core 符号、跑一半才崩」的事故**在构建期拦下**。挂进现有 `cck-manifest` CLI 的 `stamp` / `verify-compat` 子命令。纯 node、零 cc。
 
 ## Purpose（目标与定位）
 
 - **做什么**：补齐热更版本兼容闭环的**产生侧**。[[hotupdate-service]] 的 core 半已有版本闸（`createSemverVersionGate`：`minAppVersion` + `coreApiHash` 比对），但它只**执行**比对；被比对的两个值——app 自己的 `coreApiHash`、远程更新声明的 `minAppVersion`/`coreApiHash`——**产生在出包期**。本模块就是那个产生器（hotupdate-service.md Open Questions #2 明确记为 tools 后置交付物）。
-- **为什么是 hash 表面而非版本号**：ADR-0001 实证——Cocos native AOT 下，主包构建时被 tree-shake 掉的 core 符号，热更包若引用到，运行时命中缺失符号才崩、线上难复现。`coreApiHash` 给「主包烘进 AOT 时的 core API 表面」按了指纹；热更包若在**不同的 API 表面**上构建（增删导出/改签名），hash 不同 → 闸拒 → 逼整包更新。**加导出也算变**（新符号不在旧主包 AOT 里，热更引用同样崩），故任何表面变动都变 hash 是正确的严格姿态。
+- **为什么是 hash 表面而非版本号**：ADR-0001 实证——Cocos native 出包时，主包构建时被 tree-shake 掉的 core 符号，热更包若引用到，运行时命中缺失符号才崩、线上难复现。`coreApiHash` 给「主包烘进去时的 core API 表面」按了指纹；热更包若在**不同的 API 表面**上构建（增删导出/改签名），hash 不同 → 闸拒 → 逼整包更新。**加导出也算变**（新符号不在旧主包里，热更引用同样崩），故任何表面变动都变 hash 是正确的严格姿态。
 - **定位/取舍**：出包期/CI 的 node 工具，零 cc。是 `packages/tools` 第三个模块（继 [[hot-update-manifest]]、config-excel）。
 - **YAGNI（首版故意砍）**：
-  - **符号级深校验**（doc Open Q#2 的另一层：diff 热更包实际 import 的符号集 vs 主包 AOT 保留集，精确到「引用了哪个被裁符号」）——需静态分析打包产物，成本高；**首版只做 hash 级**（表面变没变），运行时闸仍是最终兜底。深校验列为上限（决策表 #4）。
+  - **符号级深校验**（doc Open Q#2 的另一层：diff 热更包实际 import 的符号集 vs 主包 主包保留集，精确到「引用了哪个被裁符号」）——需静态分析打包产物，成本高；**首版只做 hash 级**（表面变没变），运行时闸仍是最终兜底。深校验列为上限（决策表 #4）。
   - 不做戳的签名/加密（防篡改）——出包期产物，CI 内可信。
-  - 不碰 Web/小游戏兼容（那套走 bundle 版本化，无 AOT 裁剪问题）。
+  - 不碰 Web/小游戏兼容（那套走 bundle 版本化，无 主包裁剪问题）。
 
 ## Public API（TypeScript 精确签名）
 
@@ -78,10 +78,10 @@ cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <p
 
 ## Platform considerations（全平台 / 小游戏兼容）
 
-- **仅 native**（iOS/Android/PC）：AOT + tree-shake 才有「热更引用被裁符号」风险，`coreApiHash` 为此而设。
+- **仅 native**（iOS/Android/PC）：出包裁剪（tree-shake）才有「热更引用被裁符号」风险，`coreApiHash` 为此而设。
 - **引擎指纹只有 native 有意义**：`readEngineHash` 读的是 native 产物的 import map。web 的 `cc.js` 跟业务代码一起版本化热更、不存在「JS 侧换了、native 侧没换」这种分裂，故不打这枚戳。
 - **它只上得了更新戳**：app 戳要进包、生成于 Creator 构建**之前**，那时产物还不存在。客户端那一端由 engine 的 `engineHash()` 运行时从 SystemJS import map 取——所以 `verifyCompat` 对这枚戳是**两端都有才比**（不同于 `coreApiHash` 的无条件比对），只有拿上一版的**更新戳**当 app 参数时才比得成。
-- **Web / 小游戏**：解释执行 / bundle 版本化，无 AOT 裁剪问题；`hotupdate-service` 的 Web 后端（后续）走 bundle 版本，不必打 coreApiHash。工具不产小游戏戳。
+- **Web / 小游戏**：解释执行 / bundle 版本化，无 主包裁剪问题；`hotupdate-service` 的 Web 后端（后续）走 bundle 版本，不必打 coreApiHash。工具不产小游戏戳。
 - 与三种「热」：属**线上热更(hotfix)** 的出包期兼容保障，与运行时分包/开发期热重载无关。
 
 ## Testable seams + test plan（可测接缝 + vitest 用例）
@@ -96,7 +96,7 @@ cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <p
 
 ## Open Questions
 
-1. **符号级深校验**（决策表 #4 上限）：需静态分析热更包实际 import 的 `@cck/core`/`cc` 符号集 vs 主包 AOT 保留集，精确报「引用了哪个被裁符号」。首版 hash 级 + 运行时闸兜底足够，用到再上。
+1. **符号级深校验**（决策表 #4 上限）：需静态分析热更包实际 import 的 `@cck/core`/`cc` 符号集 vs 主包 主包保留集，精确报「引用了哪个被裁符号」。首版 hash 级 + 运行时闸兜底足够，用到再上。
 2. **戳如何被运行时读入**：✅ **已落地并真机 e2e 验证**（2026-07-29 首验于 probes 路径；2026-08-18 正式启动路径 `boot/Bootstrap.ts` 补齐并复验，见下「正式路径接入」）。app 戳走 `resources/cck-app-compat.json` → `AssetLoader` 读 → `AppInfo`；更新戳走 sidecar `cck-update-compat.json` → engine native backend `check()` 经 `am.getRemoteManifest().getPackageUrl()+compatFilename` XHR 拉 → 并进 `UpdateInfo`（`CcHotUpdateOptions.compatFilename` opt-in；因 `native.AssetsManager` 的 Manifest 绑定不透传自定义字段，走旁挂 sidecar 而非塞 manifest）。模拟器同一 v1 APK 二分实证：远端戳 hash=app 侧 → update-available 放行下 v2；改成不同 hash → `rejected(needFullUpdate)` 不下载/不重启——coreApiHash 闸从休眠**真正激活**。
 
 ## 正式路径接入（2026-08-18）
@@ -110,8 +110,8 @@ cck-manifest verify-compat --app-stamp <path> (--core <dist> | --update-stamp <p
 
 - **app 戳为什么必须放 `resources`**：`main` 只收「被场景引用到」的资源，散落的 JSON 会被丢掉
   （`stampBundle` 默认 `'main'` 时的表现就是 `Bundle main doesn't contain cck-app-compat`）；
-  `resources` 是 Cocos 内建包、整目录必打进包，且在 tools 的 `DEFAULT_AOT_BUNDLES` 里 → 归 base
-  manifest，**跟 AOT 一起被 base 热更替换**，戳因此永远描述「当前生效的那份 AOT」。
+  `resources` 是 Cocos 内建包、整目录必打进包，且在 tools 的 `DEFAULT_BASE_BUNDLES` 里 → 归 base
+  manifest，**跟 base 一起被热更替换**，戳因此永远描述「当前生效的那份 base」。
   **不能放 `shared` / `foundation`**：那是热更包，模块级热更就能改掉 app 自称的 coreApiHash，
   闸自己就废了。
 - **app 戳的 `version` 会覆盖 `AppConfig.version`**（core 是 `j.version ?? ctx.config.version`），

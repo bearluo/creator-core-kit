@@ -11,11 +11,11 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { computeCoreApiHash } from './api-stamp';
-import { DEFAULT_AOT_BUNDLES } from './hot-update-manifest';
+import { DEFAULT_BASE_BUNDLES } from './hot-update-manifest';
 
 /** 版本表内容。字段对齐 core 的 `RemoteVersions`（tools 不依赖 core，形状一致即可）。 */
 export interface WebVersions {
-  /** bundle 名 → 出包 md5。**不含 AOT 包**。 */
+  /** bundle 名 → 出包 md5。**不含 base 包**。 */
   readonly bundles: Record<string, string>;
   readonly version: string;
   readonly coreApiHash?: string;
@@ -27,8 +27,8 @@ export interface WebVersionsOptions {
   /** core 的 d.ts 目录或文件；给了就现算 `coreApiHash`（必须与 app 戳同源，见 compat-stamp）。 */
   readonly core?: string;
   readonly minAppVersion?: string;
-  /** 不进版本表的包。默认 {@link DEFAULT_AOT_BUNDLES}。 */
-  readonly aotBundles?: readonly string[];
+  /** 不进版本表的包。默认 {@link DEFAULT_BASE_BUNDLES}。 */
+  readonly baseBundles?: readonly string[];
 }
 
 /**
@@ -57,14 +57,14 @@ export function readBundleVers(root: string): Record<string, string> {
   return vers;
 }
 
-/** 造版本表：抽 `bundleVers`、剔掉 AOT 包、盖上版本与兼容戳。 */
+/** 造版本表：抽 `bundleVers`、剔掉 base 包、盖上版本与兼容戳。 */
 export function buildWebVersions(root: string, opts: WebVersionsOptions): WebVersions {
-  const aot = new Set(opts.aotBundles ?? DEFAULT_AOT_BUNDLES);
+  const base = new Set(opts.baseBundles ?? DEFAULT_BASE_BUNDLES);
   const bundles: Record<string, string> = {};
   for (const [name, md5] of Object.entries(readBundleVers(root))) {
-    // AOT 包的版本由页面自己的 settings.json 说了算：客户端换不动（换了只会去拉一个不存在的
+    // base 包的版本由页面自己的 settings.json 说了算：客户端换不动（换了只会去拉一个不存在的
     // 文件名），要换只能重新加载页面。
-    if (!aot.has(name)) bundles[name] = md5;
+    if (!base.has(name)) bundles[name] = md5;
   }
   return {
     bundles,

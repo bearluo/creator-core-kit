@@ -187,7 +187,7 @@ Defined in: [packages/core/src/hotupdate/version-gate.ts:35](https://hlgit.5518g
 
 Defined in: [packages/core/src/hotupdate/version-gate.ts:40](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L40)
 
-是否需整包更新（AOT 缺代码风险 → 不能只热更）。
+是否需整包更新（主包裁剪缺代码风险 → 不能只热更）。
 
 ##### ok
 
@@ -625,7 +625,7 @@ Defined in: [packages/core/src/hotupdate/bundle-version.ts:26](https://hlgit.551
 认不出就返回 `undefined`（**不是错误**）：产物没开 `md5Cache` 时入口就叫 `index.js`，
 此时引擎按不带版本的名字取，正是我们要的行为 —— 调用方回落到下一个版本来源即可。
 
-bundle 名按字面匹配、不当正则用（`mini-clicker`、`skin-base-lobby` 这类名字里的 `-` 无害，
+bundle 名按字面匹配、不当正则用（`mini-clicker`、`skin-default-lobby` 这类名字里的 `-` 无害，
 但名字来自配置，别给它解释元字符的机会）。
 
 #### Parameters
@@ -740,7 +740,7 @@ Defined in: [packages/core/src/hotupdate/hotupdate-backend.ts:60](https://hlgit.
 Defined in: [packages/core/src/hotupdate/version-gate.ts:76](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/hotupdate/version-gate.ts#L76)
 
 默认安全闸（承 ADR-0001）：
-- remote.minAppVersion 存在且 local.appVersion 低于它 → 拒，needFullUpdate（防 AOT 缺代码崩）。
+- remote.minAppVersion 存在且 local.appVersion 低于它 → 拒，needFullUpdate（防 主包裁剪缺代码崩）。
 - remote/local 都声明 coreApiHash 且不等 → 拒，needFullUpdate。
 - remote/local 都声明 engineHash 且不等 → 拒，needFullUpdate（热更换不了引擎，只能发包）。
 - 否则放行。零配置即享此安全默认；纯比对，可 node 单测。

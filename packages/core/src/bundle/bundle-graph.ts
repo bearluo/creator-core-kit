@@ -54,14 +54,14 @@ export interface BundleGraph {
 
 export interface BundleGraphOptions {
   /**
-   * 谁都能碰、不用声明的常驻包。默认是 AOT 那几个（Creator 内置包）——
+   * 谁都能碰、不用声明的常驻包。默认是 base 那几个（Creator 内置包）——
    * 它们跟应用同寿命，且共享资源本来就只许经 `resources` 这一个仓。
    */
   alwaysAllowed?: readonly string[];
   logger?: ILogger;
 }
 
-/** 默认豁免：Creator 的四个内置包，全都在 AOT 层、常驻。 */
+/** 默认豁免：Creator 的四个内置包，全都在 base 层、常驻。 */
 export const DEFAULT_ALWAYS_ALLOWED: readonly string[] = [
   'main',
   'resources',

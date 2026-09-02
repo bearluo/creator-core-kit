@@ -153,7 +153,7 @@ creator-core-kit/
 - **线上热更新(hotfix)**：统一抽象 `HotUpdateService`，对上层一套 API，平台差异藏在适配层。
   - 原生（iOS/Android/PC）：官方 `AssetsManager` + manifest 增量下载。
   - Web / 小游戏：远程 Asset Bundle 版本化加载（无 native AssetsManager）。
-  - **防 AOT 缺代码（实证，见 [ADR-0001](../adr/0001-cross-bundle-singleton-and-aot-hotupdate.md)）**：AOT 会裁掉构建时无人引用的 core API，跨版本热更「新 bundle 引用了旧主包已裁的符号」会在**调用点**才崩（符号粒度、加载不报错，`spike/bundle-probe` 已复现 `TypeError`）。对策：core 公共 API 强引用白名单防 tree-shake + 热更包与主包版本绑定校验（不匹配拒载）+ 必要时整包热更含主包/AOT。
+  - **防主包裁剪缺代码（实证，见 [ADR-0001](../adr/0001-cross-bundle-singleton-and-aot-hotupdate.md)）**：构建期 tree-shake 会裁掉无人引用的 core API，跨版本热更「新 bundle 引用了旧主包已裁的符号」会在**调用点**才崩（符号粒度、加载不报错，`spike/bundle-probe` 已复现 `TypeError`）。对策：core 公共 API 强引用白名单防 tree-shake + 热更包与主包版本绑定校验（不匹配拒载）+ 必要时整包热更含主包。
 - **运行时按需分包**：`BundleManager.load/release(name)`，一个功能模块 = 一个 Asset Bundle，控制首包体积与内存。
 - **开发期代码热重载**：Cocos 无原生脚本 HMR，分两半拿——
   - 纯逻辑层：`vitest --watch` 秒级反馈，逻辑改动不必开 Creator。

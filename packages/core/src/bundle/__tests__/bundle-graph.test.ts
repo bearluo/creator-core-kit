@@ -17,13 +17,13 @@ function fakeLogger(): { logger: ILogger; warns: unknown[][] } {
 }
 
 /** demo 形状：地基常驻，模块各带一个皮包（皮包名依赖当前马甲 → resolver）。 */
-let skin = 'base';
+let skin = 'default';
 const specs = (): BundleSpec[] => [
   { name: 'foundation' },
   { name: 'lobby', needs: ['foundation', () => `skin-${skin}-lobby`] },
   { name: 'mail', needs: ['foundation', () => `skin-${skin}-mail`] },
-  { name: 'skin-base-lobby' },
-  { name: 'skin-base-mail' },
+  { name: 'skin-default-lobby' },
+  { name: 'skin-default-mail' },
   { name: 'skin-vest-lobby' },
   { name: 'skin-vest-mail' },
 ];
@@ -45,11 +45,11 @@ describe('createBundleGraph', () => {
 
   it('needsOf 求值 resolver —— 换马甲后同一张表解出另一套皮包', () => {
     const g = createBundleGraph(specs());
-    skin = 'base';
-    expect(g.needsOf('mail')).toEqual(['foundation', 'skin-base-mail']);
+    skin = 'default';
+    expect(g.needsOf('mail')).toEqual(['foundation', 'skin-default-mail']);
     skin = 'vest';
     expect(g.needsOf('mail')).toEqual(['foundation', 'skin-vest-mail']);
-    skin = 'base';
+    skin = 'default';
   });
 
   it('needsOf 去重、丢空串；未登记的包返回空表', () => {
@@ -61,7 +61,7 @@ describe('createBundleGraph', () => {
   describe('layersFor', () => {
     it('依赖在前、自己在最后一层', () => {
       expect(createBundleGraph(specs()).layersFor('mail')).toEqual([
-        ['foundation', 'skin-base-mail'],
+        ['foundation', 'skin-default-mail'],
         ['mail'],
       ]);
     });
@@ -141,10 +141,10 @@ describe('createBundleGraph', () => {
     });
 
     it('换马甲后白名单跟着变 —— base 的模块碰不到 vest 的皮包', () => {
-      skin = 'base';
-      expect(g().mayUse('mail', 'skin-base-mail')).toBe(true);
+      skin = 'default';
+      expect(g().mayUse('mail', 'skin-default-mail')).toBe(true);
       expect(g().mayUse('mail', 'skin-vest-mail')).toBe(false);
-      skin = 'base';
+      skin = 'default';
     });
   });
 });

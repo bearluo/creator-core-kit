@@ -17,8 +17,8 @@ demo 的 2026-08-20 产物里两种漂法都出过：
 
 | 漂法 | 实况 | 后果 |
 |---|---|---|
-| **漂进 AOT** | `boot`（→`main`，priority 7）与 6 个皮包共用 `default_btn_normal` → 图归 `main`，皮包 `deps:["main"]` | `main` 只随 APK 换。热更下去的皮包引用旧 APK 的 `main` 里没有的 uuid → 界面一开就挂。**改的还不是那个皮包，是 boot** |
-| **跨马甲漂** | 两个马甲的地基皮包同为 priority 2、都引用它 → Creator 挑了 `skin-base-foundation` | `skin-vest-lobby`/`skin-vest-mail` 依赖 **base 马甲**的包，马甲隔离破掉 |
+| **漂进 base** | `boot`（→`main`，priority 7）与 6 个皮包共用 `default_btn_normal` → 图归 `main`，皮包 `deps:["main"]` | `main` 归 base：改它要热更 base 并**重启**，而皮包免重启、先到一步 —— 中间那段窗口里皮包引用的 uuid 在旧 `main` 里不存在，界面一开就挂。**改的还不是那个皮包，是 boot** |
+| **跨马甲漂** | 两个马甲的地基皮包同为 priority 2、都引用它 → Creator 挑了 `skin-default-foundation` | `skin-vest-lobby`/`skin-vest-mail` 依赖 **default 马甲**的包，马甲隔离破掉 |
 
 判据只能是二值的：**跨包资源依赖只许从声明过的共享仓借**。能当共享仓的条件是 priority **严格高于**
 所有引用者（同级就会被抢 —— 上表第二行），所以**仓可以有多个**；白名单默认只有 `resources`
@@ -90,11 +90,11 @@ uuid 属于本工程、不算「外部」，只有产物期能看见它落到了
 
 | 拦住的 | 例 | 不拦会怎样 |
 |---|---|---|
-| **倒挂** | `main`(7) → `foundation`(6) | 地基那段代码被判给主包 → 地基进 AOT → 热更失效。就是 [[adr-0014]] 那条「主包不得 import 地基的任何值」，此前**没有任何门在守** |
+| **倒挂** | `main`(7) → `foundation`(6) | 地基那段代码被判给主包 → 地基进 base → 热更失效。就是 [[adr-0014]] 那条「主包不得 import 地基的任何值」，此前**没有任何门在守** |
 | **同级互引** | `shop`(1) ↔ `mail`(1) | 两个包彼此拽住，谁都卸不干净；也正是跨马甲漂的代码版 |
 | **循环** | 任意长的环 | 严格递增 ⇒ 拓扑序存在 ⇒ 环不可能出现，**不需要另跑环检测算法** |
 
-只认相对路径的 `import`：`cc` / `@cck/*` / npm 包都在 AOT 里，不构成包间边。
+只认相对路径的 `import`：`cc` / `@cck/*` / npm 包都在 base 里，不构成包间边。
 **纯类型 `import type` 跳过** —— 编译期擦除，不是运行时依赖，demo 主包拿地基正是靠这条缝
 （`boot/foundation-api.ts` 的 `import type` + `js.getClassByName`）。
 
@@ -118,16 +118,16 @@ uuid 属于本工程、不算「外部」，只有产物期能看见它落到了
 | 决策 | 为什么 |
 |---|---|
 | 「外部」用**「工程里没有对应 `.meta`」**判定，而不是硬编码 `db://internal` | uuid 里看不出资源来自哪个库；按归属反推既准确又自动覆盖将来别的内置库 |
-| 共享仓**默认**（不是唯一，`--allow-deps` 可加）`resources` 而不是 `shared`/`foundation` | `resources` priority 8 是工程内最高的，**抢不走**。抬高 `foundation`(6)/`shared`(5) 去压 `main`(7) 会把 AOT 框架拉进热更包，[[adr-0014]] 已否 |
+| 共享仓**默认**（不是唯一，`--allow-deps` 可加）`resources` 而不是 `shared`/`foundation` | `resources` priority 8 是工程内最高的，**抢不走**。抬高 `foundation`(6)/`shared`(5) 去压 `main`(7) 会把 base 框架拉进热更包，[[adr-0014]] 已否 |
 | 钉子用 **prefab 引用**而不是复制副本 | 副本要多出字节、且全工程 29 处引用都得改指副本；钉子零副本、引用一行不动，加新图只是往钉子里加个节点 |
-| 代价：钉住的资源跟 AOT 同寿命 | 它们归 `resources`（AOT 那一档）。要用钉子里没有的内置图 = 热更整个 base 并重启 —— 这正确，AOT 是什么代价它就是什么代价 |
+| 代价：钉住的资源跟 base 同寿命 | 它们归 `resources`（base 那一档）。要用钉子里没有的内置图 = 热更整个 base 并重启 —— 这正确，base 是什么代价它就是什么代价 |
 | 代码边的排名复用 Creator 的 `priority`，不另立拓扑表 | 那个数字已经在裁决资源归属，语义就是「谁更底层」。另立一张表 = 两个真相源，早晚对不上；而且改优先级时**两件事必须一起想清楚**，本来就该是同一个旋钮 |
 | 用「严格递增」而不是跑环检测 | 单调 ⇒ 无环，是更强的性质：环检测只在**已经成环**时报，单调把「同级互引」和「倒挂」也一起拦了，而这两类才是实际踩过的 |
 | 产物期这道挂在 `--split` 里而不是单独命令 | `--split` 正是「要发热更包了」的时刻，且它已经在遍历产物 |
 
 ## Testable seams
 
-`packages/tools/src/__tests__/bundle-deps.test.ts`（35 条）：产物侧 12 条（跨马甲、借 AOT、
+`packages/tools/src/__tests__/bundle-deps.test.ts`（35 条）：产物侧 12 条（跨马甲、借 base、
 带不带 md5 后缀的 `cc.config`、坏 JSON、`depIndex` 越界、纯脚本依赖、`shared` 传空数组），
 源码侧 9 条（`subMetas` 归属、只扫指定后缀、**只被一个包引用也报**、钉一半、自定义 `pinPrefix`、
 目录不存在、坏 `.meta`），拓扑侧 14 条（`bundleName` 覆盖目录名、最长前缀归属、同名前缀不误伤、

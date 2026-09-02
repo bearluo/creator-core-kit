@@ -100,7 +100,7 @@ export function getTimer(): ITimer;
 
 - `TimerService` 纯 TS，node/web/所有小游戏/原生**无差异**。真实 dt 源由 engine 按平台提供（cc.director 已抹平平台）。
 - **不受**后台节流/小游戏 setTimeout 差异影响——因为不依赖宿主定时器，只依赖引擎循环 dt（引擎 pause 时自然停 tick）。
-- 与三种「热」：跨 bundle 共享须走全局 `TIMER` token（ADR-0001：AOT 共享层 + globalThis 根容器 → 各 bundle `getTimer()` 拿同一实例）。
+- 与三种「热」：跨 bundle 共享须走全局 `TIMER` token（ADR-0001：base 共享层 + globalThis 根容器 → 各 bundle `getTimer()` 拿同一实例）。
 - 浮点：`_now`/`due` 用 float 秒累加，长时运行有微小漂移，游戏定时精度足够；要绝对精度用帧计数场景请等 FrameScheduler。
 
 ## Testable seams + test plan（可测接缝 + vitest 用例）

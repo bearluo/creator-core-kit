@@ -1,10 +1,10 @@
 /**
  * cck-manifest CLI（node:util.parseArgs，零依赖）——native 热更出包期工具。
  *   生成 manifest: cck-manifest --root <dir> --url <packageUrl> --version <v> [--out <dir>] [--dirs a,b] [--files a.js,b.js] [--search-paths ...]
- *                  加 --split 则切成 base + 每个模块 bundle 一份（[--aot-bundles main,internal,resources]）
+ *                  加 --split 则切成 base + 每个模块 bundle 一份（[--base-bundles main,internal,resources]）
  *                  再加 --prev <上次发布目录> 则内容未变的包沿用旧版本号（只有真改了的包才涨版本）
  *                  产物开了 md5Cache 时加 --md5：base manifest 丢掉与引擎绑死 / 名字被 main.js 写死的那几类
- *                  --files 收产物根上的散文件（AOT 入口 application.<md5>.js 要它，子目录遍历够不着）
+ *                  --files 收产物根上的散文件（base 入口 application.<md5>.js 要它，子目录遍历够不着）
  *                  --split 会顺带查资源归属漂移：跨包依赖只许指向共享仓（默认 resources，用 --allow-deps 改）
  *   校验 manifest: cck-manifest verify --root <dir> [--manifest <path>]
  *   打戳:          cck-manifest stamp --core <core-dist-或-index.d.ts> --version <v> [--root <native产物根，打引擎指纹>] [--min-app-version <v>] --out <path>
@@ -66,7 +66,7 @@ function main(): void {
       'app-stamp': { type: 'string' },
       'update-stamp': { type: 'string' },
       split: { type: 'boolean' },
-      'aot-bundles': { type: 'string' },
+      'base-bundles': { type: 'string' },
       prev: { type: 'string' },
       md5: { type: 'boolean' },
       cdn: { type: 'string' },
@@ -126,7 +126,7 @@ function main(): void {
         version,
         core: values.core,
         minAppVersion: values['min-app-version'],
-        aotBundles: values['aot-bundles'] ? values['aot-bundles'].split(',') : undefined,
+        baseBundles: values['base-bundles'] ? values['base-bundles'].split(',') : undefined,
       }),
     );
     const names = Object.keys(v.bundles);
@@ -168,7 +168,7 @@ function main(): void {
       if (u.files.length > 5) console.error(`      … 另 ${u.files.length - 5} 处`);
     }
     die(
-      `${unpinned.length} 个外部资源没被共享仓钉住 —— 归属会随引用关系漂（漂进 AOT 就热更不了，` +
+      `${unpinned.length} 个外部资源没被共享仓钉住 —— 归属会随引用关系漂（漂进 base 就热更不了，` +
         '漂到别的马甲就破了隔离）。修法：在共享仓的钉子 prefab 里给每个资源挂一个节点引用一次，' +
         '工程各处的引用不用改',
     );
@@ -194,7 +194,7 @@ function main(): void {
       console.error(`  ✗ ${v.from}(${v.fromPriority}) → ${v.to}(${v.toPriority})  ${v.file} → ${v.target}`);
     die(
       `${bad.length} 条跨包依赖倒挂或同级 —— 依赖只许指向优先级更高的包。` +
-        '倒挂会把被依赖的包判给上层（地基进 AOT = 热更失效），同级互引则两个包彼此拽住、一起卸不掉。' +
+        '倒挂会把被依赖的包判给上层（地基进 base = 热更失效），同级互引则两个包彼此拽住、一起卸不掉。' +
         '修法：把共用的东西下沉到更高优先级的包，或改走事件/接口而不是直接 import',
     );
   }
@@ -234,7 +234,7 @@ function main(): void {
 
   if (values.split) {
     // 发包前先查归属漂移。Creator 把共用资源判给优先级最高的引用者，其余包降级成
-    // `deps` + `redirect`；漂进 AOT 或漂到别的马甲，都要到运行时才炸。见 bundle-deps.ts。
+    // `deps` + `redirect`；漂进 base 或漂到别的马甲，都要到运行时才炸。见 bundle-deps.ts。
     const drift = findDepViolations(
       collectBundleDeps(root),
       values['allow-deps']?.split(','),
@@ -250,7 +250,7 @@ function main(): void {
     }
     const { base, bundles } = writeSplitManifests({
       ...common,
-      aotBundles: values['aot-bundles'] ? values['aot-bundles'].split(',') : undefined,
+      baseBundles: values['base-bundles'] ? values['base-bundles'].split(',') : undefined,
       prevDir: values.prev,
       contentHashed: values.md5,
     });

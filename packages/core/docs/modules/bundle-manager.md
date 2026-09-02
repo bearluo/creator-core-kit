@@ -5,7 +5,7 @@
 摘要: 按需分包四件套——`BundleManager`（load/release 带引用计数 + 并发去重 + 版本表）、`BundleGraph`（依赖表：依赖跟着装卸 + 资源边界白名单）、`BundleScope`（一个 bundle 注册的一切都能一行回收，顺序有语义）、`IBundleReloader`（让 bundle 脚本真正失效，免重启换代码）。core 定义接缝 + 内存 fake，engine 落到 `cc.assetManager` 与 SystemJS。
 何时读: 要按需加载 / 释放一个功能 bundle 时；要声明「这个包依赖哪些包」时；要接 web 版本化热更（md5）时；要让「换了 bundle 代码而不重启应用」在正确性上成立时；排查「资源换了但代码还是旧的」时。
 日期: 2026-07-31
-依赖: [[di-container]]（`BUNDLE_SOURCE`/`BUNDLE_MANAGER`/`BUNDLE_RELOADER` token）、[[asset-manager]]（在某 bundle 内加载资源）、[[ui-manager]]（`closeByBundle`）、[[i18n]]/[[config-table]]（scope 的对称回收）、[[logger]]。跨 bundle 单例 / AOT 约束见 [[adr-0001]]；免重启换 bundle 的机制与契约见 [[adr-0010]]；包分层判据见 [[adr-0009]]。横评见 `docs/research/2026-07-27-asset-and-bundle-survey.md`。
+依赖: [[di-container]]（`BUNDLE_SOURCE`/`BUNDLE_MANAGER`/`BUNDLE_RELOADER` token）、[[asset-manager]]（在某 bundle 内加载资源）、[[ui-manager]]（`closeByBundle`）、[[i18n]]/[[config-table]]（scope 的对称回收）、[[logger]]。跨 bundle 单例 / base 约束见 [[adr-0001]]；免重启换 bundle 的机制与契约见 [[adr-0010]]；包分层判据见 [[adr-0009]]。横评见 `docs/research/2026-07-27-asset-and-bundle-survey.md`。
 ---
 
 # BundleManager 设计文档

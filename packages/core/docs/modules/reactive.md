@@ -5,14 +5,14 @@
 摘要: 自写 ~120 行 signal/computed/effect（自动依赖追踪、`.value`、零依赖），engine 出 bindText/bindProp + BindingScope 把响应式值接到 cc 节点，onDestroy 一行解绑——「改 ViewModel 数据 → UI 自动响应」的那根管子。
 何时读: 设计 ViewModel/数据驱动 UI、给某界面接数据绑定、做双向绑定（EditBox/Toggle）、或质疑「为何不直接上 Vue reactivity / MobX」时。
 日期: 2026-07-29
-依赖: docs/research/2026-07-29-mvvm-databinding-survey.md（选型横评）；docs/design/2026-07-24-architecture-overview.md（ViewModel 纯逻辑可测、View 薄壳）；docs/adr/0001（AOT tree-shake + 强引用白名单）；eventbus（disposer/offAll(owner) 生命周期范式，本模块照抄）；ui-manager（View 薄壳边界，onDestroy 天然解绑点）
+依赖: docs/research/2026-07-29-mvvm-databinding-survey.md（选型横评）；docs/design/2026-07-24-architecture-overview.md（ViewModel 纯逻辑可测、View 薄壳）；docs/adr/0001（base tree-shake + 强引用白名单）；eventbus（disposer/offAll(owner) 生命周期范式，本模块照抄）；ui-manager（View 薄壳边界，onDestroy 天然解绑点）
 ---
 
 # reactive 设计文档（响应式原语 + MVVM 数据绑定）
 
 ## TL;DR
 
-`signal(v)` 存值、`computed(fn)` 派生、`effect(fn)` 副作用；改 `sig.value` → 依赖它的 effect 自动重跑。**自写 ~120 行、零第三方依赖、自动 getter 依赖追踪**（语义抄 `@preact/signals-core`，命名对齐 Vue `.value`）。原语进 **core**（纯 TS、vitest 直测、跨 bundle 走 AOT 共享层）；engine 只出 `bindText/bindProp/bindEditBox` + `BindingScope`，把 effect 接到 `cc.Label.string` 等属性，`cc.Component.onDestroy` 里一行 `scope.dispose()` 解绑（照抄 EventBus `offAll(this)`）。给写界面的人用：ViewModel 是一堆 signal，View 是薄壳，绑一下就自动同步。
+`signal(v)` 存值、`computed(fn)` 派生、`effect(fn)` 副作用；改 `sig.value` → 依赖它的 effect 自动重跑。**自写 ~120 行、零第三方依赖、自动 getter 依赖追踪**（语义抄 `@preact/signals-core`，命名对齐 Vue `.value`）。原语进 **core**（纯 TS、vitest 直测、跨 bundle 走 base 共享层）；engine 只出 `bindText/bindProp/bindEditBox` + `BindingScope`，把 effect 接到 `cc.Label.string` 等属性，`cc.Component.onDestroy` 里一行 `scope.dispose()` 解绑（照抄 EventBus `offAll(this)`）。给写界面的人用：ViewModel 是一堆 signal，View 是薄壳，绑一下就自动同步。
 
 ## Purpose（目标与定位）
 
@@ -20,7 +20,7 @@
 - **定位/取舍**：
   - 与 **UIManager** 互补不重叠——UIManager 管「哪个界面开着、窗口栈、生命周期」，reactive 管「界面里的数据怎么自动流到控件」。一个管容器，一个管内容。
   - 与 **EventBus** 分工——signal 管**连续可观察态**（hp、金币、名字，有「当前值」且会变）；EventBus 管**离散一次性事件**（点击、收到推送、关卡通过）。别拿 signal 当事件用、也别拿事件当状态存。
-  - **零依赖**：与 DI/EventBus/Timer 一样自写。响应式核心（getter 追踪 + subs 重跑）确是 ~100 行能拿下的东西，不值当引 npm 包（见决策表 #1 及 [[adr-0001]] 的 AOT 顾虑）。
+  - **零依赖**：与 DI/EventBus/Timer 一样自写。响应式核心（getter 追踪 + subs 重跑）确是 ~100 行能拿下的东西，不值当引 npm 包（见决策表 #1 及 [[adr-0001]] 的 base 顾虑）。
 - **YAGNI（首版故意砍）**：
   - `reactive()` 式深层对象 Proxy 代理 → 用「值为对象的 signal + 整体替换」的浅响应替代（免 Proxy、免深比较、免平台不确定性）。
   - glitch-free 拓扑调度 → 朴素同步 push（菱形依赖至多一次冗余重算，UI 场景无害）。
@@ -125,7 +125,7 @@ onDestroy() { this._binds.dispose(); }             // 一行解绑
 
 | # | 维度 | 选项 | 推荐默认 | 一句话理由 |
 |---|---|---|---|---|
-| 1 | 响应式原语来源 | 自写 / @preact/signals-core / @vue/reactivity / MobX / nanostores | **自写 ~120 行** | 零依赖惯例 + AOT 表面自控（[[adr-0001]]）；~100 行搞定，兜底可整包换 signals-core |
+| 1 | 响应式原语来源 | 自写 / @preact/signals-core / @vue/reactivity / MobX / nanostores | **自写 ~120 行** | 零依赖惯例 + base 表面自控（[[adr-0001]]）；~100 行搞定，兜底可整包换 signals-core |
 | 2 | 依赖追踪 | 自动 getter / 手动依赖数组(nanostores) | **自动 getter** | 「改 vm.hp.value 血条自动更新」正需免依赖数组的体验 |
 | 3 | 值读写 API | `.value`(Preact/Vue) / `[get,set]`元组(Solid) / 属性直读(MobX) | **`.value`** | 对齐 Preact/Vue 直觉；不碰 Proxy，消除平台不确定性 |
 | 4 | 深响应 | Proxy `reactive()` / 浅 signal + 整体替换 | **浅 + 整体替换** | 免 Proxy/深比较，小游戏兼容稳；深层需求 YAGNI（Open Q1） |
@@ -137,7 +137,7 @@ onDestroy() { this._binds.dispose(); }             // 一行解绑
 ## Platform considerations（全平台 / 小游戏兼容）
 
 - core 原语**只用 `.value` getter/setter + 闭包**，不碰 `Proxy`/装饰器/`Symbol` 反射 → 原生 / Web / 微信·抖音小游戏一致，无运行时特性依赖。
-- 与三种"热"：原语是 core 公共 API，纳入 [[adr-0001]] 强引用白名单 → 主包 AOT 恒含全量，热更跨 bundle 引用不缺代码；自写表面可控，避免大 npm 包被 AOT 不可控裁剪。
+- 与三种"热"：原语是 core 公共 API，纳入 [[adr-0001]] 强引用白名单 → 主包 base 恒含全量，热更跨 bundle 引用不缺代码；自写表面可控，避免大 npm 包被 base 不可控裁剪。
 - engine 半随 cc 走，无额外平台约束（cc.Label/EditBox/Toggle 全平台一致）。
 
 ## Testable seams + test plan（可测接缝 + vitest 用例）

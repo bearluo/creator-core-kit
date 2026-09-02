@@ -110,7 +110,7 @@ describe('buildSplitManifests（分包：base + 每个模块 bundle 一份）', 
     expect(Object.keys(bundles.shop.assets).sort()).toEqual(['assets/shop/import/a.json', 'assets/shop/index.js']);
   });
 
-  it('默认 AOT 名单（main/internal/resources）归 base，其余各自成包', () => {
+  it('默认 base 名单（main/internal/resources）归 base，其余各自成包', () => {
     const { base, bundles } = buildSplitManifests(sopts());
     expect(Object.keys(bundles).sort()).toEqual(['lobby', 'shop']);
     expect(base.assets['assets/main/index.js']).toBeDefined();
@@ -120,8 +120,8 @@ describe('buildSplitManifests（分包：base + 每个模块 bundle 一份）', 
     expect(base.assets['assets/loose.txt']).toBeDefined(); // assets 下的散文件
   });
 
-  it('AOT 名单可配：把 lobby 也划进 base 后它不再单独成包', () => {
-    const { base, bundles } = buildSplitManifests({ ...sopts(), aotBundles: ['main', 'internal', 'lobby'] });
+  it('base 名单可配：把 lobby 也划进 base 后它不再单独成包', () => {
+    const { base, bundles } = buildSplitManifests({ ...sopts(), baseBundles: ['main', 'internal', 'lobby'] });
     expect(Object.keys(bundles)).toEqual(['shop']);
     expect(base.assets['assets/lobby/index.js']).toBeDefined();
   });
@@ -187,7 +187,7 @@ describe('buildSplitManifests（分包：base + 每个模块 bundle 一份）', 
       }
     });
 
-    it('改 AOT 里的文件 → base 涨版本，模块包不受影响', () => {
+    it('改 base 里的文件 → base 涨版本，模块包不受影响', () => {
       const file = join(sroot, 'src', 'settings.json');
       writeFileSync(file, '{"changed":1}');
       try {
@@ -303,7 +303,7 @@ describe('contentHashed：md5 产物下 base 只丢引擎那一半', () => {
     }
     mkdirSync(join(croot, 'src', 'chunks'), { recursive: true });
     writeFileSync(join(croot, 'src', 'settings.763c7.json'), '{}');
-    writeFileSync(join(croot, 'src', 'cck-aot.json'), '{"application":"./application.56453.js"}');
+    writeFileSync(join(croot, 'src', 'cck-base.json'), '{"application":"./application.56453.js"}');
     writeFileSync(join(croot, 'src', 'chunks', 'bundle.30ac6.js'), '// biz');
     writeFileSync(join(croot, 'application.56453.js'), '// entry');
     writeFileSync(join(croot, 'main.js'), '// boot');
@@ -324,10 +324,10 @@ describe('contentHashed：md5 产物下 base 只丢引擎那一半', () => {
     files: ['application.56453.js'],
   });
 
-  it('AOT 整条链都在 base 里：入口 + 指针 + settings + chunks + AOT 包', () => {
+  it('base 整条链都在 base 里：入口 + 指针 + settings + chunks + base 包', () => {
     const keys = Object.keys(buildSplitManifests({ ...copts(), contentHashed: true }).base.assets);
     expect(keys).toContain('application.56453.js');
-    expect(keys).toContain('src/cck-aot.json');
+    expect(keys).toContain('src/cck-base.json');
     expect(keys).toContain('src/settings.763c7.json');
     expect(keys).toContain('src/chunks/bundle.30ac6.js');
     for (const b of ['main', 'internal', 'resources']) {
@@ -381,10 +381,10 @@ describe('isEngineBound（与 .so 绑死 / 名字被 main.js 写死的那几类�
     expect(isEngineBound('src/import-map.json')).toBe(true);
   });
 
-  it('AOT 那一半一个都不误伤', () => {
+  it('引擎那一半一个都不误伤', () => {
     for (const k of [
       'application.56453.js',
-      'src/cck-aot.json',
+      'src/cck-base.json',
       'src/settings.a25ff.json',
       'src/chunks/bundle.30ac6.js',
       'assets/main/index.59bfe.js',

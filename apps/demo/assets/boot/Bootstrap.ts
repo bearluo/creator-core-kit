@@ -122,7 +122,7 @@ function launchSteps(onCdnUrl: (url: string) => void): readonly LaunchStep[] {
    * 拿到的才是新版本。协议 / 登录 / 认证跟着后移到这里，就是这个排序的直接后果。
    *
    * 取类而不是 `import`：主包 import 地基的任何值，都会让那段代码被判给主包（优先级
-   * 最高者赢）→ 地基进 AOT → 热更失效。`@ccclass` 在 bundle 加载执行脚本时已把类注册
+   * 最高者赢）→ 地基进 base → 热更失效。`@ccclass` 在 bundle 加载执行脚本时已把类注册
    * 进 cc 类表，`js.getClassByName` 是引擎原生的跨 bundle 通道。类型走 `import type`，
    * 编译期擦除，产物里不留痕迹。
    */
@@ -133,9 +133,9 @@ function launchSteps(onCdnUrl: (url: string) => void): readonly LaunchStep[] {
       await getBundleManager().load(FOUNDATION_BUNDLE);
       const C = js.getClassByName(FOUNDATION_CLASS) as (new () => FoundationApi) | undefined;
       if (!C) {
-        // 地基 bundle 加载了但类没注册 → 十有八九是热更包与本 AOT 不兼容（构建裁掉了它
+        // 地基 bundle 加载了但类没注册 → 十有八九是热更包与本 base 不兼容（构建裁掉了它
         // 引用的符号，ADR-0001），或者 `@ccclass` 名字改了没同步。这条错误值得响亮。
-        throw new Error(`地基入口 '${FOUNDATION_CLASS}' 未注册 —— bundle '${FOUNDATION_BUNDLE}' 是否与当前 AOT 兼容？`);
+        throw new Error(`地基入口 '${FOUNDATION_CLASS}' 未注册 —— bundle '${FOUNDATION_BUNDLE}' 是否与当前 base 兼容？`);
       }
       await new C().boot(ctx);
     },
@@ -208,11 +208,11 @@ export class Bootstrap extends Component {
     // APK 换了（覆盖安装 / 降级 / 换渠道包）就把上一版攒下的热更缓存整个作废。
     // **必须在 bootCoreKit 之前** —— `ccHotUpdateModule` 一装，`AssetsManagerEx.create()` 就把
     // storagePath 前插进搜索路径了，那之后再删就是在拆一条已经挂上的链。
-    // 判据是 `main.js` 烘进来的包内 AOT 入口名（`window.__cckAotEntry` → `aotStamp`），没换 /
-    // 没开 md5Cache 时原样不动。**不能用运行时 settings.bundleVers** —— AOT 现在可热更，那个
+    // 判据是 `main.js` 烘进来的包内 base 入口名（`window.__cckBaseEntry` → `baseStamp`），没换 /
+    // 没开 md5Cache 时原样不动。**不能用运行时 settings.bundleVers** —— base 现在可热更，那个
     // 每更新一次就翻一次，会把刚下好的缓存当成「上一版 APK 的」删掉，死循环（ADR-0017 决策 6）。
-    // 少了这段，装了**更旧**的包时引擎那道 `versionGreater` 会判「缓存更新」→ 旧 AOT 配着
-    // 为新 AOT 编译的模块代码跑，而 coreApiHash 闸救不了（缓存 = 远端 → check 判 up-to-date，
+    // 少了这段，装了**更旧**的包时引擎那道 `versionGreater` 会判「缓存更新」→ 旧 base 配着
+    // 为新 base 编译的模块代码跑，而 coreApiHash 闸救不了（缓存 = 远端 → check 判 up-to-date，
     // 压根不去拉更新戳）。表现就是「装完启动报错，清数据才好」。
     for (const d of resetCcHotUpdateOnAppChange()) console.log(`${TAG} 热更缓存作废 ${d}`);
 

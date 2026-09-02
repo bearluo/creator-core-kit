@@ -68,7 +68,8 @@ describe('声明 vs 现实', () => {
 
   it('模块之间默认互不可见 —— 例外只有 alsoNeeds 明写过的那几对', () => {
     // 动态取别人包里的资源（`assets.load(path,{bundle})`）静态闸看不见，所以必须在
-    // `alsoNeeds` 里声明；声明过的这里才该放行。鱼阵编辑器取捕鱼的图集就是这么一对。
+    // `alsoNeeds` 里声明；声明过的这里才该放行。**当前一对都没有** —— 断言退化成
+    // 「任意两个模块互不可见」，等哪天真出现这种引用，忘了声明就会在这儿红。
     const declared = new Set(
       MODULE_CATALOG.flatMap((e) => (e.alsoNeeds ?? []).map((n) => `${e.bundle} → ${n}`)),
     );

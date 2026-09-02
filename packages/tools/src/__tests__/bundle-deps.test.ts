@@ -29,8 +29,8 @@ beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'cck-deps-'));
   bundle('resources', { deps: [], redirect: [] }, '7721b');
   bundle('main', { deps: ['resources'], redirect: ['aaa@f9941', 0, 'bbb@f9941', 0] }, '5a776');
-  bundle('skin-base-mail', { deps: ['resources'], redirect: ['aaa@f9941', 0] }, '8cf1a');
-  bundle('skin-vest-lobby', { deps: ['skin-base-foundation'], redirect: ['ccc@f9941', 0] }); // 跨马甲
+  bundle('skin-default-mail', { deps: ['resources'], redirect: ['aaa@f9941', 0] }, '8cf1a');
+  bundle('skin-vest-lobby', { deps: ['skin-default-foundation'], redirect: ['ccc@f9941', 0] }); // 跨马甲
   bundle('shop', { deps: ['main'], redirect: ['ddd@f9941', 0] }); // 借 AOT
   bundle('lobby', { deps: [], redirect: [] });
   mkdirSync(join(root, 'assets', 'not-a-bundle'), { recursive: true }); // 没有 cc.config
@@ -44,7 +44,7 @@ describe('collectBundleDeps', () => {
     expect(collectBundleDeps(root).map((b) => b.name)).toEqual([
       'main',
       'shop',
-      'skin-base-mail',
+      'skin-default-mail',
       'skin-vest-lobby',
     ]);
   });
@@ -108,25 +108,25 @@ describe('findDepViolations', () => {
   it('默认只放行 resources：借 main 与跨马甲都算违规', () => {
     expect(findDepViolations(list())).toEqual([
       { bundle: 'shop', dep: 'main', uuids: ['ddd@f9941'] },
-      { bundle: 'skin-vest-lobby', dep: 'skin-base-foundation', uuids: ['ccc@f9941'] },
+      { bundle: 'skin-vest-lobby', dep: 'skin-default-foundation', uuids: ['ccc@f9941'] },
     ]);
   });
 
   it('全指向共享仓 → 空表', () => {
     expect(
-      findDepViolations([{ name: 'skin-base-mail', borrows: { resources: ['aaa@f9941'] } }]),
+      findDepViolations([{ name: 'skin-default-mail', borrows: { resources: ['aaa@f9941'] } }]),
     ).toEqual([]);
   });
 
   it('shared 可自定义（接入方的仓不叫 resources）', () => {
-    expect(findDepViolations(list(), ['resources', 'main', 'skin-base-foundation'])).toEqual([]);
+    expect(findDepViolations(list(), ['resources', 'main', 'skin-default-foundation'])).toEqual([]);
   });
 
   it('shared 传空数组 → 任何跨包依赖都算违规', () => {
     expect(findDepViolations(list(), []).map((v) => v.bundle)).toEqual([
       'main',
       'shop',
-      'skin-base-mail',
+      'skin-default-mail',
       'skin-vest-lobby',
     ]);
   });
@@ -159,7 +159,7 @@ describe('scanAssetRefs / findUnpinnedRefs（源码期）', () => {
       'INTERNAL-SPLASH@f9941',
       'aaaaaaaa-0000-0000-0000-000000000001@f9941',
     ]);
-    asset('skins/base/mail/Mail.prefab', 'bbbbbbbb-0000-0000-0000-000000000002', ['INTERNAL-BTN@f9941']);
+    asset('skins/default/mail/Mail.prefab', 'bbbbbbbb-0000-0000-0000-000000000002', ['INTERNAL-BTN@f9941']);
     asset('skins/vest/mail/Mail.prefab', 'bbbbbbbb-0000-0000-0000-000000000003', ['INTERNAL-BTN@f9941']);
     // 不带引用的格式（.ts / .json）即使写了 __uuid__ 也不扫
     mkdirSync(join(src, 'foundation'), { recursive: true });
@@ -179,7 +179,7 @@ describe('scanAssetRefs / findUnpinnedRefs（源码期）', () => {
     const files = scanAssetRefs(src).refs.map((r) => r.file);
     expect(files).toEqual([
       'boot/LaunchOverlay.prefab',
-      'skins/base/mail/Mail.prefab',
+      'skins/default/mail/Mail.prefab',
       'skins/vest/mail/Mail.prefab',
     ]);
   });
@@ -189,7 +189,7 @@ describe('scanAssetRefs / findUnpinnedRefs（源码期）', () => {
     expect(un).toEqual([
       {
         uuid: 'INTERNAL-BTN@f9941',
-        files: ['boot/LaunchOverlay.prefab', 'skins/base/mail/Mail.prefab', 'skins/vest/mail/Mail.prefab'],
+        files: ['boot/LaunchOverlay.prefab', 'skins/default/mail/Mail.prefab', 'skins/vest/mail/Mail.prefab'],
       },
       { uuid: 'INTERNAL-SPLASH@f9941', files: ['boot/LaunchOverlay.prefab'] },
     ]);
@@ -263,9 +263,9 @@ describe('拓扑单调（代码边）', () => {
     bundleDir('foundation', 6);
     bundleDir('modules/lobby', 3);
     bundleDir('modules/shop', 1);
-    bundleDir('skins/base/foundation', 2, 'skin-base-foundation');
-    bundleDir('skins/base/mail', 1, 'skin-base-mail');
-    mkdirSync(join(src, 'skins/base'), { recursive: true }); // skins/ 与 skins/base/ 不是 bundle
+    bundleDir('skins/default/foundation', 2, 'skin-default-foundation');
+    bundleDir('skins/default/mail', 1, 'skin-default-mail');
+    mkdirSync(join(src, 'skins/default'), { recursive: true }); // skins/ 与 skins/default/ 不是 bundle
     // 合法：模块(3/1) → 地基(6)
     ts(
       'modules/lobby/LobbyHost.ts',
@@ -285,14 +285,14 @@ describe('拓扑单调（代码边）', () => {
         'main:7',
         'foundation:6',
         'lobby:3',
-        'skin-base-foundation:2',
+        'skin-default-foundation:2',
         'shop:1',
-        'skin-base-mail:1',
+        'skin-default-mail:1',
       ]);
     });
 
-    it('bundleName 覆盖目录名（皮包目录叫 mail、包名叫 skin-base-mail）', () => {
-      expect(readBundles(src).find((b) => b.dir === 'skins/base/mail')?.name).toBe('skin-base-mail');
+    it('bundleName 覆盖目录名（皮包目录叫 mail、包名叫 skin-default-mail）', () => {
+      expect(readBundles(src).find((b) => b.dir === 'skins/default/mail')?.name).toBe('skin-default-mail');
     });
 
     it('assets 目录不存在 → 只剩主包，不抛', () => {
@@ -304,7 +304,7 @@ describe('拓扑单调（代码边）', () => {
     const bundles = (): ReturnType<typeof readBundles> => readBundles(src);
 
     it('最长目录前缀说了算', () => {
-      expect(bundleOf('skins/base/mail/Mail.prefab', bundles()).name).toBe('skin-base-mail');
+      expect(bundleOf('skins/default/mail/Mail.prefab', bundles()).name).toBe('skin-default-mail');
     });
 
     it('没被任何 bundle 圈住的归主包', () => {
@@ -372,7 +372,7 @@ describe('拓扑单调（代码边）', () => {
     const g = toMermaid(readBundles(src), scanCodeEdges(src));
     expect(g.startsWith('graph BT')).toBe(true);
     expect(g).toContain('foundation["foundation · 6"]');
-    expect(g).toContain('skin_base_mail["skin-base-mail · 1"]');
+    expect(g).toContain('skin_default_mail["skin-default-mail · 1"]');
     expect(g.match(/lobby --> foundation/g)).toHaveLength(1); // 两条 import 合成一条边
   });
 });

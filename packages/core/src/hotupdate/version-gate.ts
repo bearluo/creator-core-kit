@@ -36,7 +36,7 @@ export interface GateResult {
   ok: boolean;
   /** 不通过原因（面向提示）。 */
   reason?: string;
-  /** 是否需整包更新（AOT 缺代码风险 → 不能只热更）。 */
+  /** 是否需整包更新（主包裁剪缺代码风险 → 不能只热更）。 */
   needFullUpdate?: boolean;
 }
 
@@ -68,7 +68,7 @@ export function compareVersion(a: string, b: string): number {
 
 /**
  * 默认安全闸（承 ADR-0001）：
- * - remote.minAppVersion 存在且 local.appVersion 低于它 → 拒，needFullUpdate（防 AOT 缺代码崩）。
+ * - remote.minAppVersion 存在且 local.appVersion 低于它 → 拒，needFullUpdate（防 主包裁剪缺代码崩）。
  * - remote/local 都声明 coreApiHash 且不等 → 拒，needFullUpdate。
  * - remote/local 都声明 engineHash 且不等 → 拒，needFullUpdate（热更换不了引擎，只能发包）。
  * - 否则放行。零配置即享此安全默认；纯比对，可 node 单测。

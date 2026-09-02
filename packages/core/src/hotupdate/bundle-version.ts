@@ -20,7 +20,7 @@
  * 认不出就返回 `undefined`（**不是错误**）：产物没开 `md5Cache` 时入口就叫 `index.js`，
  * 此时引擎按不带版本的名字取，正是我们要的行为 —— 调用方回落到下一个版本来源即可。
  *
- * bundle 名按字面匹配、不当正则用（`mini-clicker`、`skin-base-lobby` 这类名字里的 `-` 无害，
+ * bundle 名按字面匹配、不当正则用（`mini-clicker`、`skin-default-lobby` 这类名字里的 `-` 无害，
  * 但名字来自配置，别给它解释元字符的机会）。
  */
 export function bundleVersionFromAssetKeys(

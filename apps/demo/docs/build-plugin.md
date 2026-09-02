@@ -9,7 +9,7 @@
 
 ## 为什么需要它
 
-`app-config.ts` 里那六个值躲不掉 AOT 层：`VEST` 要在 `app.launch()` 之前定（第一个界面就要
+`app-config.ts` 里那六个值躲不掉 base 层：`VEST` 要在 `app.launch()` 之前定（第一个界面就要
 按它解析皮包），`dispatcher.url` 要在握手前就有，而 `cdnUrl` 正是握手才下发的 —— 鸡生蛋。
 但它们又恰恰是**一个包一个值**的东西：出十个马甲的包，改十次源码、构建十次、每次都可能改错一处。
 
@@ -53,7 +53,7 @@ options.packages['cck-build']        构建插件读到（extensions/cck-build/b
 ```bash
 CC="C:/ProgramData/cocos/editors/Creator/3.8.7/CocosCreator.exe"
 
-# 马甲 base，正式环境
+# 马甲 default，正式环境
 "$CC" --project apps/demo --build "platform=android;packages={\"cck-build\":{\"env\":\"prod\"}}"
 
 # 马甲 vest，连另一个 dispatcher

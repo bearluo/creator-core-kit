@@ -1,7 +1,7 @@
 /**
  * 捕鱼的内容数据：路径几何 + 鱼阵编排。
  *
- * ⚠️ **这个文件是编辑器导出的全文**（`mini-fish-editor`：复制 → 人 `Ctrl+V` 覆盖 → `git diff`
+ * ⚠️ **这个文件是编辑器导出的全文**（`apps/fish-editor`：复制 → 人 `Ctrl+V` 覆盖 → `git diff`
  * 看得见改了什么）。别往里写说明或手写代码 —— 下一次导出会整份盖掉。字段含义、为什么这么设计、
  * 联网之后怎么办，都在 `content-types.ts` 和
  * `docs/design/2026-08-31-mini-fish-content-editor.md`。
@@ -25,7 +25,9 @@ export const CONTENT = {
   waves: [
     {
       id: 'yellow-cross',
-      groups: [{ at: 0, path: 'cross-lr', kind: 'fish_yellow', count: 8, gap: 0.3, speed: 120 }],
+      groups: [
+        { at: 0, path: 'cross-lr', kind: 'fish_yellow', count: 8, gap: 0.3, speed: 120 },
+      ],
     },
     {
       id: 'red-cross',

@@ -267,7 +267,7 @@ export function defaultLaunchSteps(deps?: AppDeps): readonly LaunchStep[] {
           info = { appVersion: j.version ?? ctx.config.version, coreApiHash: j.coreApiHash };
           assets().release(path, { bundle, type: 'json' }); // 值已取出，资源可放
         } catch (e) {
-          // 缺戳**不阻断启动**：闸对 coreApiHash 单边缺失恒放行（休眠），只是失去 AOT 缺代码的保护。
+          // 缺戳**不阻断启动**：闸对 coreApiHash 单边缺失恒放行（休眠），只是失去 主包裁剪缺代码的保护。
           // 只取 message 不带堆栈——没打戳的项目每次启动都会走到这，堆栈纯噪音。
           logger.warn(
             `app 戳未读到（${bundle}/${path}）→ coreApiHash 闸休眠：${(e as Error)?.message ?? String(e)}`,
@@ -361,7 +361,7 @@ export function defaultLaunchSteps(deps?: AppDeps): readonly LaunchStep[] {
         const remote = await assets().loadRemote<JsonLike>(url, { type: 'json' });
         const j = (remote?.json ?? {}) as RemoteVersions;
         // ⚠️ web 路径没有 AssetsManager 的 apply，compat 闸只能摆在这里 —— 少了它，热更下来的新
-        // bundle 引用主包 AOT 里已被裁掉的符号时，会跑到那一行才崩（ADR-0001，隐蔽）。
+        // bundle 引用主包 base 里已被裁掉的符号时，会跑到那一行才崩（ADR-0001，隐蔽）。
         const local = (ctx.bag.get(APP_INFO) as AppInfo | undefined) ?? {
           appVersion: ctx.config.version,
         };

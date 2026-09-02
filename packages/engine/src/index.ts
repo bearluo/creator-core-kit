@@ -50,10 +50,10 @@ export {
   seedBundleManifest,
   retiredBundleDirs,
   engineHash,
-  packagedAotEntry,
-  aotStamp,
-  aotQuarantined,
-  aotQuarantineVerdict,
+  packagedBaseEntry,
+  baseStamp,
+  baseQuarantined,
+  baseQuarantineVerdict,
   manifestVersion,
 } from './hotupdate-paths';
 

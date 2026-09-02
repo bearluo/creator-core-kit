@@ -49,7 +49,7 @@ prefab 随 Boot.scene 的 `@property` 序列化进 **main 包**，启动第一�
 | 分类 | 界面 | 动作 |
 |---|---|---|
 | `network` | 网络异常，启动失败 | 「重试」→ `app.retry()`，从**失败那一步**续跑，前面不重跑 |
-| `needFullUpdate` | 需要下载完整安装包 + 原因 | 引导去应用商店（热更换不动引擎 / AOT chunks / 主包，重试没意义） |
+| `needFullUpdate` | 需要下载完整安装包 + 原因 | 引导去应用商店（引擎指纹变了，或兼容闸不过——重试没意义） |
 | `fatal` | 启动失败 + 错误信息 | 「重启应用」→ `app.restart()` |
 
 **③ `LobbyHost.ts` + `module-catalog.ts`（怎么加功能）** —— 大厅是**数据驱动**的：加一个功能 = 新建 `assets/modules/<id>/` 一个 bundle + 在 `MODULE_CATALOG` 加一行，**大厅代码零改**。界面同样是 prefab：`LobbyPanel.prefab`（标题 + 副标题 + `Items` 容器）+ `LobbyItem.prefab`（一个入口按钮的模板），代码只负责按清单克隆模板、填标题、绑点击。两种承载：

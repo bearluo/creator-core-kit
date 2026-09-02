@@ -10,7 +10,7 @@
  *   皮包变成 `deps:["main"]`。而 `main` 只随 APK 更新 —— 热更下去的皮包引用一个旧 APK 的
  *   `main` 里没有的 uuid，界面一开就挂。改的还不是那个皮包，是 boot。
  * - **跨马甲漂**：两个马甲的地基皮包同为 priority 2、都引用它 → Creator 挑了
- *   `skin-base-foundation`，于是 `skin-vest-lobby`/`skin-vest-mail` 依赖 base 马甲的包，
+ *   `skin-default-foundation`，于是 `skin-vest-lobby`/`skin-vest-mail` 依赖 default 马甲的包，
  *   马甲隔离直接破掉。
  *
  * 能二值化的规则：跨包**资源**依赖只许指向 `shared` 白名单里的包。能进白名单的条件是它的
@@ -273,7 +273,7 @@ export function readBundles(assetsRoot: string): BundleNode[] {
   return out.sort((a, b) => b.priority - a.priority || a.name.localeCompare(b.name));
 }
 
-/** 一个文件归哪个包 —— 最长目录前缀说了算（`skins/base/mail` 赢过 `skins/base`）。 */
+/** 一个文件归哪个包 —— 最长目录前缀说了算（`skins/default/mail` 赢过 `skins/default`）。 */
 export function bundleOf(file: string, bundles: readonly BundleNode[]): BundleNode {
   let best = MAIN_BUNDLE;
   for (const b of bundles)

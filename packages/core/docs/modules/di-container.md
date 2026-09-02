@@ -136,7 +136,7 @@ export class KitContext extends Component {
 - 与三种"热"：
   - **运行时分包**：一个 bundle 一个子作用域，`BundleManager.release(name)` 时 `scope.dispose()` 连带回收该 bundle 注册的服务（防泄漏）。
   - **开发期热重载**：`unregister` / `register(..., {allowOverride:true})` 替换实现。
-  - **线上热更**：容器不涉及；被注册实现的**符号**受 AOT 裁剪影响 → 归 HotUpdate 白名单（ADR-0001），不在本模块。
+  - **线上热更**：容器不涉及；被注册实现的**符号**受 主包裁剪影响 → 归 HotUpdate 白名单（ADR-0001），不在本模块。
 
 ## Testable seams + test plan（可测接缝 + vitest 用例）
 

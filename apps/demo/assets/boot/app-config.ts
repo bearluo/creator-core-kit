@@ -5,15 +5,17 @@ import { loadScene } from '@cck/engine';
 import { buildValue } from './build-config';
 
 /**
- * 应用配置 —— 版本 / 渠道 / 环境 / 包分层集中在这一处。**留在 AOT 层的东西全在这个文件里**。
+ * 应用配置 —— 版本 / 渠道 / 环境 / 包分层集中在这一处。**留在 base 层的东西全在这个文件里**。
  *
- * 三层包分层（判据是「改了它要付什么代价」）：
+ * `assets/` 三层（判据是「改了它要付什么代价」）：
  *
  * | 层 | 内容 | 换它要 |
  * |---|---|---|
- * | ① **AOT** | 引擎 + `@cck/core` + `@cck/engine` + `assets/boot/`（本文件 + Bootstrap + Boot.scene + 启动界面） | **热更、重启**（引擎指纹变才发包） |
+ * | ① **base** | `@cck/core` + `@cck/engine` + `assets/boot/`（本文件 + Bootstrap + Boot.scene + 启动界面） | 热更，**重启**生效 |
  * | ② **地基** | `assets/foundation/`：协议 / 登录 / 认证 / 网关搬家 / 模块清单 / 模块契约 / 跨模块事件 | 热更，不重启 |
  * | ③ **模块** | `assets/modules/*`：lobby / mail / shop / mini-clicker / mini-dodge | 按需 load / release |
+ *
+ * 再往下还有**引擎层**（`libcocos.so` + 引擎 JS + `main.js`）—— 不在 `assets/` 里，**只能发 APK**。
  *
  * 为什么 dispatcher 地址躲不掉 ①：客户端要先握手才知道 `cdnUrl`（热更内容基址），
  * 而热更内容里才有地基。鸡生蛋，只能钉死在包里。其余服务端地址都在
@@ -32,13 +34,13 @@ import { buildValue } from './build-config';
  *
  * 登记了换皮的界面从 `skin-<VEST>-<跟随者>` 包取 prefab（接缝见 `foundation/catalog.ts` 的
  * `skinBundle()`）——**一个跟随者一个皮包**，跟着它装卸。**没有「原皮」这一档**：demo 自己
- * 也是一个马甲，它的地基皮就是 `skin-base-foundation`；加一个马甲 = 照着复制一套皮包 +
+ * 也是一个马甲，它的地基皮就是 `skin-default-foundation`；加一个马甲 = 照着复制一套皮包 +
  * 出包时在构建面板选它，地基与模块一个字不动。
  *
  * ⚠️ 它必须在 `app.launch()` **之前**定死（第一个界面就要按它解析皮包），所以只能是打包期
  * 的东西 —— 运行时切马甲需要把已装的皮包全卸了重装，不是这套设计要解决的问题。
  */
-export const VEST = buildValue('vest', 'base');
+export const VEST = buildValue('vest', 'default');
 
 /** `AppConfig.env` 的合法值。构建面板用下拉框限制，这里再兜一道 —— settings.json 是可以手改的。 */
 const ENVS = ['dev', 'staging', 'prod'] as const;
@@ -60,8 +62,8 @@ export const APP_CONFIG: AppConfig = {
   channel: buildValue('channel', 'dev'),
   env: envValue(),
   // app 兼容戳所在包。默认 'main'，但 main 只收「被场景引用到」的资源，散落的 JSON 会被丢掉；
-  // `resources` 是 Cocos 内建包、整目录必打进包，且在 tools 的 DEFAULT_AOT_BUNDLES 里 → 归 base
-  // manifest，跟 AOT 一起被 base 热更替换。**不能放 shared / foundation**：那是热更包，模块级热更
+  // `resources` 是 Cocos 内建包、整目录必打进包，且在 tools 的 DEFAULT_BASE_BUNDLES 里 → 归 base
+  // manifest，跟 base 一起被 base 热更替换。**不能放 shared / foundation**：那是热更包，模块级热更
   // 就能改掉 app 自称的 coreApiHash，闸自己就废了。戳的内容由 scripts/build.mjs 每次构建前重写。
   stampBundle: 'resources',
   // 共享**资源** bundle（i18n / 图集 / 音效）。地基不列在这里 —— 它要在 hotupdate 之后

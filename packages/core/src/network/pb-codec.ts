@@ -104,8 +104,8 @@ export type SegmentBody = Pick<PbSchema, 'encodeBody' | 'decodeBody'>;
 /**
  * 可增量注册的 schema —— **分包的那一半**。
  *
- * 协议不能一股脑塞进不可热更的 AOT 层：客户端把 npm 依赖统统打进主包，
- * 所以只有 AOT 装「基础段」（握手 / 心跳 / 错误 / 分配器），各功能模块的协议
+ * 协议不能一股脑塞进 base 层（改了要重启才生效）：客户端把 npm 依赖统统打进主包，
+ * 所以只有 base 装「基础段」（握手 / 心跳 / 错误 / 分配器），各功能模块的协议
  * 随自己的 Asset Bundle 走，加载时 {@link add} 进来、释放时注销。
  * 整个过程 `INetwork` 和 codec 实例不变，连接不断。
  */

@@ -85,7 +85,7 @@
 - [x] **mini-fish 补刀：目录分层 + 三处现场反馈**（2026-08-28 · 1007 全绿 · web 真产物 e2e PASS）— 第二刀跑起来之后玩出来的三个问题，外加一次目录重构。**① `ECS → 节点` 那座桥有个真 bug**：连打一分钟，`Bullets` 层下攒出十来个**停在屏幕正中央不动的子弹**（现场数据：`atOrigin` 3 → 10 → 12，只增不减）。根因是 `enterQuery` / `exitQuery` 是**两个独立数组、读不出交错顺序**，而同一个 eid 一帧内可以同时出现在两边 —— 子弹在炮口出生的那一帧就命中了正巧游过炮口的鱼（AI 炮就架在鱼道上），于是「先跑 exit（表里还没有，空转）再跑 enter」建出一个**实体已经不存在**的节点：它不在 query 里、位置永远不刷新，就停在 `gameNode` 的默认位置 `(0,0)`，也永远不会再 exit（它已经 exit 过了）。反向交错（`removeEntity` 把 eid 还进池子、同帧 `addEntity` 又取出来）会把新租客的节点拆掉或让旧节点变孤儿。判据只有一条：**这一帧结束时它还在不在 `query(world)` 里** —— 收进 `ecs/reconcile.ts`（零 `cc`、6 例单测，四种交错各一条）。**鱼也有同一个 bug**，只是鱼不会出生即死（`feedSystem` 生出来 `t=0`，`despawnSystem` 要 `t>=1`）所以一直没现形，一并修了。⚠️ 这条是**所有 ECS→节点桥的通病**，不是捕鱼特有的，已写进设计文档开放项 9 供下一个消费者复用。**② 子弹不会转**：`syncBullets` 只 `setPosition` 没 `setRotation`，所有子弹一律头朝上飞。补上 `atan2(Velocity.y, Velocity.x) - 90°`（子弹贴图跟炮台一样头朝 +y）。**③ 四门炮改成上下对坐**：原来一排四个在底部（`y` 全是 -450），中间两门互相挡视线、上半场没人打鱼白游；改成下左（玩家）/ 下右 / 上左 / 上右四个角，上半场那两门待机时先转 180° 朝下。`|y|` 同时从 450 收到 **360**：场地是 cover 缩放的，比 16:9 更宽的屏会把上下裁掉一截（可见半高 ≈ `960 / 宽高比`，21:9 只剩 412，炮台半高 48），而**故意不在 View 里做钳制** —— 那会让画出来的炮口跟 VM 里子弹的出膛点对不上，超宽屏下子弹就凭空从旁边冒出来。**④ 目录从 16 个文件平铺分成四层**：`content/`（鱼种表 + 泳道，改它不动结构）· `ecs/`（组件 + 六个 system + reconcile）· `seams/`（**四道接缝**，设计里最重要的一件事，原先在平铺目录里根本看不出来）· `art/`，根上只留 `Fish.scene` / `FishGame.ts`（唯一带 `cc` 的文件）/ `FishVM.ts` / `events.ts`。测试目录**镜像**同一棵树（`check:vm-tests` 就是按镜像路径找的）；搬文件时 `.meta` 必须跟着走 —— `Fish.scene` 是按 `compressUuid(FishGame.ts 的 uuid)` 引用组件的，uuid 换了场景当场找不到脚本。**web 真产物 e2e**：四门炮落在 25%/75% × 17%/83%（**上二下二**），上排 `rotZ ≈ -182` / `-251`（真朝下打）；连打 70 炮 + 三个 AI 打 30 秒后 `atOrigin` **恒为 0**（改之前同样操作攒到 12 个），子弹 `rotZ` 各不相同且与飞行方向吻合。八道门全绿（1007 例，+6）。⚠️ 同前：**只验过 web**
 - [x] **mini-fish 水下氛围：水面后处理 + 受击闪白 + 死亡朝向**（2026-08-28 · 1009 全绿 · web 真产物 e2e PASS）— **① 死亡动画不接朝向**：活鱼是「转到路径切线 + 朝左时 `scale.y=-1` 上下翻」，一断气两样全丢 —— 一条朝左游的鱼瞬间变成头朝右还镜像了一次，看着像**换了条鱼**（用户就是这么报的）。排查过「是不是播错鱼种」：图集里 11 种鱼各 4 帧 `_dead_`、帧名与 `FishKind.id` 一一对应、`dead_0` 与 `run_0` 的贴图尺寸也对得上，而 `e.kind` 是发事件时的值拷贝、`arbiter.resolve` 返回的 eid 一一对应 —— **不是换鱼，就是朝向**。修法：`CatchEvent` 带上 `angle`（`netSystem` 在 `removeEntity` 之前读 `Angle.v[eid]`），死亡帧沿用活鱼那一套。**② 水波纹改成真·后处理**：原先只给海底贴图拧 UV，只能让背景自己晃、鱼纹丝不动，像「水在背景里」。改成**整个水下画面先进 RenderTexture** —— 新开一个 `WATER` 层（bit 1，bit 0 被 kit 的 `BG` 占着），一台只看这层的相机（priority 100 < kit ui 相机的 200）把海底 / 鱼画进 RT，再由一张全屏 quad 采样输出，于是折射拧的是「隔着水面看到的一切」；**子弹 / 渔网 / 炮台 / HUD 留在 `UI_2D` 不进 RT，一点都不扭**（玩家射出去的东西跟着水晃会让人以为自己瞄歪了）。子弹一开始沉进了水里，用户报「轨迹有问题」—— **折射是个空间上变化的位移场**（每个像素按所在位置的噪声被拧走十几像素，噪声还在滚），**一条直线穿过位移场就不再是直线**：鱼大且慢只表现为微微变形，子弹细长又每帧走很远，整条轨迹被拧成抖动的波浪，还跟不扭的炮口衔接不上。⚠️ `node.layer` 不继承，每帧新生的鱼都要逐个置层。一个 pass 干三件事所以水面只占一个 draw call：**折射**用两层反向滚动的噪声取不同通道当 x/y 偏移（同向滚 = 整幅画在平移；同通道 = 只沿对角线抖）；**焦散**只在两层等值线相交处才亮，相交带天然是网状的，正是阳光透过水面那种游动光网；**气泡**一列一个、每像素只查相邻三列（开销与气泡数无关），画的是**环**不是实心圆（实心的看着像光球，气泡是薄壳）。噪声图 `art/noise.png` 由 `pnpm gen:noise` 烘：64×64（**POT 才能开 REPEAT**，波纹靠 UV 一直往外滚，clamp 会把整幅图糊成边缘那一行），R/G/B 三通道装三层频率，一次采样拿三层；生成物**不配 `--check` 闸**（源就是那个脚本，没有仓外美术要同步，判据同 `mini-hop` 的 `level.ts`）。**③ 受击闪白**：挨了一网没死的鱼白闪 0.12 秒（`netSystem` 新发 `hurt` 事件）。非要一个 effect 是因为 `Sprite.color` 是**乘算**的 —— 只能把鱼调暗，白色乘上去等于没变；全场受击的鱼共用同一个 Material，闪完换回内置材质。**web 真产物 e2e**：极端折射参数（0.06）下鱼和海底一起被拧变形而 HUD / 炮台纹丝不动（截图为证），证明分层正确；打 100 炮后死亡动画节点的 `rotZ` 分别是 180（`scaleY=-1`）/ 22 / -9 —— 各带各的朝向，不再清一色 0；受击闪白采样命中 26 次。八道门全绿（1009 例，+2）。⚠️ **采 RT 必须翻 y，这活得自己干**（用户报「是不是 y 颠倒了」，是的）：GL 系后端往 framebuffer 写的第 0 行是屏幕**底**边，采样时 `uv.y=0` 拿的就是第 0 行 → 整幅水下画面上下颠倒。引擎备了这条路但只走内置材质 —— `Sprite._updateBuiltinMaterial` 发现贴图是 `RenderTexture` 时复制一份打了 `SAMPLE_FROM_RT` define 的材质，`builtin-sprite.effect` 里的 `CC_HANDLE_RT_SAMPLE_FLIP(uv0)` 才生效；**用 `customMaterial` 就够不着那段**。修法是在 fs 里自己调一次宏（宏读 `cc_cameraPos.w`，自带后端判断，一行同时管住 WebGL 与 Metal / Vulkan），且**只翻取 RT 颜色那一次** —— 噪声 / 焦散 / 气泡是屏幕空间效果，照旧吃没翻过的 `uv0`。同前：**只验过 web**
 - [x] **鱼阵内容与 waveFeeder：捕鱼从「随机投喂」进到「有编排的内容」**（2026-09-01 · 1024 全绿 · 八道门全绿）— 配套设计见 [`2026-08-31-mini-fish-content-editor.md`](design/2026-08-31-mini-fish-content-editor.md)（wayfinder 八票的结论）。新增 `content/content.ts`（`rev` + 8 条路径 + 4 个起手阵），`content/paths.ts` 的硬编码表改为从它派生 —— **存档格式从「下标」换成「稳定字符串 id」**：删掉第 3 条路径时，下标方案会让鱼阵指向另一条**完全合法**的路径，不抛异常、只是这队鱼走错了路；id 方案引用不到会**当场抛**。下标只留给运行期（`PathFollow.pathId` 只装数字），转换发生在 `waveFeeder` 载入内容那一刻。新增 `waveFeeder`（纯表播放器：无随机、无 `rand` 注入，同一份 content + 同一串 dt 必吐同一串 spawn —— 将来服务端要重写一遍，确定性是能逐行对照的前提）与 `combineFeeders`（⚠️ 用 `flatMap` 不用 `[...a,...b]`，后者会被 Cocos 构建降级成 `[].concat`）。`FishVM` 的默认投喂改成 **鱼阵 + 压低的随机底噪**：底噪从 `0.6s/2 批` 压到 `1.0s/1 批`，这两个数是**算出来的** —— 稳态同屏数 = 投喂率 × 平均寿命（8 条路径平均弧长 2387 ÷ 平均速度 140 ≈ 17s），1 条/秒 × 17s ≈ 17 条，约为原先 57 条的三分之一，**总量守恒**、其余让给鱼阵。阵与阵**按「上一阵投喂完毕 + 间隔」接续，不等清场**（一队 8 条 `gap 0.3` 的阵 2.1 秒投完却要 19 秒才游干净，等清场每阵之间会白空十几秒）；⚠️ 「等清场」那个判据只属**编辑器预览窗口**，两者别混。闸：`content.ts` **不配 `--check` 生成物闸**（源与产物是同一个文件，闸挡的是不会发生的事，判据同 `mini-hop` 的 `level.ts`），改配 `content.test.ts` **内容自检**（跨表引用 + 数值范围，正是 `as const` 与 `typecheck` 挡不住的两样）+ `feeder.test.ts` 的时刻表与大 dt 等价 + `FishVM.test.ts` 的**稳态带 12~24**（有人改 `interval` 把屏幕搞空或搞爆当场红，用 mulberry32 播种，不许靠 `Math.random` 随机红）。**只验到 node 单测层**：web 真产物 e2e 与真机帧率还没跑
-- [x] **鱼阵编辑器（mini-fish-editor）：路径 + 鱼阵可视编辑**（2026-09-01 · 1043 全绿 · 八道门全绿 · web 真产物 e2e PASS）— 设计见 [`2026-08-31-mini-fish-content-editor.md`](design/2026-08-31-mini-fish-content-editor.md)。新 bundle（priority 1）依赖 `mini-fish`（**1 → 2**，跨包 import 要严格更高），图集**动态取**以保住 `deps: []`（`--allow-deps` 是全局白名单，开一次谁都能借），边界改由 `catalog.ts` 新增的 `alsoNeeds` 声明进 `BUNDLE_GRAPH`。**逻辑全在一个 `EditorVM`**（零 `cc`，18 条镜像测试）：增删改复制 · 控制点命中判定与拖拽落点（世界坐标纯数学）· `rev` 只在导出时 +1 · 草稿基线比对；**删掉被引用的路径 ⇒ 那个 group 进未解析态**（换成下标会静默改指另一条完全合法的路径）。View 只做四件事，界面走**三张 prefab**（`EditorPanel` / `PathItem` / `GroupItem`），预览**直接跑 `FishVM`**（`aiAgents: []` ⇒ 无炮无子弹无结算）。⚠️ **funplay 的 `create_prefab_from_node` 产出的 prefab 缺 `PrefabInfo`**，运行时能 instantiate 但**编辑器一打开就崩** `reading 'instance'` —— 按 `LobbyItem.prefab` 的形状补 `cc.PrefabInfo` / `cc.CompPrefabInfo` 才修好；另一坑是 `node.destroy()` **延迟到帧末**，重跑生成脚本时新旧同名节点并存 → `create_prefab_from_node({name})` 抓错源，改用临时名 `T_*` + `rootName` 回正。**入口按 `env` 门控**（`devOnly`，`visibleCatalog()` 在 prod 里滤掉），⚠️ 但**门控删的是入口不是产物**：实测编辑器包照样进 `build/web-mobile/assets/`（Creator 按目录 meta 的 `isBundle` 收包，与可达性无关），web 按需下载 ⇒ 玩家流量 0，native 等出包期「按包选是否随 APK」才不进产物。**web 真产物 e2e**：Boot → 游客登录 → 大厅 → 编辑器场景，`路径=8 阵=4 图集=true`，真鼠标点 `▶` 把 `count` 8→9、时长跟着 22→22.3s（多一条 × gap 0.3），点播放跑到 3s 时场上 9 条鱼（截图为证），全程 0 error。⚠️ **合成 DOM 事件（`dispatchEvent`）打不进 Cocos 输入**，必须用 Playwright 的真鼠标 `page.mouse.click` —— 这条坑值钱：用合成事件验交互会得出「按钮全都点不动」的假结论
+- [x] **鱼阵编辑器 —— 路径 + 鱼阵**（2026-09-02 · 1082 全绿 · 八道门全绿）— 现状见 [`2026-08-31-mini-fish-content-editor.md`](design/2026-08-31-mini-fish-content-editor.md)，宿主判据见 [`ADR-0020`](adr/0020-internal-tools-in-html.md)。**它是纯 web 内部工具**（`apps/fish-editor/`，vite，`pnpm editor`），**不进任何游戏包** —— 先按 Cocos 模块做了一版（一个 bundle、五张 prefab、约 700 行 View、自烘的九宫格底图），做完重新问「它为什么得在 Cocos 里」，发现**要复用的那部分本来就零 `cc`**（整棵 mini-fish 树里 `import 'cc'` 的只有 `FishGame.ts` 一个），留在引擎里换来的只有「一个没有 CSS 的 UI 工具箱」和「一个只有策划用的工具跟着产品下发给玩家」，于是整个搬走、Cocos 那套全删。**逻辑全在一个 `EditorVM`**（零 `cc`，32 条镜像测试）：增删改复制 · 控制点命中判定与拖拽落点 · 分段贝塞尔接续与折角 · `rev` 只在导出时 +1 · 草稿基线比对；**删掉被引用的路径 ⇒ 那个 group 进未解析态**（换成下标会静默改指另一条完全合法的路径）。预览**直接跑 `FishVM`**（`aiAgents: []` ⇒ 无炮无子弹无结算）。⚠️ 搬家时逮到**编辑器跟游戏早就不一致**：帧号（游戏播 12fps 序列帧、编辑器永远 `_run_0`）、朝向、场地缩放（cover vs contain）、鱼的尺寸（美术原尺寸 vs 按判定半径算的框）四处各写一份 —— **不一致的来源是「两个 View 各写一份映射」，跟宿主无关**，所以抽出零 `cc` 的 `mini-fish/render-map.ts`，游戏 View 与编辑器读同一份（11 条测试，四种变异全咬住）。顺带白拿一件只有 DOM 才顺手的：游戏 cover 缩放**窄屏会裁掉 `FIELD` 上下**，旧编辑器画完整场地框等于骗人，现在叠一圈可见区虚线（1440×864，4:3 ~ 20:9 都看得见）。⚠️ DOM 侧唯一要补的是 `textures.plist` 解析（约 40 行）：167 帧里 **65 帧是转着存的**（鱼占 39 帧），不处理 `textureRotated` 会看到一堆侧躺的鱼；**TRIMMED 尺寸还逐帧变**（同一条黄鱼 `_run_3` 52×31、`_run_0` 52×34）。⚠️ 另一条**跟宿主无关**的 Cocos 通性坑（在 Cocos 版上踩到的，规则留在 `ui-style-guide.md` + 全工程闸 `test/prefab-alpha.test.ts`）：`Batcher2D.walk` 把节点自身 `UIRenderer.color.a` 乘进**整棵子树**，所以「半透明底 + 子节点放文字」会把文字一起调暗，alpha 归零则文字**彻底消失**，而 `active`/`enabled`/`color` 在检查器里全是对的 —— 一个能查的地方都不异常，只是不画
 
 ### 2026-08-18 · 热更内容基址一律听服务端（base 与分包统一）
 
@@ -501,6 +501,59 @@ bundle 优先级（目录 `.meta` 的 `userData.priority`）—— 那个数字�
 **未验**：`strict` 抛错那条（表外的包一 `load` 就抛）在真产物里没触发到 —— `getBundleManager()`
 是模块内符号，产物里够不着，构造不出「表外的包」的调用点。单测有覆盖。
 
+### 2026-08-31 · 层名统一：AOT 退休，那一层改叫 base 层
+
+**起因**：Unity/HybridCLR 里 AOT dll 指的是**包内不可更新**的那半，而本仓的 `AOT` 自 [[adr-0017]]
+起指的恰恰是**能热更**的那层 —— 词义相反，读文档的人一律把它当最底层。
+
+**三个层名定死**：**引擎层**（`libcocos.so` · 引擎 JS · `main.js`，发 APK）→ **base 层**
+（业务代码 · `assets/boot` · `main`/`resources`，热更后重启生效）→ **分包层**
+（`foundation` · `shared` · `skin-*` · `modules/*`，热更免重启）。
+
+- **代码改名（14 个文件）**：`src/cck-aot.json`→`src/cck-base.json`、`window.__cckAotEntry`→
+  `__cckBaseEntry`、`cck.aotTry`/`cck.aotBadVersion`/`cck.aotStamp`→`cck.base*`、
+  `aotStamp()`/`packagedAotEntry()`/`aotQuarantined*()`→`base*`、`DEFAULT_AOT_BUNDLES`/
+  `--aot-bundles`→`base` 版。
+- **ADR 0017/0018/0019 连文件名一起改**，全部路径引用同步修好；**0001 不改** —— 它的 AOT 指
+  编译期 tree-shake 裁剪，那是这个词的正确用法。
+- **顺带修掉 [[adr-0017]] 之后没跟上的过期陈述**：`bundle-layout` 里 boot「发新包 + 玩家重装」、
+  归位判据表整体错位一档、`needFullUpdate` 的括号写着「换不动 AOT chunks / 主包」、协议
+  「加一个子游戏要用户重装」、「`main` 只随 APK 换」×3（真实后果是**皮包免重启先到、`main` 要等
+  重启**，中间有错配窗口）、ADR-0014 的 ① 行。
+- **闸**：`typecheck` / `test`（1009）/ `lint` / `lint:demo` / `check:graph` 全绿，`docs:api` 已重生成。
+- **未决**：base 更新与分包共用同一道 `coreApiHash` 闸（`hotupdate-service.ts` / `bundle-updater.ts`），
+  于是 **core API 面一变的 base 热更会被自己的闸拒成 `needFullUpdate`**。业务改动不受影响，升 kit 才撞。
+  要不要给 base 只留 `engineHash` 闸，待定。
+- **顺手改掉撞名**：demo 默认马甲原来也叫 `base`，与新层名撞车 → 马甲改名 **`default`**：
+  `skins/base/` → `skins/default/`、三个皮包 `skin-base-*` → `skin-default-*`（目录 `.meta` 的 `bundleName`）、
+  `build-configs/*.json` 与 `app-config.ts` 的 `vest` 默认值、`scripts/prefab-gen/skin-base-*.prefab.json` 文件名、
+  以及 core/tools 里拿它当例子的注释与单测。demo 现在两个马甲：`default` 与 `vest`。
+  ⚠️ 改了目录名与 `bundleName`，**Creator 下次打开要重建 `library/`**，`build/` 里的旧产物作废。
+
+**真机 e2e PASS**（2026-08-31，x86_64 模拟器 `fortune_test`，干净装机，正式启动路径）：
+
+```
+装 1.3.4（包内 BUILD_TAG=v1）
+  [cck] APK 换了（base ccd65） → 热更缓存作废          ← packagedBaseEntry/baseStamp 新名字生效
+  [CCK-BOOT] BUILD_TAG=v1 · skin='default'
+  skin-default-foundation.manifest 基址取服务端下发     ← 马甲改名后皮包真按新名取到
+  长连接就绪 · 0 崩溃
+CDN 发 1.3.5（只有 project.manifest 涨号，其余 15 个包沿用旧号 ← --prev 生效）
+  hotupdate 0→100% → [cck] base 入口取热更版本: ./application.3acdc.js   ← 固定名指针 src/cck-base.json 从热更目录读到
+  → BUILD_TAG=v2
+force-stop 冷启动
+  仍走 application.3acdc.js → BUILD_TAG=v2 · 无「隔离」「缓存作废」  ← 搜索路径还原 + 看门狗握手都成立
+撤掉标记发 1.3.6 → 再更新一次 → application.bcede.js → 长连接就绪，全程 0 FATAL
+```
+
+判据说明：**改名这件事只有真机能证**——`cck.baseTry` 的两处字面量由 `build.mjs` 对账，但
+「`main.js` 那半还念不念得对 `src/cck-base.json`」只有装到机器上才知道。上面第二段的
+「base 入口取热更版本」就是它，第三段的冷启动排除了「靠内存里的 setSearchPaths 蒙对」。
+
+⚠️ CDN 上留着一批 `skin-base-*.manifest`（改名前的皮包）—— 客户端不再问它们，按「只叠加绝不清空」
+的规矩不删（删了会打断回滚到旧 release）。
+
+
 ## 模块状态
 
 | 批次 | 模块 | 包 | 状态 | 设计文档 | commit |
@@ -522,7 +575,7 @@ bundle 优先级（目录 `.meta` 的 `userData.priority`）—— 那个数字�
 | 2 设施 | AudioService（`IAudioService`） | core/engine | 已实现（core 半，24 测试, 覆盖 100%；BGM 单轨+双音效路径+三档音量/静音实时下发；**engine 半 `IAudioPlayer` cc.AudioSource 实现 + `ccAudioModule`，四门全绿，真机验证 DI 接入（`AUDIO_PLAYER registered`+playOneShot 不抛），真出声待 audioClip 资产**） | `packages/core/docs/modules/audio-service.md` | — |
 | 2 设施 | i18n 多语言 | core/engine | 已实现（core 半，18 测试, 覆盖 100%；**engine 半 `loadLocaleTable`+`setupLocalePersistence`，四门全绿，真机验证真加载翻译表 JSON（拍平+插值）**；字体切换随项目 onChange） | `packages/core/docs/modules/i18n.md` | — |
 | 2 设施 | ConfigTable（Excel→JSON） | core/tools/engine | 已实现（core 半，14 测试, 覆盖 100%；**engine 半 `loadTable`（JSON 经 AssetLoader 加载 → register），四门全绿，真机验证真加载配表数组**；Excel→JSON 走 tools） | `packages/core/docs/modules/config-table.md` | — |
-| 3 进阶 | HotUpdateService（线上热更统一入口） | core/engine | 已实现（**native 走内容寻址**：`md5Cache` + 版本从 bundle 自己的 manifest 反推 + CDN 叠加式发布/归档回滚 + APK 覆盖安装作废旧缓存，见 [[adr-0016]]；**AOT 层经固定名指针 `src/cck-aot.json` 可热更、重启生效，只有引擎指纹变才发 APK，见 [[adr-0017]]；起不来的 AOT 由启动看门狗退回包内并隔离那一版，见 [[adr-0018]]，三轮真机 e2e 十八条全过**；core 半，25 测试, 覆盖 100%；统一状态机 + 版本兼容闸[钩子+安全默认] + 进度/重试；**engine 半 `native.AssetsManager` 后端 + `sys.isNative` 守门 `ccHotUpdateModule`，四门全绿，真机验证 web 守门 no-op + `check()=up-to-date`；**native 真更新全流程已真机 e2e 验证（真 Android APK：check→download→apply→restart，`BUILD_TAG` v1→v2，见 ADR-0006）**；出包期 manifest 生成/校验已由 tools `hot-update-manifest` 提供） | `packages/core/docs/modules/hotupdate-service.md` | — |
+| 3 进阶 | HotUpdateService（线上热更统一入口） | core/engine | 已实现（**native 走内容寻址**：`md5Cache` + 版本从 bundle 自己的 manifest 反推 + CDN 叠加式发布/归档回滚 + APK 覆盖安装作废旧缓存，见 [[adr-0016]]；**base 层经固定名指针 `src/cck-base.json` 可热更、重启生效，只有引擎指纹变才发 APK，见 [[adr-0017]]；起不来的 base 由启动看门狗退回包内并隔离那一版，见 [[adr-0018]]，三轮真机 e2e 十八条全过**；core 半，25 测试, 覆盖 100%；统一状态机 + 版本兼容闸[钩子+安全默认] + 进度/重试；**engine 半 `native.AssetsManager` 后端 + `sys.isNative` 守门 `ccHotUpdateModule`，四门全绿，真机验证 web 守门 no-op + `check()=up-to-date`；**native 真更新全流程已真机 e2e 验证（真 Android APK：check→download→apply→restart，`BUILD_TAG` v1→v2，见 ADR-0006）**；出包期 manifest 生成/校验已由 tools `hot-update-manifest` 提供） | `packages/core/docs/modules/hotupdate-service.md` | — |
 | 3 进阶 | Network / 协议层（`INetwork`） | core/engine | 已实现（core 半，28 测试, 覆盖 100%；连接状态机+请求关联[seq 经 codec]+自动重连[退避]+心跳+推送路由，调度注入 ITimer；**engine 半 `createWebSocketSocket` + `ccNetworkModule`（Web/native WebSocket，重连 identity 卫），四门全绿，真机 gameView 验证 `NETWORK_SOCKET registered=true` + 真 echo 端到端往返 OK（连 jmalloc/echo-server，request/seq 回显闭环）**） | `packages/core/docs/modules/network.md` | — |
 | 3 进阶 | ECS 扩展（bitECS 接入范例，不进 core） | ecs-bitecs | 已实现（pin `bitecs@0.3.40`；`export * from 'bitecs'` 全套 + 薄 kit 胶水 `createEcsWorld`/`createEcsRunner`[秒制 `world.time` + `tick(dt)` 每帧驱动接缝]；6 测试全绿含**ITimer.onFrame 驱动 runner** 的 kit 接入证明；四门全绿[全仓 369]、`dist` 33KB 自包含[tsup noExternal 打进 bitecs]；**demo cc 渲染场景[大量 agent 移动]留后续**——需玩法 + 真机验证，本包纯逻辑已 node 全测不阻塞） | `packages/ecs-bitecs/docs/modules/ecs.md` | — |
 | 3 进阶 | ECS spatial（寻路/碰撞/群体避让 高性能 system 组） | ecs-bitecs | 已实现（5 system + 4 规范组件：`SpatialHash`/`FlowField`/`seek`/`flowFollow`/`separation`/`collision`/`movement`/`spatialIndex`；全 hand-roll 零第三方[不上物理引擎/navmesh/ORCA/yuka]，纯 SoA·node 可测；**ORCA 不做**[单向 swarm 无对穿礼让]；10 测试全绿[结构+系统+集成 pipeline]，四门全绿[全仓 379]；**独立 Cocos Creator 工程渲染验证留下一步**） | `packages/ecs-bitecs/docs/modules/spatial.md` | — |
