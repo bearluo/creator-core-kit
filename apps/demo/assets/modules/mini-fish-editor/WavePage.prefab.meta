@@ -2,12 +2,12 @@
   "ver": "1.1.50",
   "importer": "prefab",
   "imported": true,
-  "uuid": "1fe19d59-0592-4dbb-b49f-e48f85e15e41",
+  "uuid": "de15c435-105a-4bda-9655-f6fec782c6f0",
   "files": [
     ".json"
   ],
   "subMetas": {},
   "userData": {
-    "syncNodeName": "GroupItem"
+    "syncNodeName": "WavePage"
   }
 }

@@ -28,18 +28,21 @@
  *   Node = {
  *     name, pos?: [x,y], size?: [w,h], anchor?: [x,y], active?: bool,
  *     label?:  { string?, fontSize?, lineHeight?, color?: [r,g,b,a?], align?: 'left'|'center'|'right' },
+ *                // 给了 size 就锁 overflow=CLAMP（不锁的话文字会反过来把节点撑成自己的尺寸）
  *     sprite?: { frame: <uuid>, type?: 'simple'|'sliced'|'filled', fill?: 'horizontal'|'vertical',
  *                fillStart?: 0..1, fillRange?: 0..1, color?: [r,g,b,a?], sizeMode?: 'custom'|'trimmed'|'raw' },
  *     editBox?: { placeholder?, string?, password?: bool, maxLength?, fontSize?,
  *                 color?: [r,g,b,a?], placeholderColor?: [r,g,b,a?], frame?: <uuid>, bgColor?: [r,g,b,a?] },
  *     button?:  { transition?: 'color'|'none', normal?, hover?, pressed?, disabled?: [r,g,b,a?] },
- *     toggle?:  { checked?: bool },        // 父节点自动挂 ToggleContainer（页签互斥全靠它）
+ *     toggle?:  { checked?: bool },        // 父节点自动挂 ToggleContainer（页签互斥全靠它）。
+ *                                          Toggle 继承 Button ⇒ 跟 button 同节点时**共用一个组件**
  *     slider?:  { progress?: 0..1, direction?: 'horizontal'|'vertical', handle?: <子节点名> },
  *     layout?:  { type?: 'horizontal'|'vertical'|'grid', spacing?, padding?: [l,r,t,b],
  *                 resize?: 'none'|'container'|'children', cell?: [w,h] },
  *     scroll?:  { vertical?: bool, horizontal?: bool, inertia?: bool },  // 见下「⚠️ ScrollView」
  *     widget?:  { left?, right?, top?, bottom?, hCenter?: bool, vCenter?: bool },
- *     graphics?: true,                     // 画布：Graphics 组件（曲线 / 控制点由代码画）
+ *     graphics?: true,                     // 画布：Graphics 组件（曲线 / 控制点由代码画）。
+ *                                          ⚠️ **不能跟 sprite 同节点**（都派生自 Renderable2D，引擎当场抛）
  *     comp?: '<@ccclass 名>',   // 挂一个项目脚本组件（如 'LoginView'）
  *     children?: Node[],
  *   }
@@ -83,6 +86,13 @@ async function _pgBuild(desc, parent) {
     if (l.color) label.color = _pgColor(l.color);
     label.horizontalAlign = _pgHAlign[l.align ?? 'center'];
     label.verticalAlign = cc.Label.VerticalAlign.CENTER;
+    // ⚠️ 默认 `overflow = NONE` 是**文字反向撑节点**：写了 size 也会被文字尺寸顶掉，
+    //    于是 align 失效、外面那层 Layout 按错的宽度排版（且什么时候顶掉取决于 Label
+    //    什么时候刷新，同一份描述两次生成可能不一样）。写了 size 就锁成 CLAMP。
+    if (desc.size) {
+      label.overflow = cc.Label.Overflow.CLAMP;
+      ui.setContentSize(desc.size[0], desc.size[1]);
+    }
   }
 
   if (desc.sprite) {
@@ -173,23 +183,26 @@ async function _pgBuild(desc, parent) {
     widget.alignMode = cc.Widget.AlignMode.ALWAYS; // ONCE 只在第一帧算，父节点后来改尺寸就对不上了
   }
 
-  if (desc.button) {
-    const b = desc.button;
-    const btn = node.addComponent(cc.Button);
-    btn.transition = b.transition === 'none' ? cc.Button.Transition.NONE : cc.Button.Transition.COLOR;
-    btn.target = node; // 不指就是 null ⇒ 点了没有任何反馈，且不报错
-    if (b.normal) btn.normalColor = _pgColor(b.normal);
-    if (b.hover) btn.hoverColor = _pgColor(b.hover);
-    if (b.pressed) btn.pressedColor = _pgColor(b.pressed);
-    if (b.disabled) btn.disabledColor = _pgColor(b.disabled);
-  }
-
+  // ⚠️ toggle 必须排在 button 前面：`cc.Toggle` **继承自 `cc.Button`**，
+  //    同一个节点挂两个 Button 派生组件的话点一下两个都会响应（引擎不拦，编辑器里也看不出来）。
   if (desc.toggle) {
     const tg = node.addComponent(cc.Toggle);
     tg.isChecked = !!desc.toggle.checked;
     // 互斥归**父节点**的 ToggleContainer 管：谁都不挂的话两个页签能同时选中
     const box = parent.getComponent(cc.ToggleContainer) ?? parent.addComponent(cc.ToggleContainer);
     box.allowSwitchOff = false;
+  }
+
+  if (desc.button) {
+    const b = desc.button;
+    // 上面刚挂的 Toggle 本身就是个 Button，取到就配它，别再加一个
+    const btn = node.getComponent(cc.Button) ?? node.addComponent(cc.Button);
+    btn.transition = b.transition === 'none' ? cc.Button.Transition.NONE : cc.Button.Transition.COLOR;
+    btn.target = node; // 不指就是 null ⇒ 点了没有任何反馈，且不报错
+    if (b.normal) btn.normalColor = _pgColor(b.normal);
+    if (b.hover) btn.hoverColor = _pgColor(b.hover);
+    if (b.pressed) btn.pressedColor = _pgColor(b.pressed);
+    if (b.disabled) btn.disabledColor = _pgColor(b.disabled);
   }
 
   if (desc.slider) {

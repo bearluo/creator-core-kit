@@ -2,12 +2,12 @@
   "ver": "1.1.50",
   "importer": "prefab",
   "imported": true,
-  "uuid": "1fe19d59-0592-4dbb-b49f-e48f85e15e41",
+  "uuid": "c0b14d02-9a17-4156-9785-4f9432329002",
   "files": [
     ".json"
   ],
   "subMetas": {},
   "userData": {
-    "syncNodeName": "GroupItem"
+    "syncNodeName": "PathPage"
   }
 }
