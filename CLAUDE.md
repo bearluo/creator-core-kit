@@ -110,7 +110,7 @@ skins/vest/…           → `skin-vest-*`（示例马甲）      同名同路�
 - **prefab 首次创建用脚本生成**（描述数据 → 编辑器 `create-prefab` 消息从临时节点树产出；**别裸序列化 `Node`**——缺 `PrefabInfo`，运行时能 instantiate 但编辑器一打开就崩）；**改已有 prefab 走 MCP**，不要用脚本重新生成覆盖别人的编辑。
 - **线性历史**：rebase-before-merge，fast-forward 合并，禁 merge commit。
 - **分支开发一律用 git worktree，一分支一目录**（勿在同一目录反复 checkout 切分支）。
-- `.gitignore` 覆盖 `library/ temp/ build/ profiles/ native/` 等生成物；`.meta` 需提交。
+- `.gitignore` 覆盖 `library/ temp/ build/ profiles/` 等生成物；`.meta` 需提交。**`native/` 是源不是产物、必须入库**（Creator 只在目录不存在时拷一次模板，gradle 编的 `:app` 被指回那里，渠道 SDK 的 Java 侧就住在 `native/engine/android/app/src/<flavor>/`，见 [`ADR-0021`](docs/adr/0021-channel-sdk-via-gradle-product-flavors.md)）；规则**有两份**（根 `.gitignore` 与 `apps/demo/.gitignore`），改一处不生效。
 
 ---
 

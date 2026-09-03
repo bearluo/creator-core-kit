@@ -16,9 +16,17 @@ coverage/
 **/local/
 **/build/
 **/profiles/
-# 只忽略 Creator 生成的原生工程目录（工程根下的 native/），别误伤
-# apps/*/build-templates/native/（那是要入库的构建模板，见 hotupdate-service.md）
-/apps/*/native/
+# native/ 是**源**不是产物，必须入库：Creator 只在目录不存在时拷一次模板
+# （native-pack-tool 的 base/default.ts:357 判的是目录存在性，之后永不补文件），
+# gradle 真正编译的 :app 模块被 proj/settings.gradle 指回 native/engine/android/app，
+# 且 app/build.gradle 把 buildDir 与 CMake staging 都重定向到了 proj/build/ ——
+# 所以这里一个字节产物都不落。渠道 SDK 的 Java 侧就住在 app/src/<flavor>/（ADR-0021）。
+# 与 Creator 自带项目模板的 .gitignore 一致：只忽略构建时拷进去的资源。
+# ⚠️ 每个 Creator 工程自己也带一份 .gitignore（apps/demo/.gitignore），里面有同样的
+# 规则。这里是给还没配自己那份的工程兜底 —— 改的时候两处都要看，只改一处不生效。
+/apps/*/native/engine/android/**/*/assets
+# 该文件内容自己写着 "This file is ignored from git"（给本机改 NODE_EXECUTABLE 用）
+/apps/*/native/engine/common/localCfg.cmake
 
 # funplay-cocos MCP 编辑器扩展（第三方 dev 工具，装在 demo 工程内实测，不入库；
 # 源码在 spike/bundle-probe/extensions 或 npm i -g funplay-cocos-mcp）

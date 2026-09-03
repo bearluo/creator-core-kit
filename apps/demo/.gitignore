@@ -7,8 +7,11 @@ temp/
 local/
 build/
 profiles/
-# 加前导 / 锚到工程根：裸 `native` 会连 build-templates/native/ 一起吞掉
-/native/
+# native/ 入库（见根 .gitignore 的说明与 ADR-0021）。这里只忽略构建时拷进去的资源，
+# 与 Creator 自带项目模板的 .gitignore 一致。前导 / 锚到工程根：裸 `native`
+# 会连 build-templates/native/ 一起吞掉。
+/native/engine/android/**/*/assets
+/native/engine/common/localCfg.cmake
 #//////////////////////////
 # NPM
 #//////////////////////////
