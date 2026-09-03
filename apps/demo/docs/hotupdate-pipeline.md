@@ -396,7 +396,7 @@ native 的一切都围绕「怎么把文件下下来」；**web 一个文件都�
 | 产物 | 一 bundle 一份 manifest（每文件 md5+size） | **一张版本表** `cck-versions.json`（bundle → md5） |
 | 谁下载 | `AssetsManagerEx` 自己下 | 浏览器（换文件名即换版本） |
 | 基址 | dispatcher 下发 `cdn_url`，运行时注入 | **不需要** —— 版本表与 bundle 同源，跟着页面走 |
-| 部署 | **只叠加、绝不清空** + 归档 `releases/<version>/` | **只叠加、绝不清空** |
+| 部署 | **只叠加、绝不清空** + 归档 `releases/<version>/`；**引擎层不拷** | **只叠加、绝不清空**（引擎 JS 就是页面要跑的，照拷） |
 | 生效 | base 要重启；模块包免重启 | 免重启（下次 `load` 就是新的） |
 | bundle 版本 | 从**刚更新完的那份 manifest** 反推（`bundleVersionFromAssetKeys`） | 版本表 `cck-versions.json` |
 | 回滚 | `cck-manifest rollback`（换 manifest，不重传内容） | 换版本表（旧 md5 文件还在） |

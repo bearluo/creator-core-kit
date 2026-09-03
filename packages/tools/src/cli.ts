@@ -14,6 +14,7 @@
  *   拓扑门控:      cck-manifest check-graph --assets <工程 assets 目录> [--mermaid]
  *                  跨包 import 只许指向优先级更高的包（严格递增 ⇒ 不可能成环）；--mermaid 打印拓扑图
  *   web 版本表:    cck-manifest web-versions --root <web构建产物根> --version <v> [--core <dist>] [--min-app-version <v>] --out <path>
+ *   部署:          cck-manifest deploy --root <native产物根> --cdn <CDN根>   （只叠加，引擎层不拷）
  *   归档:          cck-manifest archive --cdn <CDN根> --version <v>        （落 releases/<v>/，出包流程自动调）
  *   回滚:          cck-manifest rollback --cdn <CDN根> --release <旧版本> --version <新版本号，必须更大>
  */
@@ -32,6 +33,7 @@ import {
 } from './bundle-deps';
 import {
   archiveManifests,
+  deployToCdn,
   rollbackManifests,
   verifyManifest,
   writeManifests,
@@ -91,6 +93,14 @@ function main(): void {
       engineHash: values.root === undefined ? undefined : readEngineHash(values.root),
     });
     console.log(`✅ 打戳 ${out}：version=${stamp.version} coreApiHash=${stamp.coreApiHash}${stamp.engineHash ? ` engineHash=${stamp.engineHash}` : ''}${stamp.minAppVersion ? ` minAppVersion=${stamp.minAppVersion}` : ''}`);
+    return;
+  }
+
+  if (sub === 'deploy') {
+    const root = values.root ?? die('deploy 需要 --root（native 构建产物根，含 src/ assets/）');
+    const cdn = values.cdn ?? die('deploy 需要 --cdn（CDN 根目录）');
+    const skipped = deployToCdn(root, cdn);
+    console.log(`✅ 同步 ${root} → ${cdn}（只叠加），引擎层跳过 ${skipped.length} 项：${skipped.join(' ') || '(无)'}`);
     return;
   }
 

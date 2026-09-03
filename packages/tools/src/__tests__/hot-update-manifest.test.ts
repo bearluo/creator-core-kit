@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   archiveManifests,
+  deployToCdn,
   buildManifest,
   buildSplitManifests,
   isEngineBound,
@@ -470,5 +471,56 @@ describe('archive + rollback（回滚 = 发一版号更大、内容是旧的）'
 
   it('没归档过的版本 → 直接抛，别让人以为回滚成功了', () => {
     expect(() => rollbackManifests({ cdnDir: cdn, release: '9.9.9', version: '2.0.0' })).toThrow();
+  });
+});
+
+describe('deployToCdn（同步到 CDN，引擎层不拷）', () => {
+  it('引擎层整棵跳过，其余照拷；已在 CDN 上的旧文件不清', () => {
+    const src = mkdtempSync(join(tmpdir(), 'cck-deploy-src-'));
+    const cdn = mkdtempSync(join(tmpdir(), 'cck-deploy-cdn-'));
+    mkdirSync(join(src, 'src', 'cocos-js'), { recursive: true });
+    mkdirSync(join(src, 'src', 'chunks'), { recursive: true });
+    mkdirSync(join(src, 'jsb-adapter'), { recursive: true });
+    mkdirSync(join(src, 'assets', 'shop'), { recursive: true });
+    writeFileSync(join(src, 'main.js'), 'launcher');
+    writeFileSync(join(src, 'application.abc12.js'), 'base entry');
+    writeFileSync(join(src, 'cck-update-compat.json'), '{}');
+    writeFileSync(join(src, 'project.manifest'), '{}');
+    writeFileSync(join(src, 'src', 'cocos-js', 'cc.25e81.js'), 'engine');
+    writeFileSync(join(src, 'src', 'effect.bin'), 'ubo');
+    writeFileSync(join(src, 'src', 'import-map.1d8b3.json'), '{}');
+    writeFileSync(join(src, 'src', 'system.bundle.590c7.js'), 'sys');
+    writeFileSync(join(src, 'src', 'chunks', 'bundle.beb47.js'), 'biz');
+    writeFileSync(join(src, 'src', 'cck-base.json'), '{}');
+    writeFileSync(join(src, 'jsb-adapter', 'web-adapter.js'), 'adapter');
+    writeFileSync(join(src, 'assets', 'shop', 'index.js'), 'shop');
+    // 上一版留在 CDN 上的字节（回滚要用），deploy 不许动它
+    writeFileSync(join(cdn, 'application.old99.js'), 'old base');
+
+    const skipped = deployToCdn(src, cdn).sort();
+
+    expect(skipped).toEqual([
+      'jsb-adapter',
+      'main.js',
+      'src/cocos-js',
+      'src/effect.bin',
+      'src/import-map.1d8b3.json',
+      'src/system.bundle.590c7.js',
+    ]);
+    const at = (...p: string[]) => existsSync(join(cdn, ...p));
+    expect(at('src', 'cocos-js')).toBe(false);
+    expect(at('jsb-adapter')).toBe(false);
+    expect(at('main.js')).toBe(false);
+    // 该拷的一个不少：base 入口、指针、业务 chunk、bundle，以及按固定名直取、不进资产表的更新戳
+    expect(at('application.abc12.js')).toBe(true);
+    expect(at('src', 'cck-base.json')).toBe(true);
+    expect(at('src', 'chunks', 'bundle.beb47.js')).toBe(true);
+    expect(at('assets', 'shop', 'index.js')).toBe(true);
+    expect(at('cck-update-compat.json')).toBe(true);
+    expect(at('project.manifest')).toBe(true);
+    expect(at('application.old99.js')).toBe(true);
+
+    rmSync(src, { recursive: true, force: true });
+    rmSync(cdn, { recursive: true, force: true });
   });
 });

@@ -5,7 +5,7 @@
  * 产物由 engine 半的 native.AssetsManager 后端消费（见 packages/core/docs/modules/hotupdate-service.md）。
  */
 import { createHash } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 
 /** manifest 里单个文件条目。 */
@@ -175,6 +175,7 @@ const ENGINE_BOUND: readonly RegExp[] = [
   /^src\/system\.bundle(\.[^/.]+)?\.js$/, // main.js 里 require 的字面量
   /^src\/polyfills(\.[^/.]+)?\.js$/, // 同上
   /^src\/import-map(\.[^/.]+)?\.json$/, // 同上 + 兼任引擎身份凭据（imports.cc）
+  /^main\.js$/, // 启动器自己：名字写死在 C++ BaseGame::init() 里，且跑在搜索路径还原之前
 ];
 
 /** 这个 asset key 是不是「与引擎绑死 / 名字写死」那一类。 */
@@ -346,6 +347,34 @@ export function writeSplitManifests(opts: SplitManifestOptions & { outDir?: stri
 /** CDN 根下某一版 manifest 的归档目录。 */
 function releaseDir(cdnDir: string, version: string): string {
   return join(cdnDir, 'releases', version);
+}
+
+/**
+ * 把 native 构建产物同步到 CDN 目录 —— **{@link isEngineBound} 那几类一个都不拷**，返回被跳过的路径。
+ *
+ * 它们没进任何 manifest，客户端因此永远不会去 CDN 取；Creator 每次重出产物又原样把它们摆在
+ * data/ 根上，无脑整目录拷过去就是每次发布往 CDN 上叠一份没人读的死重量（`src/cocos-js/` 一家
+ * 就近 4MB）。跳过它们**不影响任何一层的更新能力**：引擎层本来就只随 APK 走。
+ *
+ * 用**排除表**而不是「按 manifest 白名单拷」：CDN 上有按固定名直取、不进资产表的文件
+ * （`cck-update-compat.json` 就是），白名单会把这类新文件静默漏掉，而漏了是发布事故。
+ *
+ * 只叠加、不清空——历史版本的字节留在 CDN 上是「回滚只换 manifest」成立的前提。
+ */
+export function deployToCdn(root: string, cdnDir: string): string[] {
+  const skipped: string[] = [];
+  cpSync(root, cdnDir, {
+    recursive: true,
+    filter: (src) => {
+      const rel = relative(root, src).split(sep).join('/');
+      if (rel === '') return true;
+      // 目录补一个尾斜杠才对得上 `/^src/cocos-js//` 这类前缀式规则（整棵子树一次跳过）。
+      if (!isEngineBound(statSync(src).isDirectory() ? `${rel}/` : rel)) return true;
+      skipped.push(rel);
+      return false;
+    },
+  });
+  return skipped;
 }
 
 /** CDN 根（或归档目录）下的所有 manifest 文件名，含 `*.version.manifest`。 */

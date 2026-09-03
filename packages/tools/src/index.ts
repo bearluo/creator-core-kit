@@ -11,6 +11,7 @@ export {
   writeManifests,
   writeSplitManifests,
   verifyManifest,
+  deployToCdn,
 } from './hot-update-manifest';
 export type {
   AssetEntry,

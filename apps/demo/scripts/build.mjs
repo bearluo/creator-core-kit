@@ -260,12 +260,22 @@ if (flag('manifest')) {
       throw new Error(`${why}里找不到 'cck.baseTry'（${f}）—— base 看门狗的握手会静默失效`);
   }
 
+  // 同步到 CDN 走 CLI 的 deploy：**引擎层不拷**（cocos-js / effect.bin / jsb-adapter /
+  // system.bundle / polyfills / import-map / main.js）。它们没进任何 manifest、客户端永远不会去
+  // CDN 取，整目录拷过去只是每次发布叠一份没人读的死重量。排除规则和 `--md5` 丢的那几类共用
+  // `isEngineBound`，别在这儿再抄一份正则。
+  const deploy = () => {
+    const r = spawnSync(process.execPath, [CLI, 'deploy', '--root', DATA, '--cdn', cdnDir], { encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`同步 CDN 失败：${r.stderr || r.stdout}`);
+    process.stdout.write(r.stdout);
+  };
+
   if (cdnDir) {
     if (cfg.md5Cache) {
       // ⚠️ 内容寻址下**只叠加、绝不清空**（与 web 同理）：文件名带 md5，新旧天然共存，历史各版本的
       // 字节留在 CDN 上正是「回滚只换 manifest、不重传内容」成立的前提。清空等于把回滚路堵死，
       // 还会把正在更新中的老客户端要的文件抽走。清历史版本是另一件事（按时间保留 N 版）。
-      cpSync(DATA, cdnDir, { recursive: true });
+      deploy();
       const r = spawnSync(process.execPath, [CLI, 'archive', '--cdn', cdnDir, '--version', version], { encoding: 'utf8' });
       if (r.status !== 0) throw new Error(`manifest 归档失败：${r.stderr || r.stdout}`);
       console.log(`✓ manifest 就位，叠加到 ${cdnDir}，并归档 releases/${version}/`);
@@ -273,7 +283,7 @@ if (flag('manifest')) {
     } else {
       // 不开 md5：同名不同内容，历史版本留着只会让 CDN 上混着对不上任何 manifest 的孤儿文件。
       rmSync(cdnDir, { recursive: true, force: true });
-      cpSync(DATA, cdnDir, { recursive: true });
+      deploy();
       console.log(`✓ manifest 就位，并同步到 ${cdnDir}`);
     }
   } else {

@@ -76,6 +76,8 @@ export function buildSplitManifests(opts: SplitManifestOptions): SplitManifests;
 export function writeSplitManifests(opts: SplitManifestOptions & { outDir?: string }): SplitWriteResult;
 
 // —— 叠加式发布的两件配套（内容寻址下新旧文件天然共存）——
+/** 产物 → CDN，**`isEngineBound` 那几类不拷**（含 `main.js`）。只叠加不清空，返回被跳过的路径。 */
+export function deployToCdn(root: string, cdnDir: string): string[];
 /** 把 CDN 根上当前这套 manifest 归档进 `<cdnDir>/releases/<version>/`，返回归档的文件名。 */
 export function archiveManifests(cdnDir: string, version: string): string[];
 /** 回滚：把 `releases/<release>/` 那版配上更大的 `version` 发回 CDN 根。内容文件不重传。 */
@@ -140,7 +142,9 @@ demo 实测：47 条全表 → base 22 条（`src/` 6 + `jsb-adapter/` 2 + `asse
    - **与 `.so` 绑死**：`src/cocos-js/**`、`src/effect.bin`、`jsb-adapter/**`。它们与 `libcocos.so` 里的 C++ 同属一次引擎构建，换引擎或改模块勾选时两边一起变、`.so` 必须重编——单独下发新 JS 配旧 `.so` 就是崩在绑定层，而它想修的东西本来也只能随包发。`cc.<md5>.js` 一个就好几 MB，下了还无人问津。
    - **名字被 `main.js` 写死**：`src/system.bundle.*.js`、`src/polyfills.*.js`、`src/import-map*.json`。`main.js` 里 `require` 的是字面量旧 md5 名，新文件下下来没人念。`import-map` 还兼任引擎身份凭据（`imports.cc` → `engineHash()`），能热更就等于版本闸可伪造，**故意不解**。
 
-   `main.js` 自己两类都不占——它跑在搜索路径还原**之前**（还原本身就是它干的），天然不在 `dirs` 里，也**永远不许**出现在 `files` 里。模块 bundle 不受影响：它们的 `index.<md5>.js` 由客户端显式传 version 加载（版本从这张 manifest 自己反推，见 core 的 `bundleVersionFromAssetKeys` 与 [[adr-0016]]）。
+   `main.js` 自己是第三类——它跑在搜索路径还原**之前**（还原本身就是它干的），名字写死在 C++ `BaseGame::init()` 里。它天然不在 `dirs` 里，但仍列进 `ENGINE_BOUND`：把「**永远不许**出现在 `files` 里」这条从注释变成代码。模块 bundle 不受影响：它们的 `index.<md5>.js` 由客户端显式传 version 加载（版本从这张 manifest 自己反推，见 core 的 `bundleVersionFromAssetKeys` 与 [[adr-0016]]）。
+
+-1.6 `deployToCdn`（CLI `deploy`）：`ENGINE_BOUND` **一表两用**——① `--md5` 时把这几类挡在 base manifest 外（不下发），② 同步到 CDN 时把它们挡在 `cpSync` 外（不上传）。同一条判据「客户端永远不会去 CDN 取它」，所以传上去只是每次发布往 CDN 上叠一份没人读的死重量（`src/cocos-js/` 一家近 4MB）。用**排除表**而不是「按 manifest 白名单拷」：CDN 上有按固定名直取、不进任何资产表的文件（`cck-update-compat.json`），白名单会把这类新文件静默漏掉，而漏了是发布事故。web 侧**不适用**——那边的产物目录就是站点根，引擎 JS 正是浏览器要跑的。
 
 -1.5 `archiveManifests` / `rollbackManifests`：内容寻址下发布改成**只叠加、绝不清空**，历史各版本的字节都留在 CDN 上，于是「回滚」退化成「把旧那版的 manifest 重新发一遍」。两条硬约束：**① 号只能更大**——引擎默认 `cmpVersion` 把「远端号更小」判成本地已最新、**静默跳过**；而改掉比较规则是陷阱（同一个 `setVersionCompareHandle` 还服务 `loadLocalManifest` 的 `versionGreater`，改了会让新装的 APK 被旧缓存盖住）。**② 只能动内容真变了的包**——归档目录里躺着全部 manifest，给没变的也涨号 = 客户端判 NEW_VERSION 而 `genDiff` 空表 → worker 线程 SIGSEGV（真机崩过）。所以逐份与**当前在发的那版**比资产表，一致就原样不动；`*.version.manifest` 没有资产表，跟随它对应的主 manifest 的决定。这与 `--prev` 是同一条不变式：**「版本号变了」必须蕴含「内容真变了」**。
 
