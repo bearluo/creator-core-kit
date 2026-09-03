@@ -46,7 +46,7 @@ dependencies {
 }
 ```
 
-**JS 侧一行分支都不写**：调用点固定为 `callNative('com/cck/channel/CckChannel', 'login', …)`，哪个实现进包由 flavor 决定。Java 侧也没有 `if`。
+**JS 侧一行分支都不写**：调用点固定为 `native.reflection.callStaticMethod('com/cck/channel/CckChannel', 'signIn', …)`，哪个实现进包由 flavor 决定。Java 侧也没有 `if`。
 
 出包：`gradlew assemble<Channel><Debug|Release>`。
 

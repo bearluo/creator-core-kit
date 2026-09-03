@@ -436,9 +436,12 @@ jbw.addScriptEventListener("signIn", arg -> jbw.dispatchEventToScript("signInRes
 
 - **只吃 `string`**（两个参数：一个事件名 + 一个负载）；复杂数据自己 JSON 序列化。
 - 官方对 `JsbBridgeWrapper` 的原话是「**不具备多线程稳定性，也不是 100% 安全**」，复杂场景建议自己实现事件机制。
-- **待实测**：`JsbBridge.sendToScript` 内部是否已经帮你切到游戏线程（`nativeSendToScript` 是 native 方法，
-  C++ 侧是否 post 到游戏线程本次没查）。**在确认之前，从非游戏线程调 `sendToScript` 也一律用
-  `CocosHelper.runOnGameThread` 包一层**——包了没坏处。
+- ~~**待实测**：`JsbBridge.sendToScript` 内部是否已经帮你切到游戏线程~~
+  → **已查实（2026-09-03，hlgit #35）：切了**。`native/cocos/bindings/manual/JavaScriptJavaBridge.cpp:211` 的
+  `Java_com_cocos_lib_JsbBridge_nativeSendToScript` 把 JS 调用整个包进了
+  `CC_CURRENT_ENGINE()->getScheduler()->performFunctionInCocosThread([=]{ … })`。
+  所以 **`sendToScript` 可以从任意线程调，不要再套 `CocosHelper.runOnGameThread`**。
+  上面 6.2 关于 `evalString` 的结论不受影响——那是另一个 API，它确实要自己切。
 
 ### 6.4 给 Google Sign-In 的选型建议
 
