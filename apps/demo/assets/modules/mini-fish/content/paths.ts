@@ -164,18 +164,96 @@ function split(path: FishPath, s: number): { k: number; t: number } {
   return { k, t: g - k };
 }
 
-/** 路径上「已走弧长比例 `s`」处的点。⚠️ `s` 不是贝塞尔参数，见文件头。 */
-export function pointAt(path: FishPath, s: number): { x: number; y: number } {
-  const { k, t } = split(path, s);
-  return { x: bez(path.p, k, t, 0), y: bez(path.p, k, t, 1) };
-}
-
-/** 路径上 `s` 处的**朝向**（弧度，+x 为 0）。⚠️ `s` 不是贝塞尔参数，见文件头。 */
-export function angleAt(path: FishPath, s: number): number {
+/**
+ * 路径上 `s` 处、**离中线 `offset` 像素**的位姿（`offset` 正 = 前进方向的左手边）。
+ * ⚠️ `s` 不是贝塞尔参数，见文件头。
+ *
+ * 侧向偏移是**队形的一半实现**：一群鱼共用一条路径，靠它岔开成两列 / 楔形 / 一簇；
+ * 另一半是进场延迟 —— 队形的纵深（沿路径那一维）在 `waveFeeder` 里换算成秒数，
+ * 因为路径起点之前没有路可站。
+ *
+ * `angle` **不带偏移** —— 整群朝向都取中线的切线：偏在旁边那条鱼不该斜着游，
+ * 它跟领队是平行的。
+ *
+ * 一次定位同时给点和朝向：{@link pointAt} / {@link angleAt} 都走它，全表只有一份求值代码，
+ * 鱼是每帧每条都要算的，少一次二分查表不亏。
+ */
+export function poseAt(path: FishPath, s: number, offset = 0): { x: number; y: number; angle: number } {
   const { k, t } = split(path, s);
   const dx = dbez(path.p, k, t, 0);
   const dy = dbez(path.p, k, t, 1);
   // 手柄压在锚点上时导数退化为 0。`MIN_HANDLE` + `content.test.ts` 那道闸让它不该出现，
   // 但真出现时别静默变成 NaN —— 朝右总比 NaN 强。
-  return dx === 0 && dy === 0 ? 0 : Math.atan2(dy, dx);
+  const angle = dx === 0 && dy === 0 ? 0 : Math.atan2(dy, dx);
+  return {
+    // 法线 = 切线转 +90°（世界 y 向上 ⇒ 正的 offset 在左手边）
+    x: bez(path.p, k, t, 0) - Math.sin(angle) * offset,
+    y: bez(path.p, k, t, 1) + Math.cos(angle) * offset,
+    angle,
+  };
+}
+
+/**
+ * `s` 越出 `[0,1]` 时**沿端点切线外推**，不夹紧。给 {@link bodyPoseAt} 用：鱼刚进场时尾尖
+ * 还在路径起点之外，夹紧会把尾巴按在起点上 ⇒ 鱼一进场先被压扁再"长"出来。
+ */
+function edgePoseAt(
+  path: FishPath,
+  s: number,
+  offset: number,
+): { x: number; y: number; angle: number } {
+  if (s >= 0 && s <= 1) return poseAt(path, s, offset);
+  const end = s < 0 ? 0 : 1;
+  const q = poseAt(path, end, offset);
+  const d = (s - end) * path.length;
+  return { x: q.x + Math.cos(q.angle) * d, y: q.y + Math.sin(q.angle) * d, angle: q.angle };
+}
+
+/**
+ * 一条**长 `body` 像素的鱼**摆在路径上的位姿：鼻尖压在 `s + 半身`、尾尖压在 `s − 半身`，
+ * 位置取两端中点、朝向取**两端连线**（不是中点处的切线）。
+ *
+ * ## 为什么不直接用切线
+ *
+ * 用切线等于把整条鱼钉在一个点上原地转：路径一弯，500 像素长的鲨鱼就绕着**自己肚子**旋，
+ * 尾巴往前甩、头往后扫 —— 转弯看着僵硬的根就在这儿，跟帧动画没关系。真鱼转弯是头先走、
+ * 身子跟上，**位置和朝向分别由身体两端决定**。
+ *
+ * 把鱼当一根两端都压在路径上的棍子，这件事就自动成立了，而且不用存任何状态：
+ *
+ * - 转弯速率**按体长自动低通**。弯道比身子短，大鱼就跨过去、不理会；小鱼身子短，
+ *   跟得贴。于是"大鱼转得稳、小鱼灵活"是几何给的，不是又一列参数。
+ * - 位置被拉向弯道内侧（矢高 ≈ `体长² / 8R`），这是对的 —— 一根刚性的棍子过弯，
+ *   中点本来就不可能还在弧上。
+ * - 仍是 `s` 的纯函数：编辑器拖走带、将来跟服务端逐行对照，都还成立。
+ *
+ * 侧向偏移 `offset` 两端各按各的法线加 —— 同心弧上的两点转过同样的角度，连线方向跟中线
+ * 那条一致，所以"偏在旁边那条鱼跟领队平行"这条规矩没被破坏。
+ */
+export function bodyPoseAt(
+  path: FishPath,
+  s: number,
+  offset: number,
+  body: number,
+): { x: number; y: number; angle: number } {
+  if (body <= 0) return poseAt(path, s, offset);
+  const half = body / (2 * path.length);
+  const a = edgePoseAt(path, s - half, offset);
+  const b = edgePoseAt(path, s + half, offset);
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  // 身子长到把整条路绕回原处时两端会重合（现有路径不会，但别静默变 NaN）
+  if (dx === 0 && dy === 0) return poseAt(path, s, offset);
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, angle: Math.atan2(dy, dx) };
+}
+
+/** 路径上「已走弧长比例 `s`」处的点。⚠️ `s` 不是贝塞尔参数，见文件头。 */
+export function pointAt(path: FishPath, s: number): { x: number; y: number } {
+  const q = poseAt(path, s);
+  return { x: q.x, y: q.y };
+}
+
+/** 路径上 `s` 处的**朝向**（弧度，+x 为 0）。⚠️ `s` 不是贝塞尔参数，见文件头。 */
+export function angleAt(path: FishPath, s: number): number {
+  return poseAt(path, s).angle;
 }

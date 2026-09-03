@@ -7,10 +7,15 @@
  *
  * `progress` 到 1 就停在终点不再前进，由 `despawnSystem` 收走 —— 「走完了」与「被销毁」分开，
  * 于是同一帧里后面的 system 看到的还是一个位置合法的实体。
+ *
+ * 写出来的是**槽位**（中线 + `PathFollow.offset` 的侧向偏移），不是最终位置：后面那步
+ * `schoolSystem` 会在它上面叠一层漫游位移。分两步是有意的 —— 槽位每帧从路径重算，
+ * 「偏离槽位多远」才是需要连续演化的状态。
  */
 import { defineQuery, Position, type EcsSystem } from '@cck/ecs-bitecs';
 import { Angle, Fish, PathFollow } from './components';
-import { angleAt, fishPath, pointAt } from '../content/paths';
+import { bodyPoseAt, fishPath } from '../content/paths';
+import { fishKind } from '../content/fish-kinds';
 
 const swimmers = defineQuery([Fish, PathFollow, Position, Angle]);
 
@@ -22,10 +27,10 @@ export const pathSystem: EcsSystem = (world) => {
     const path = fishPath(PathFollow.pathId[e]);
     const s = Math.min(1, PathFollow.progress[e] + (PathFollow.speed[e] * dt) / path.length);
     PathFollow.progress[e] = s;
-    const p = pointAt(path, s);
+    const p = bodyPoseAt(path, s, PathFollow.offset[e], fishKind(Fish.kind[e]).body);
     Position.x[e] = p.x;
     Position.y[e] = p.y;
-    Angle.v[e] = angleAt(path, s);
+    Angle.v[e] = p.angle;
   }
   return world;
 };

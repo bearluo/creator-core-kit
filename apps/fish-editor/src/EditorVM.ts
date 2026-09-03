@@ -15,6 +15,7 @@
  */
 import { signal, type Signal } from '@cck/core';
 import type { FishContent, FishGroup } from '@game/content/content-types';
+import { FISH_KINDS } from '@game/content/fish-kinds';
 import { MIN_HANDLE, segmentCount } from '@game/content/paths';
 
 /** 草稿态的一条路径。跟 {@link FishContent} 的区别只有一个：可变。 */
@@ -23,14 +24,73 @@ export interface DraftPath {
   p: number[];
 }
 
-/** 草稿态的一个 group。`gap` 在这里**一定有值**（载入时补 0），View 不必到处 `?? 0`。 */
+/** 草稿态的一群鱼。跟 {@link FishGroup} 的区别只有一个：可变。 */
 export interface DraftGroup {
   at: number;
   path: string;
   kind: string;
-  count: number;
-  gap: number;
   speed: number;
+  /** 队形槽位 `[dx0, dy0, …]`，至少一条鱼。含义见 {@link FishGroup.formation}。 */
+  formation: number[];
+}
+
+/**
+ * 队形模板 —— 「一键摆成这样」。**一个字节都不进数据**：存下来的永远是每条鱼的槽位。
+ *
+ * 存模板（形状 + 条数 + 间距）会省一半字节，但那样就没法单独拖一条鱼了 —— 而「这一条往外挪
+ * 一点」正是编队形的人真正在做的事。模板只是起手，不是格式。
+ */
+export type FormationShape = 'line' | 'row' | 'wedge' | 'cluster';
+
+export const FORMATION_SHAPES: readonly { readonly id: FormationShape; readonly name: string }[] = [
+  { id: 'line', name: '一列' },
+  { id: 'row', name: '横排' },
+  { id: 'wedge', name: '雁阵' },
+  { id: 'cluster', name: '一簇' },
+];
+
+/** 黄金角。撒点用它，任意条数都不会撞成放射状的行列。 */
+const GOLDEN = 2.39996;
+
+/**
+ * 取整，且**把 `-0` 变回 `0`**。`Math.round(-0)` 还是 `-0`，而它 `join(', ')` 出来就是
+ * 字面量 `-0` —— 导出的 `content.ts` 里冒出个 `-0` 谁看谁疑惑，往返闸也对不上。
+ */
+const r0 = (v: number): number => Math.round(v) || 0;
+
+/**
+ * 按模板摆 `n` 条鱼，间距 `spacing` 像素。局部坐标（`dx` 沿路径、负 = 靠后；`dy` 垂直）。
+ *
+ * 四种覆盖到的观感：鱼贯而入、并肩推进、雁阵、一团。**都保证任意两条不近于 `spacing`** ——
+ * 内容闸要求同群槽位不重叠（`content.test.ts`），模板生的东西不该一出来就是红的。
+ */
+export function formationOf(shape: FormationShape, n: number, spacing: number): number[] {
+  const count = Math.max(1, Math.round(n));
+  const sp = Math.max(1, spacing);
+  const out: number[] = [];
+  for (let i = 0; i < count; i++) {
+    if (shape === 'row') {
+      out.push(0, r0((i - (count - 1) / 2) * sp));
+    } else if (shape === 'wedge') {
+      // 领队在尖上，两侧交替往后排。最后一条落单是真雁阵的样子，不强行对称
+      const k = Math.ceil(i / 2);
+      out.push(r0(-k * sp * 0.8), i === 0 ? 0 : (i % 2 === 1 ? 1 : -1) * k * sp);
+    } else if (shape === 'cluster') {
+      const r = sp * Math.sqrt(i);
+      out.push(r0(r * Math.cos(i * GOLDEN)), r0(r * Math.sin(i * GOLDEN)));
+    } else {
+      out.push(r0(-i * sp), 0);
+    }
+  }
+  return out;
+}
+
+/**
+ * 这种鱼的槽位最近能挨多近 = **判定半径和**，跟 `schoolSystem` 的分离半径、`content.test.ts`
+ * 那道闸是同一个数。比这更近，弹簧和分离力会打起来，一群鱼在原地哆嗦。
+ */
+export function minSpacing(kind: string): number {
+  return 2 * (FISH_KINDS.find((k) => k.id === kind)?.r ?? 20);
 }
 
 export interface DraftWave {
@@ -108,9 +168,8 @@ function toDraft(content: FishContent): Draft {
         at: g.at,
         path: g.path,
         kind: g.kind,
-        count: g.count,
-        gap: g.gap ?? 0,
         speed: g.speed,
+        formation: g.formation.slice(),
       })),
     })),
   };
@@ -136,6 +195,20 @@ export class EditorVM {
   }
 
   private segment = 0;
+
+  /**
+   * 画布上**正在摆队形**的是第几群。读出来一定合法 —— 换个阵、删掉一群之后这个下标会越界，
+   * 夹在读的这一刻，谁改鱼阵都不用记得同步（同 {@link selectedSegment}）。
+   */
+  get selectedGroup(): number {
+    const n = this.draft.waves[this.selectedWave]?.groups.length ?? 0;
+    return Math.min(this.groupCursor, Math.max(0, n - 1));
+  }
+  set selectedGroup(v: number) {
+    this.groupCursor = Math.max(0, v);
+  }
+
+  private groupCursor = 0;
 
   private readonly source: FishContent;
   private readonly storage?: EditorStorage;
@@ -377,6 +450,138 @@ export class EditorVM {
     this.bump();
   }
 
+  // —— 队形 ————————————————————————————————————————————————————————
+
+  /** 这一群有几条鱼。**是算出来的**（槽位数），不是另存一份会漂的 count。 */
+  groupSize(index: number): number {
+    return (this.group(index)?.formation.length ?? 0) / 2;
+  }
+
+  /**
+   * 加 / 减到 `n` 条。
+   *
+   * 加是**照着最后两条的间距往后接**（同 {@link addSegment} 的路数：接出去的那条天然接得上，
+   * 一列继续成列、一簇继续散开），减是从队尾拿掉 —— 队尾是最靠后那条，删它最不打眼。
+   * 至少留一条：零条鱼的群等于这一群不存在，那是「删掉这群」的活。
+   */
+  setGroupSize(index: number, n: number): void {
+    const g = this.group(index);
+    if (!g) return;
+    const target = Math.max(1, Math.min(60, Math.round(n)));
+    const f = g.formation;
+    const min = minSpacing(g.kind);
+    while (f.length / 2 > target) f.length -= 2;
+    while (f.length / 2 < target) {
+      const k = f.length / 2;
+      // 只有一条时没有「趋势」可续，就往正后方接
+      let x = k === 1 ? f[0] - min - 6 : 2 * f[(k - 1) * 2] - f[(k - 2) * 2];
+      let y = k === 1 ? f[1] : 2 * f[(k - 1) * 2 + 1] - f[(k - 2) * 2 + 1];
+      [x, y] = this.pushOut(f, -1, x, y, min);
+      f.push(x, y);
+    }
+    this.bump();
+  }
+
+  /** 按模板整群重排。间距不许小于判定半径和 —— 那样摆出来的队形一出生就在自己跟自己打架。 */
+  reshapeGroup(index: number, shape: FormationShape, spacing: number): void {
+    const g = this.group(index);
+    if (!g) return;
+    const n = g.formation.length / 2;
+    g.formation = formationOf(shape, n, Math.max(minSpacing(g.kind), Math.round(spacing)));
+    this.bump();
+  }
+
+  /**
+   * 队形的锚点：路径**起点**的位置与切线（队形就是绕着它摆的）。
+   *
+   * 故意不走 `makeFishPath` —— 那会为每次命中判定建一张 128 采样的弧长表，而起点的位置和
+   * 切线直接读控制点就有：点是 P0，导数是 `3(P1−P0)`（取角度时那个系数无所谓）。
+   */
+  groupPose(index: number): { x: number; y: number; angle: number } | null {
+    const g = this.group(index);
+    const p = g && this.draft.paths.find((it) => it.id === g.path)?.p;
+    if (!p) return null;
+    return { x: p[0], y: p[1], angle: Math.atan2(p[3] - p[1], p[2] - p[0]) };
+  }
+
+  /** 第 `slot` 条鱼在**世界**里的位置（局部槽位绕锚点转到路径方向上）。 */
+  slotWorld(index: number, slot: number): { x: number; y: number } | null {
+    const g = this.group(index);
+    const pose = this.groupPose(index);
+    if (!g || !pose || slot < 0 || slot * 2 + 1 >= g.formation.length) return null;
+    const c = Math.cos(pose.angle);
+    const s = Math.sin(pose.angle);
+    const dx = g.formation[slot * 2];
+    const dy = g.formation[slot * 2 + 1];
+    return { x: pose.x + dx * c - dy * s, y: pose.y + dx * s + dy * c };
+  }
+
+  /** 离 `(x, y)` 最近的那条鱼，超出 `tol` 返回 `null`。世界坐标进世界坐标出，同 {@link hitTest}。 */
+  hitTestSlot(index: number, x: number, y: number, tol: number): number | null {
+    let best = -1;
+    let bestD = tol;
+    for (let i = 0; i < this.groupSize(index); i++) {
+      const w = this.slotWorld(index, i);
+      if (!w) continue;
+      const d = Math.hypot(x - w.x, y - w.y);
+      if (d <= bestD) {
+        best = i;
+        bestD = d;
+      }
+    }
+    return best < 0 ? null : best;
+  }
+
+  /**
+   * 把第 `slot` 条鱼拖到世界坐标 `(x, y)`：转回局部再写。
+   *
+   * **落点会被推开到不跟别的鱼重叠**（判据同 `schoolSystem` 的分离半径）。挡在这儿而不是
+   * 事后报错，是因为重叠的槽位不会报任何错，只会让那一群在原地哆嗦 —— 跟 {@link MIN_HANDLE}
+   * 那条一个道理：能在源头夹住的，别留给人去发现。
+   */
+  dragSlot(index: number, slot: number, x: number, y: number): void {
+    const g = this.group(index);
+    const pose = this.groupPose(index);
+    if (!g || !pose || slot < 0 || slot * 2 + 1 >= g.formation.length) return;
+    const c = Math.cos(pose.angle);
+    const s = Math.sin(pose.angle);
+    const vx = x - pose.x;
+    const vy = y - pose.y;
+    const [dx, dy] = this.pushOut(
+      g.formation,
+      slot,
+      vx * c + vy * s,
+      -vx * s + vy * c,
+      minSpacing(g.kind),
+    );
+    g.formation[slot * 2] = dx;
+    g.formation[slot * 2 + 1] = dy;
+    this.bump();
+  }
+
+  /**
+   * 槽位挨得比判定半径和还近的群。空数组 = 这份内容摆得开。
+   *
+   * 拖拽和模板都会夹紧，所以正常编不出来 —— 这条留给**另一条进来的路**：旧格式的草稿、
+   * 人手改过的 `content.ts`、合并冲突解错。让编的人在导出**之前**看见，比 CI 红了再回来强。
+   */
+  crowded(): { wave: number; group: number; a: number; b: number; gap: number }[] {
+    const out: { wave: number; group: number; a: number; b: number; gap: number }[] = [];
+    this.draft.waves.forEach((w, wave) => {
+      w.groups.forEach((g, group) => {
+        const min = minSpacing(g.kind);
+        const f = g.formation;
+        for (let i = 0; i < f.length / 2; i++) {
+          for (let j = i + 1; j < f.length / 2; j++) {
+            const d = Math.hypot(f[i * 2] - f[j * 2], f[i * 2 + 1] - f[j * 2 + 1]);
+            if (d < min) out.push({ wave, group, a: i, b: j, gap: Math.round(d) });
+          }
+        }
+      });
+    });
+    return out;
+  }
+
   // —— 导出 ————————————————————————————————————————————————————————
 
   /** 当前草稿的纯数据投影。**不动 `rev`** —— 预览用它，预览不是发布。 */
@@ -386,7 +591,15 @@ export class EditorVM {
       paths: this.draft.paths.map((it) => ({ id: it.id, p: it.p.slice() })),
       waves: this.draft.waves.map((w) => ({
         id: w.id,
-        groups: w.groups.map((g) => this.trimGroup(g)),
+        groups: w.groups.map(
+          (g): FishGroup => ({
+            at: g.at,
+            path: g.path,
+            kind: g.kind,
+            speed: g.speed,
+            formation: g.formation.slice(),
+          }),
+        ),
       })),
     };
   }
@@ -400,11 +613,11 @@ export class EditorVM {
     this.draft.rev += 1;
     this.bump();
     const q = (v: string): string => `'${v}'`;
-    const group = (g: DraftGroup): string => {
-      const t = this.trimGroup(g);
-      const gap = t.gap === undefined ? '' : `, gap: ${t.gap}`;
-      return `{ at: ${t.at}, path: ${q(t.path)}, kind: ${q(t.kind)}, count: ${t.count}${gap}, speed: ${t.speed} }`;
-    };
+    // 一群一行。队形长了这行会很长（八条鱼 = 16 个数），但它是**一张表**：
+    // 折行反而让「这一群」在 diff 里散成好几处
+    const group = (g: DraftGroup): string =>
+      `{ at: ${g.at}, path: ${q(g.path)}, kind: ${q(g.kind)}, speed: ${g.speed}, ` +
+      `formation: [${g.formation.join(', ')}] }`;
     const lines: string[] = [];
     lines.push('/**');
     lines.push(' * 捕鱼的内容数据：路径几何 + 鱼阵编排。');
@@ -480,13 +693,55 @@ export class EditorVM {
 
   private newGroup(): DraftGroup {
     const path = this.draft.paths[this.selectedPath]?.id ?? this.draft.paths[0]?.id ?? '';
-    return { at: 0, path, kind: 'fish_yellow', count: 4, gap: 0.3, speed: 120 };
+    const kind = 'fish_yellow';
+    return { at: 0, path, kind, speed: 120, formation: formationOf('line', 4, minSpacing(kind) + 20) };
   }
 
-  /** `gap` 为 0 就不写进数据 —— 默认值不该占一行 diff。 */
-  private trimGroup(g: DraftGroup): FishGroup {
-    const base = { at: g.at, path: g.path, kind: g.kind, count: g.count, speed: g.speed };
-    return g.gap === 0 ? base : { ...base, gap: g.gap };
+  private group(index: number): DraftGroup | undefined {
+    return this.draft.waves[this.selectedWave]?.groups[index];
+  }
+
+  /**
+   * 把 `(x, y)` 推到「离表里每一条都不近于 `min`」的地方，返回取整后的落点。
+   *
+   * 逐轮找**最挤的**那条、沿两点连线推出去，最多八轮 —— 推开一条可能挤到另一条，但每轮都
+   * 严格离开当前最近的那个，实际队形（几十条、间距同量级）一两轮就收敛。真推不开就维持
+   * 当前落点，交给 {@link crowded} 去报，不硬塞。`self` 传 -1 表示这是条新鱼、还不在表里。
+   */
+  private pushOut(
+    f: readonly number[],
+    self: number,
+    x: number,
+    y: number,
+    min: number,
+  ): [number, number] {
+    let px = x;
+    let py = y;
+    for (let pass = 0; pass < 8; pass++) {
+      let worst = -1;
+      let worstD = min;
+      for (let i = 0; i < f.length / 2; i++) {
+        if (i === self) continue;
+        const d = Math.hypot(px - f[i * 2], py - f[i * 2 + 1]);
+        if (d < worstD) {
+          worst = i;
+          worstD = d;
+        }
+      }
+      if (worst < 0) break;
+      let vx = px - f[worst * 2];
+      let vy = py - f[worst * 2 + 1];
+      let d = Math.hypot(vx, vy);
+      if (d < 1e-6) {
+        // 正好压在别人身上 ⇒ 方向没定义。往正后方退，那是队形里最不打眼的空位
+        vx = -1;
+        vy = 0;
+        d = 1;
+      }
+      px = f[worst * 2] + (vx / d) * min;
+      py = f[worst * 2 + 1] + (vy / d) * min;
+    }
+    return [r0(px), r0(py)];
   }
 
   private readDraft(): StoredDraft | null {

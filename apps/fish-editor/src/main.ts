@@ -23,7 +23,15 @@ import { waveFeeder } from '@game/seams/feeder';
 import atlasPng from '@game/art/textures.png';
 import atlasPlist from '@game/art/textures.plist?raw';
 import { drawFrame, loadAtlas, type Atlas } from './atlas';
-import { EditorVM, type DraftGroup, type EditorStorage } from './EditorVM';
+import {
+  EditorVM,
+  FORMATION_SHAPES,
+  minSpacing,
+  type DraftGroup,
+  type EditorStorage,
+  type FormationShape,
+} from './EditorVM';
+import { fuzzyFilter } from './fuzzy';
 
 // ——————————————————————————————————————————————————————————————
 // 起手：VM + 草稿存储
@@ -53,10 +61,17 @@ const vm = new EditorVM(CONTENT, {
 let tab: 'path' | 'wave' = 'path';
 /** 正在拖 `p` 里第几对坐标。 */
 let drag: number | null = null;
+/** 正在拖队形里第几条鱼（鱼阵页）。跟 `drag` 分开：两页拖的根本不是一种东西。 */
+let slotDrag: number | null = null;
+/**
+ * 「重排」用的间距。**不是数据**，是那个动作的参数，所以全编辑器共一个、也不落盘；
+ * `null` = 按鱼种自动（判定半径和再松一点）。真要精调的是拖，不是这个数。
+ */
+let reshapeSpacing: number | null = null;
 let playing = false;
 let clock = 0;
 let last = 0;
-/** 预览用的运行时。换阵 / 改队 / 拖点都要重建它。 */
+/** 预览用的运行时。换阵 / 改队形 / 拖点都要重建它。 */
 let preview: FishVM | undefined;
 let atlas: Atlas | undefined;
 
@@ -208,7 +223,64 @@ function draw(): void {
     drawControls(path.p);
   });
 
-  if (tab === 'wave') drawFish();
+  if (tab === 'wave') {
+    drawFish();
+    drawFormation();
+  }
+}
+
+/**
+ * 选中那一群的**队形**：摆在路径起点、按起点切线转过去，拖它们就是在编队形。
+ *
+ * 画的是真鱼（图集第 0 帧、按 `fishFacing` 定朝向）加一圈判定半径 —— 摆队形时最想知道的
+ * 就是「这两条挨得下吗」，画成小圆点就看不出来了。半透明是为了跟预览里真在游的鱼分开。
+ */
+function drawFormation(): void {
+  const gi = vm.selectedGroup;
+  const g = vm.draft.waves[vm.selectedWave]?.groups[gi];
+  const pose = vm.groupPose(gi);
+  if (!g || !pose) return;
+  const kind = FISH_KINDS.find((k) => k.id === g.kind);
+  const facing = fishFacing(pose.angle);
+
+  ctx.save();
+  // 锚点：路径起点。一条短箭头指出整群的前进方向
+  const [ax, ay] = toS(pose.x, pose.y);
+  ctx.strokeStyle = '#47c8c0';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  ctx.lineTo(ax + Math.cos(pose.angle) * 46, ay - Math.sin(pose.angle) * 46);
+  ctx.stroke();
+
+  for (let i = 0; i < vm.groupSize(gi); i++) {
+    const w = vm.slotWorld(gi, i);
+    if (!w) continue;
+    const [x, y] = toS(w.x, w.y);
+    const r = (kind?.r ?? 20) * S();
+
+    ctx.globalAlpha = 0.55;
+    const drawn =
+      atlas && kind && drawFrame(ctx, atlas, `${kind.id}_run_0`, x, y, S(), facing.deg, facing.flipY);
+    ctx.globalAlpha = 1;
+
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = i === slotDrag ? '#f0a03c' : '#47c8c0aa';
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(6, r), 0, 7);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (!drawn) {
+      ctx.fillStyle = '#47c8c044';
+      ctx.fill();
+    }
+
+    ctx.fillStyle = '#7d9aab';
+    ctx.font = '15px "IBM Plex Mono",monospace';
+    ctx.fillText(String(i + 1), x + Math.max(6, r) + 4, y - Math.max(6, r) + 2);
+  }
+  ctx.restore();
 }
 
 /** cover 之后各比例屏幕都看得见的那块。摆在它外面的鱼，窄屏上会被裁掉。 */
@@ -355,9 +427,16 @@ cv.addEventListener('pointerdown', (e) => {
     cv.setPointerCapture(e.pointerId);
     return;
   }
-  if (tab !== 'path') return;
   const [wx, wy] = toW(...evToCanvas(e));
   // 命中半径在**屏幕上**恒定：放大之后不该更难点中
+  if (tab === 'wave') {
+    const hit = vm.hitTestSlot(vm.selectedGroup, wx, wy, 28 / S());
+    if (hit === null) return;
+    slotDrag = hit;
+    cv.setPointerCapture(e.pointerId);
+    draw();
+    return;
+  }
   const hit = vm.hitTest(wx, wy, 24 / S());
   if (hit === null) return;
   drag = hit;
@@ -373,6 +452,11 @@ cv.addEventListener('pointermove', (e) => {
     camera.cx = pan.cx - (e.clientX - pan.sx) * k;
     camera.cy = pan.cy + (e.clientY - pan.sy) * k;
     draw();
+    return;
+  }
+  if (slotDrag !== null) {
+    const [sx, sy] = toW(...evToCanvas(e));
+    vm.dragSlot(vm.selectedGroup, slotDrag, sx, sy);
     return;
   }
   if (drag === null) return;
@@ -394,6 +478,11 @@ addEventListener('pointerup', () => {
   if (drag !== null) {
     drag = null;
     restartPreview();
+    renderAll();
+  }
+  if (slotDrag !== null) {
+    slotDrag = null;
+    restartPreview(); // 队形改了，预览得按新的重放
     renderAll();
   }
 });
@@ -448,7 +537,7 @@ function renderRows(): void {
       shown++;
       const li = document.createElement('li');
       li.className = `row wave${i === vm.selectedWave ? ' on' : ''}`;
-      const n = w.groups.reduce((a, g) => a + g.count, 0);
+      const n = w.groups.reduce((a, g) => a + g.formation.length / 2, 0);
       li.innerHTML = `<span class="nm">${esc(w.id)}</span><span class="meta">${n} 条</span>`;
       li.onclick = () => {
         vm.selectedWave = i;
@@ -513,7 +602,7 @@ function renderLeft(): void {
 
 function renderRight(): void {
   const el = $('right');
-  // ⚠️ 重建 innerHTML 会把 scrollTop 打回 0 —— 于是「加一队鱼」之后视图跳回顶部、
+  // ⚠️ 重建 innerHTML 会把 scrollTop 打回 0 —— 于是「加一群鱼」之后视图跳回顶部、
   //    新那队在下面看不见，看起来就像根本没滚动。改完先把位置存下来。
   const keepTop = el.scrollTop;
 
@@ -567,21 +656,38 @@ function renderRight(): void {
   } else {
     const w = vm.draft.waves[vm.selectedWave];
     const known = new Set(vm.draft.paths.map((p) => p.id));
-    let h = `<h2>鱼阵</h2>${fieldText('id', w.id, 'wid')}<h2>队 ${w.groups.length}</h2>`;
+    let h = `<h2>鱼阵</h2>${fieldText('id', w.id, 'wid')}<h2>群 ${w.groups.length}</h2>`;
+    const crowded = vm.crowded().filter((c) => c.wave === vm.selectedWave);
     w.groups.forEach((g, i) => {
+      const on = i === vm.selectedGroup;
+      const sp = reshapeSpacing ?? minSpacing(g.kind) + 20;
       h +=
-        `<div class="group"><div class="ghead"><span>队 ${i + 1}</span>` +
+        `<div class="group${on ? ' on' : ''}" data-sel="${i}"><div class="ghead">` +
+        `<span>群 ${i + 1} · ${g.formation.length / 2} 条${on ? ' · 画布上可拖' : ''}</span>` +
         `<button class="step" data-jump="${i}" title="去改这条路">↗</button>` +
         `<button class="step danger" data-del="${i}">✕</button></div>` +
         fieldPick('路径', g.path, `gp${i}`, !known.has(g.path)) +
         fieldPick('鱼种', g.kind.replace('fish_', ''), `gk${i}`, false) +
         fieldNum('入场', g.at, 0.1, `ga${i}`) +
-        fieldNum('条数', g.count, 1, `gc${i}`) +
-        fieldNum('间隔', g.gap, 0.05, `gg${i}`) +
         fieldNum('速度', g.speed, 10, `gs${i}`) +
+        fieldNum('条数', g.formation.length / 2, 1, `gn${i}`) +
+        '<div class="field"><label>重排</label><div class="shapes">' +
+        FORMATION_SHAPES.map((s) => `<button data-shape="${i}:${s.id}">${s.name}</button>`).join('') +
+        `<input type="number" id="gsp${i}" value="${sp}" step="10" title="重排用的间距（像素）">` +
+        '</div></div>' +
         '</div>';
     });
-    h += '<button id="addGroup" style="width:100%">＋ 加一队鱼</button>';
+    if (crowded.length) {
+      h +=
+        `<div class="warnbox">有 <b>${crowded.length} 处槽位挨得太近</b>（` +
+        crowded
+          .slice(0, 3)
+          .map((c) => `群 ${c.group + 1} 的第 ${c.a + 1}、${c.b + 1} 条只隔 ${c.gap}`)
+          .join('；') +
+        `${crowded.length > 3 ? ' 等' : ''}）。挤在一起的两条鱼会一边被弹簧拉回槽位、一边互相推开，` +
+        '看上去就是一群鱼在原地哆嗦 —— 拖开，或者点一下「重排」。</div>';
+    }
+    h += '<button id="addGroup" style="width:100%">＋ 加一群鱼</button>';
     el.innerHTML = h;
     el.scrollTop = keepTop;
 
@@ -589,9 +695,29 @@ function renderRight(): void {
       w.id = (e.target as HTMLInputElement).value;
       renderLeft();
     };
+    el.querySelectorAll<HTMLElement>('[data-sel]').forEach((box) => {
+      box.onclick = (e) => {
+        // 点块里的输入框 / 按钮不算选中，那些有自己的事要做
+        if ((e.target as HTMLElement).closest('input,button')) return;
+        vm.selectedGroup = Number(box.dataset.sel);
+        renderAll();
+      };
+    });
+    el.querySelectorAll<HTMLButtonElement>('[data-shape]').forEach((b) => {
+      b.onclick = () => {
+        const [gi, shape] = (b.dataset.shape ?? '').split(':');
+        const box = document.getElementById(`gsp${gi}`) as HTMLInputElement | null;
+        const sp = parseFloat(box?.value ?? '');
+        if (Number.isFinite(sp)) reshapeSpacing = clamp(sp, 4, 600);
+        vm.selectedGroup = Number(gi);
+        vm.reshapeGroup(Number(gi), shape as FormationShape, reshapeSpacing ?? 0);
+        restartPreview();
+      };
+    });
     el.querySelectorAll<HTMLButtonElement>('[data-del]').forEach((b) => {
       b.onclick = () => {
         vm.removeGroup(Number(b.dataset.del));
+        vm.selectedGroup = 0;
         restartPreview();
       };
     });
@@ -608,6 +734,7 @@ function renderRight(): void {
     });
     $('addGroup').onclick = () => {
       vm.addGroup();
+      vm.selectedGroup = w.groups.length - 1;
       restartPreview();
       el.scrollTop = el.scrollHeight; // 新那队在最下面，滚过去让人看见
     };
@@ -620,9 +747,16 @@ function renderRight(): void {
         (v) => patch(i, { kind: `fish_${v}` }),
       );
       bindNum(`ga${i}`, (v) => patch(i, { at: clamp(v, 0, 120) }), 0.1);
-      bindNum(`gc${i}`, (v) => patch(i, { count: Math.round(clamp(v, 1, 60)) }), 1);
-      bindNum(`gg${i}`, (v) => patch(i, { gap: clamp(v, 0, 10) }), 0.05);
       bindNum(`gs${i}`, (v) => patch(i, { speed: clamp(v, 10, 600) }), 10);
+      bindNum(
+        `gn${i}`,
+        (v) => {
+          vm.selectedGroup = i;
+          vm.setGroupSize(i, v);
+          restartPreview();
+        },
+        1,
+      );
     });
   }
 }
@@ -667,7 +801,10 @@ function bindNum(id: string, apply: (v: number) => void, step: number): void {
     apply(round(parseFloat(el.value) + step));
 }
 
-/** 下拉：点当前值弹一张小列表 + 全屏遮罩关闭。 */
+/**
+ * 下拉：点当前值弹一张小列表 + 全屏遮罩关闭。**带模糊筛选 + 键盘** —— 路径能编到几十条，
+ * 靠眼睛在一张滚动列表里找不现实（`fuzzyFilter`：敲 `crh` 中 `cross-rl-high`）。
+ */
 function pick(id: string, options: readonly string[], cur: string, apply: (v: string) => void): void {
   const box = document.getElementById(id);
   if (!box) return;
@@ -676,35 +813,102 @@ function pick(id: string, options: readonly string[], cur: string, apply: (v: st
     const r = box.getBoundingClientRect();
     const veil = document.createElement('div');
     veil.className = 'veil';
+    veil.onclick = closePop;
     const pop = document.createElement('div');
     pop.className = 'pop';
     pop.style.left = `${r.left}px`;
-    pop.style.width = `${r.width}px`;
-    pop.style.top = `${r.bottom + 3}px`;
-    veil.onclick = closePop;
-    for (const o of options) {
-      const b = document.createElement('button');
-      b.textContent = o;
-      if (o === cur) b.className = 'on';
-      b.onclick = () => {
-        closePop();
-        apply(o);
-      };
-      pop.appendChild(b);
-    }
+    pop.style.width = `${Math.max(r.width, 168)}px`;
+
+    const find = document.createElement('input');
+    find.className = 'pfind';
+    find.type = 'text';
+    find.placeholder = '筛选…';
+    const list = document.createElement('div');
+    list.className = 'popitems';
+    pop.appendChild(find);
+    pop.appendChild(list);
     document.body.appendChild(veil);
     document.body.appendChild(pop);
-    // 下面塞不下就翻到触发按钮上方
-    const h = pop.getBoundingClientRect().height;
-    if (r.bottom + 3 + h > innerHeight) pop.style.top = `${Math.max(6, r.top - 3 - h)}px`;
+
+    let shown: string[] = [];
+    let active = 0;
+
+    /** 下面塞不下就翻到触发按钮上方。筛选会改高度，所以每次重填都摆一次。 */
+    const place = (): void => {
+      const h = pop.getBoundingClientRect().height;
+      pop.style.top =
+        r.bottom + 3 + h > innerHeight ? `${Math.max(6, r.top - 3 - h)}px` : `${r.bottom + 3}px`;
+    };
+    const choose = (v: string): void => {
+      closePop();
+      apply(v);
+    };
+    const fill = (): void => {
+      shown = fuzzyFilter(options, find.value);
+      active = clamp(active, 0, Math.max(0, shown.length - 1));
+      list.innerHTML = '';
+      if (!shown.length) {
+        const e = document.createElement('div');
+        e.className = 'empty';
+        e.textContent = `没有像「${find.value.trim()}」的`;
+        list.appendChild(e);
+      }
+      shown.forEach((o, i) => {
+        const b = document.createElement('button');
+        b.textContent = o;
+        b.className = `${o === cur ? 'on' : ''}${i === active ? ' at' : ''}`.trim();
+        b.onclick = () => choose(o);
+        b.onmousemove = () => {
+          if (i === active) return;
+          active = i;
+          syncActive();
+        };
+        list.appendChild(b);
+      });
+      place();
+    };
+    const syncActive = (): void => {
+      list.querySelectorAll('button').forEach((b, i) => b.classList.toggle('at', i === active));
+      (list.children[active] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest' });
+    };
+
+    find.oninput = fill;
+    find.onkeydown = (e) => {
+      if (e.key === 'Escape') return closePop();
+      if (e.key === 'Enter') {
+        if (shown[active] !== undefined) choose(shown[active]);
+        return;
+      }
+      const d = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+      if (!d || !shown.length) return;
+      e.preventDefault();
+      active = (active + d + shown.length) % shown.length;
+      syncActive();
+    };
+
+    fill();
+    // 起手停在当前值上：开下拉最常见的动作是「看看现在是哪个 / 换到隔壁那个」
+    active = Math.max(0, shown.indexOf(cur));
+    syncActive();
+    find.focus();
   };
 }
 
 const closePop = (): void => {
   document.querySelectorAll('.pop,.veil').forEach((n) => n.remove());
 };
-// fixed 定位跟不上滚动/缩放，那就关掉它 —— 比让它飘在错的位置强
-addEventListener('scroll', closePop, true);
+// fixed 定位跟不上滚动/缩放，那就关掉它 —— 比让它飘在错的位置强。
+// ⚠️ **`.pop` 自己滚不算**：捕获阶段连子元素的 scroll 也收得到，不排掉就是「列表一滚就关、
+//    再点已经没东西可点」—— 看起来像下拉根本不能滚。
+addEventListener(
+  'scroll',
+  (e) => {
+    const t = e.target;
+    if (t instanceof Element && t.closest('.pop')) return;
+    closePop();
+  },
+  true,
+);
 addEventListener('resize', closePop);
 
 // ——————————————————————————————————————————————————————————————
@@ -748,8 +952,16 @@ function duration(): number {
   for (const g of wave.groups) {
     const geom = pathOf(g.path);
     if (!geom) continue;
-    const travel = geom.length / Math.max(1, g.speed);
-    for (let i = 0; i < g.count; i++) end = Math.max(end, g.at + i * g.gap + travel);
+    const speed = Math.max(1, g.speed);
+    const travel = geom.length / speed;
+    // 最后进场的是队形里 dx 最小那条（跟 waveFeeder 同一条式子）
+    let lead = -Infinity;
+    let tail = Infinity;
+    for (let i = 0; i < g.formation.length / 2; i++) {
+      lead = Math.max(lead, g.formation[i * 2]);
+      tail = Math.min(tail, g.formation[i * 2]);
+    }
+    end = Math.max(end, g.at + (lead - tail) / speed + travel);
   }
   return Math.ceil(Math.min(120, end + 0.5) * 10) / 10;
 }
@@ -930,7 +1142,7 @@ $('safe').onclick = () => {
 function renderAll(): void {
   lut = new Map();
   // 拖点的时候整栏重建会每帧抢走输入焦点，只重画布
-  if (drag !== null) {
+  if (drag !== null || slotDrag !== null) {
     draw();
     return;
   }
@@ -944,7 +1156,8 @@ function renderAll(): void {
     err ||
     (tab === 'path'
       ? '画布两页共用。灰线是别的路径 —— 排新路时要对照着看挤不挤，用左边每行的 <b>◉</b> 单独收起来。<b style="color:#47c8c0">青色小点</b>是弧长等距采样：它们均匀，就是鱼恒速的证据。'
-      : '<b>只画这一阵用到的</b>路线，别的跟这阵无关。走带只在这一页 —— 跑的是游戏本体的运行时。');
+      : '<b>只画这一阵用到的</b>路线，别的跟这阵无关。走带只在这一页 —— 跑的是游戏本体的运行时。' +
+        '<br>半透明那几条是<b>选中那群的队形</b>（摆在路径起点、按起点切线转过去），直接拖就是编队形；虚线圈是判定半径。');
   if (tab === 'wave') syncTransport();
 }
 

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   EditorVM,
+  formationOf,
   memoryEditorStorage,
+  minSpacing,
+  FORMATION_SHAPES,
 } from '../src/EditorVM';
 import type { FishContent } from '@game/content/content-types';
 import { waveFeeder } from '@game/seams/feeder';
@@ -17,8 +20,8 @@ const SRC: FishContent = {
     {
       id: 'w',
       groups: [
-        { at: 0, path: 'a', kind: 'fish_yellow', count: 2, gap: 0.5, speed: 100 },
-        { at: 1, path: 'b', kind: 'fish_red', count: 1, speed: 90 },
+        { at: 0, path: 'a', kind: 'fish_yellow', speed: 100, formation: [0, 0, -50, 40] },
+        { at: 1, path: 'b', kind: 'fish_red', speed: 90, formation: [0, 0] },
       ],
     },
   ],
@@ -32,9 +35,11 @@ describe('EditorVM · 载入', () => {
     expect(vm.draft.paths[0].p[0]).toBe(5);
   });
 
-  it('gap 省略的 group 补成 0 —— 草稿里字段齐全，View 不必到处 ?? 0', () => {
+  it('队形也是深拷贝 —— 拖一条鱼不许动到源码那份数组', () => {
     const vm = new EditorVM(SRC);
-    expect(vm.draft.waves[0].groups[1].gap).toBe(0);
+    vm.dragSlot(0, 1, 0, 0);
+    expect(SRC.waves[0].groups[0].formation).toEqual([0, 0, -50, 40]);
+    expect(vm.draft.waves[0].groups[0].formation).not.toEqual([0, 0, -50, 40]);
   });
 });
 
@@ -85,8 +90,7 @@ describe('EditorVM · 鱼阵', () => {
     const vm = new EditorVM(SRC);
     vm.addGroup();
     expect(vm.draft.waves[0].groups).toHaveLength(3);
-    vm.patchGroup(2, { count: 7, speed: 150 });
-    expect(vm.draft.waves[0].groups[2].count).toBe(7);
+    vm.patchGroup(2, { speed: 150 });
     expect(vm.draft.waves[0].groups[2].speed).toBe(150);
     vm.removeGroup(2);
     expect(vm.draft.waves[0].groups).toHaveLength(2);
@@ -99,6 +103,132 @@ describe('EditorVM · 鱼阵', () => {
     vm.addWave(); // 再来一个才撞名
     expect(vm.draft.waves[2].id).toBe('wave-2');
     expect(vm.selectedWave).toBe(2);
+  });
+});
+
+describe('队形模板', () => {
+  it('四种模板都给得出任意条数，且任意两条不近于间距', () => {
+    for (const s of FORMATION_SHAPES) {
+      for (const n of [1, 2, 3, 7, 12]) {
+        const f = formationOf(s.id, n, 60);
+        expect(f, `${s.name} ${n} 条`).toHaveLength(n * 2);
+        for (let i = 0; i < n; i++) {
+          for (let j = i + 1; j < n; j++) {
+            const d = Math.hypot(f[i * 2] - f[j * 2], f[i * 2 + 1] - f[j * 2 + 1]);
+            expect(d, `${s.name}：第 ${i + 1}、${j + 1} 条只隔 ${d.toFixed(1)}`).toBeGreaterThanOrEqual(59.5);
+          }
+        }
+      }
+    }
+  });
+
+  it('一列是沿路径往后排、横排是垂直并肩 —— 两维不许弄反', () => {
+    expect(formationOf('line', 3, 50)).toEqual([0, 0, -50, 0, -100, 0]);
+    expect(formationOf('row', 3, 50)).toEqual([0, -50, 0, 0, 0, 50]);
+  });
+
+  it('雁阵的领队在最前，两侧交替往后', () => {
+    const f = formationOf('wedge', 5, 50);
+    expect(f.slice(0, 2)).toEqual([0, 0]);
+    expect(f[3]).toBe(50); // 第 2 条在左手边
+    expect(f[5]).toBe(-50); // 第 3 条在右手边
+    expect(f[2]).toBe(f[4]); // 这两条一样靠后
+    expect(f[6]).toBeLessThan(f[2]); // 第二排更靠后
+  });
+
+  it('最小间距 = 判定半径和，跟 schoolSystem 的分离半径、内容闸是同一个数', () => {
+    expect(minSpacing('fish_yellow')).toBe(34);
+    expect(minSpacing('fish_shayu')).toBe(204);
+    expect(minSpacing('没这种鱼')).toBeGreaterThan(0); // 不认识也别返回 0，0 会让「不重叠」失效
+  });
+});
+
+describe('EditorVM · 队形', () => {
+  it('条数是算出来的（槽位数），加是照趋势往后接、减是从队尾拿', () => {
+    const vm = new EditorVM(SRC);
+    expect(vm.groupSize(0)).toBe(2);
+    vm.setGroupSize(0, 4);
+    expect(vm.groupSize(0)).toBe(4);
+    // 前两条是 (0,0) 与 (-50,40)，续下去就是 (-100,80)、(-150,120)
+    expect(vm.draft.waves[0].groups[0].formation.slice(4)).toEqual([-100, 80, -150, 120]);
+    vm.setGroupSize(0, 1);
+    expect(vm.draft.waves[0].groups[0].formation).toEqual([0, 0]);
+    vm.setGroupSize(0, 0); // 至少留一条：零条鱼的群等于这群不存在
+    expect(vm.groupSize(0)).toBe(1);
+  });
+
+  it('只剩一条时也接得出来（没有「趋势」可续，就往正后方排）', () => {
+    const vm = new EditorVM(SRC);
+    vm.setGroupSize(0, 1);
+    vm.setGroupSize(0, 3);
+    const f = vm.draft.waves[0].groups[0].formation;
+    expect(f).toHaveLength(6);
+    for (let i = 1; i < 3; i++) {
+      const d = Math.hypot(f[i * 2] - f[(i - 1) * 2], f[i * 2 + 1] - f[(i - 1) * 2 + 1]);
+      expect(d).toBeGreaterThanOrEqual(minSpacing('fish_yellow'));
+    }
+  });
+
+  it('重排的间距被夹到判定半径和以上 —— 摆出来就重叠的队形一出生就在自己跟自己打架', () => {
+    const vm = new EditorVM(SRC);
+    vm.setGroupSize(0, 3);
+    vm.reshapeGroup(0, 'line', 5);
+    expect(vm.draft.waves[0].groups[0].formation).toEqual([0, 0, -34, 0, -68, 0]);
+  });
+
+  it('槽位转成世界坐标：绕路径起点、按起点切线转过去', () => {
+    const vm = new EditorVM(SRC);
+    // 路径 a 从 (-1160,0) 朝 +x：局部坐标原样搬过去
+    expect(vm.groupPose(0)).toEqual({ x: -1160, y: 0, angle: 0 });
+    expect(vm.slotWorld(0, 1)).toEqual({ x: -1210, y: 40 });
+    // 路径 b 从 (1160,260) 朝 -x：整条队形跟着掉头
+    vm.patchGroup(0, { path: 'b' });
+    const pose = vm.groupPose(0)!;
+    expect(pose).toMatchObject({ x: 1160, y: 260 });
+    expect(Math.abs(pose.angle)).toBeCloseTo(Math.PI, 6);
+    const w = vm.slotWorld(0, 1)!;
+    expect(w.x).toBeCloseTo(1210, 6);
+    expect(w.y).toBeCloseTo(220, 6);
+  });
+
+  it('拖一条鱼：世界坐标转回局部，往返对得上', () => {
+    const vm = new EditorVM(SRC);
+    vm.dragSlot(0, 1, -1000, -120);
+    expect(vm.draft.waves[0].groups[0].formation.slice(2)).toEqual([160, -120]);
+    expect(vm.slotWorld(0, 1)).toEqual({ x: -1000, y: -120 });
+  });
+
+  it('拖到别人身上会被推开到刚好不重叠 —— 重叠不报错，只会让一群鱼在原地哆嗦', () => {
+    const vm = new EditorVM(SRC);
+    vm.dragSlot(0, 1, -1160, 0); // 正正压在第 1 条身上
+    const f = vm.draft.waves[0].groups[0].formation;
+    const d = Math.hypot(f[2] - f[0], f[3] - f[1]);
+    expect(d).toBeGreaterThanOrEqual(minSpacing('fish_yellow'));
+    expect(vm.crowded()).toEqual([]);
+  });
+
+  it('命中判定按世界坐标，超出容差不算', () => {
+    const vm = new EditorVM(SRC);
+    expect(vm.hitTestSlot(0, -1206, 44, 20)).toBe(1);
+    expect(vm.hitTestSlot(0, -1206, 44, 3)).toBeNull();
+    expect(vm.hitTestSlot(0, -1160, 0, 20)).toBe(0);
+  });
+
+  /** 拖拽和模板都夹紧了，所以这条报的一定是**别处**进来的坏数据（旧草稿、人手改的 content.ts）。 */
+  it('crowded 报出挨太近的槽位', () => {
+    const vm = new EditorVM(SRC);
+    vm.draft.waves[0].groups[0].formation = [0, 0, 10, 0]; // 绕过夹紧，模拟人手贴回来的
+    expect(vm.crowded()).toEqual([{ wave: 0, group: 0, a: 0, b: 1, gap: 10 }]);
+  });
+
+  it('selectedGroup 读出来一定合法 —— 删掉一群之后不会指向不存在的下标', () => {
+    const vm = new EditorVM(SRC);
+    vm.selectedGroup = 1;
+    expect(vm.selectedGroup).toBe(1);
+    vm.removeGroup(1);
+    expect(vm.selectedGroup).toBe(0);
+    vm.addGroup(); // 位置还在，回得去
+    expect(vm.selectedGroup).toBe(1);
   });
 });
 
@@ -128,9 +258,12 @@ describe('EditorVM · 导出', () => {
     expect(text.endsWith('\n')).toBe(true);
   });
 
-  it('省略 gap 的 group 导出时不写这个字段 —— 默认值不该占一行 diff', () => {
+  it('一群一行，队形整条写在行内 —— 折行会让「这一群」在 diff 里散成好几处', () => {
     const text = new EditorVM(SRC).exportText();
-    expect(text).toContain("{ at: 1, path: 'b', kind: 'fish_red', count: 1, speed: 90 }");
+    expect(text).toContain("{ at: 1, path: 'b', kind: 'fish_red', speed: 90, formation: [0, 0] }");
+    expect(text).toContain(
+      "{ at: 0, path: 'a', kind: 'fish_yellow', speed: 100, formation: [0, 0, -50, 40] }",
+    );
   });
 });
 

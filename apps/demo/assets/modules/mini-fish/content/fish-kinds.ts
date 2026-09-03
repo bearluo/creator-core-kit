@@ -20,23 +20,39 @@ export interface FishKind {
    * 取短边而不是长边：鲨鱼 499×205 按长边算，判定圈会大到把它身后一整片海都算进网里。
    */
   readonly r: number;
+  /**
+   * 体长（设计像素）= 图集里 `<id>_run_0` 那帧的**宽** —— 鱼头一律朝 +x，宽就是沿身子那一维。
+   * 鱼是**一根有长度的棍子**摆在路径上（鼻尖与尾尖各压在路径上一点，见 `paths.bodyPoseAt`），
+   * 不是钉在一个点上原地转，所以这一列直接决定它转得有多稳：身子越长，弯道越被它自己抹平。
+   */
+  readonly body: number;
   /** 炸弹鱼：死的时候把周围一起炸（决策 D3）。全表只有河豚一条。 */
   readonly bomb: boolean;
+  /**
+   * 摆幅倍率（群游用，见 `ecs/schoolSystem.ts`）。稳态摆幅 = `基准 × (r / 参照体型) × sway`
+   * —— **体型那一份自动给**，这一列只说性格：水母飘、鲨鱼稳。1 = 按体型该有的样子。
+   */
+  readonly sway: number;
+  /**
+   * 守位倍率：回槽弹簧的倍数。大 = 老实待在队形里、被挤开也很快回去；
+   * 小 = 松垮爱游离。**它同时决定摆动的快慢** —— 弹簧硬则频率高，正是小鱼碎、大鱼缓那回事。
+   */
+  readonly hold: number;
 }
 
 /** 下标即 `Fish.kind[eid]`，**顺序就是存档格式**，只许往后加、不许插队。 */
 export const FISH_KINDS: readonly FishKind[] = [
-  { id: 'fish_red', name: '红鱼', frames: 4, m: 10, r: 28, bomb: false },
-  { id: 'fish_denglongyu', name: '灯笼鱼', frames: 8, m: 10, r: 61, bomb: false },
-  { id: 'fish_yellow', name: '黄鱼', frames: 4, m: 10, r: 17, bomb: false },
-  { id: 'fish_bigred', name: '大红鱼', frames: 4, m: 20, r: 26, bomb: false },
-  { id: 'fish_fuyi', name: '蝠鲼', frames: 8, m: 20, r: 73, bomb: false },
-  { id: 'fish_gui', name: '鬼鱼', frames: 6, m: 30, r: 79, bomb: false },
-  { id: 'fish_hailuoshuimu', name: '海螺水母', frames: 8, m: 30, r: 38, bomb: false },
-  { id: 'fish_hetun', name: '河豚', frames: 4, m: 40, r: 44, bomb: true },
-  { id: 'fish_jinshayu', name: '金鲨', frames: 8, m: 40, r: 107, bomb: false },
-  { id: 'fish_shayu', name: '鲨鱼', frames: 8, m: 50, r: 102, bomb: false },
-  { id: 'fish_shuimu', name: '水母', frames: 6, m: 50, r: 41, bomb: false },
+  { id: 'fish_red', name: '红鱼', frames: 4, m: 10, r: 28, body: 72, bomb: false, sway: 1, hold: 1 },
+  { id: 'fish_denglongyu', name: '灯笼鱼', frames: 8, m: 10, r: 61, body: 170, bomb: false, sway: 0.8, hold: 1.1 },
+  { id: 'fish_yellow', name: '黄鱼', frames: 4, m: 10, r: 17, body: 52, bomb: false, sway: 1.3, hold: 0.9 },
+  { id: 'fish_bigred', name: '大红鱼', frames: 4, m: 20, r: 26, body: 68, bomb: false, sway: 0.9, hold: 1.1 },
+  { id: 'fish_fuyi', name: '蝠鲼', frames: 8, m: 20, r: 73, body: 146, bomb: false, sway: 0.7, hold: 1.2 },
+  { id: 'fish_gui', name: '鬼鱼', frames: 6, m: 30, r: 79, body: 166, bomb: false, sway: 0.5, hold: 1.3 },
+  { id: 'fish_hailuoshuimu', name: '海螺水母', frames: 8, m: 30, r: 38, body: 89, bomb: false, sway: 1.2, hold: 0.55 },
+  { id: 'fish_hetun', name: '河豚', frames: 4, m: 40, r: 44, body: 90, bomb: true, sway: 0.7, hold: 1.2 },
+  { id: 'fish_jinshayu', name: '金鲨', frames: 8, m: 40, r: 107, body: 514, bomb: false, sway: 0.5, hold: 1.4 },
+  { id: 'fish_shayu', name: '鲨鱼', frames: 8, m: 50, r: 102, body: 499, bomb: false, sway: 0.5, hold: 1.4 },
+  { id: 'fish_shuimu', name: '水母', frames: 6, m: 50, r: 41, body: 82, bomb: false, sway: 1.3, hold: 0.5 },
 ];
 
 /** 炸弹鱼死了以后，以它为心炸这么大一圈（设计像素）。 */

@@ -3,6 +3,7 @@ import { CONTENT } from '../../../../assets/modules/mini-fish/content/content';
 import type { FishWave } from '../../../../assets/modules/mini-fish/content/content-types';
 import { FISH_KINDS } from '../../../../assets/modules/mini-fish/content/fish-kinds';
 import {
+  FIELD,
   MIN_HANDLE,
   PATHS,
   pointAt,
@@ -82,6 +83,30 @@ describe('content.ts 内容自检', () => {
     }
   });
 
+  /**
+   * 两端在屏外、中段进屏。
+   *
+   * 端点跑进屏里 = 玩家看着鱼**凭空出现**（或半路消失）；整条都在屏外 = 这一群白放，一条也看不见。
+   * 两样都不报错、不崩，只有盯着看才发现，而 `content.ts` 是人手贴回的文件。
+   * 判据用 {@link FIELD}：屏是 1920×1080，端点至少出去 40 像素（比最大的鱼半径 107 松，
+   * 那条鱼的**身子**还可能露出来一点点，但游进游出的观感已经成立）。
+   */
+  it('每条路径都从屏外进、屏外出，中间真进屏', () => {
+    const outX = FIELD.width / 2 + 40;
+    const outY = FIELD.height / 2 + 40;
+    const outside = (q: { x: number; y: number }): boolean =>
+      Math.abs(q.x) >= outX || Math.abs(q.y) >= outY;
+    for (const path of PATHS) {
+      const id = CONTENT.paths[PATHS.indexOf(path)].id;
+      expect(outside(pointAt(path, 0)), `路径 ${id} 的起点在屏里 —— 鱼会凭空出现`).toBe(true);
+      expect(outside(pointAt(path, 1)), `路径 ${id} 的终点在屏里 —— 鱼会半路消失`).toBe(true);
+      const seen = Array.from({ length: 41 }, (_, i) => pointAt(path, i / 40)).some(
+        (q) => !outside(q),
+      );
+      expect(seen, `路径 ${id} 整条都在屏外 —— 走它的鱼一条也看不见`).toBe(true);
+    }
+  });
+
   it('鱼阵 id 唯一，且每阵至少一个 group', () => {
     const waveIds = new Set<string>(waves.map((w) => w.id));
     expect(waveIds.size).toBe(waves.length);
@@ -97,15 +122,52 @@ describe('content.ts 内容自检', () => {
     }
   });
 
-  it('数值在合法范围：count ≥ 1、gap ≥ 0、speed > 0、at ≥ 0', () => {
+  it('数值在合法范围：队形是 2n 个数（n ≥ 1）、speed > 0、at ≥ 0', () => {
     for (const w of waves) {
       for (const g of w.groups) {
-        expect(g.count).toBeGreaterThanOrEqual(1);
-        expect(g.gap ?? 0).toBeGreaterThanOrEqual(0);
+        expect(g.formation.length % 2, `鱼阵 ${w.id} 的 ${g.kind} 队形有 ${g.formation.length} 个数，该是 2n`).toBe(0);
+        expect(g.formation.length).toBeGreaterThanOrEqual(2);
+        for (const v of g.formation) expect(Number.isFinite(v)).toBe(true);
         expect(g.speed).toBeGreaterThan(0);
         expect(g.at).toBeGreaterThanOrEqual(0);
       }
     }
+  });
+
+  /**
+   * 同群两条鱼的槽位不许贴到**判定圈重叠**。重叠的槽位是 `schoolSystem` 里两条力的死结：
+   * 槽位弹簧把它们拽到一起、分离力再把它们推开，一群鱼于是在原地哆嗦。
+   *
+   * 判据跟 `schoolSystem` 的分离半径是**同一个**（半径和）。编辑器摆队形时按它夹紧，
+   * 这道闸挡的是另一条路：人手贴回、手改、合并冲突解错。
+   */
+  it('同群的槽位不重叠 —— 两条鱼的距离 ≥ 判定半径和', () => {
+    for (const w of waves) {
+      for (const g of w.groups) {
+        const r = FISH_KINDS.find((k) => k.id === g.kind)?.r ?? 0;
+        const f = g.formation;
+        for (let i = 0; i < f.length / 2; i++) {
+          for (let j = i + 1; j < f.length / 2; j++) {
+            const d = Math.hypot(f[i * 2] - f[j * 2], f[i * 2 + 1] - f[j * 2 + 1]);
+            expect(
+              d,
+              `鱼阵 ${w.id} 的 ${g.kind} 第 ${i + 1}、${j + 1} 条槽位只隔 ${d.toFixed(1)}，半径和是 ${2 * r}`,
+            ).toBeGreaterThanOrEqual(2 * r);
+          }
+        }
+      }
+    }
+  });
+
+  /**
+   * 11 种鱼的图集**整包下下来**（一张 `fish.plist`，不按种类切），所以没排进鱼阵的鱼种就是
+   * 白下载的字节。底噪 `randomFeeder` 会随机放到它，但那是背景，玩家记不住 —— 编排里出现过
+   * 才算这条鱼在这款游戏里有位置。
+   */
+  it('11 种鱼都排进了鱼阵 —— 美术进了包却不出场就是白下', () => {
+    const used = new Set<string>(waves.flatMap((w) => w.groups.map((g) => g.kind)));
+    const missing = FISH_KINDS.filter((k) => !used.has(k.id)).map((k) => k.name);
+    expect(missing, `这些鱼一阵都没排：${missing.join('、')}`).toEqual([]);
   });
 
   it('rev 是正整数 —— 它是「发布过一次」的编号，编辑器每次导出 +1', () => {

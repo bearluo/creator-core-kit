@@ -94,10 +94,10 @@ li.empty{
 }
 
 /* 深色下的滚动条 —— 默认那条亮灰在这套配色里像道裂缝 */
-ul.list,#left,#right,pre.out,.pop{scrollbar-width:thin; scrollbar-color:var(--line-hi) transparent}
-ul.list::-webkit-scrollbar,#left::-webkit-scrollbar,#right::-webkit-scrollbar,pre.out::-webkit-scrollbar,.pop::-webkit-scrollbar{width:9px; height:9px}
-ul.list::-webkit-scrollbar-track,#right::-webkit-scrollbar-track,pre.out::-webkit-scrollbar-track,.pop::-webkit-scrollbar-track{background:transparent}
-ul.list::-webkit-scrollbar-thumb,#right::-webkit-scrollbar-thumb,pre.out::-webkit-scrollbar-thumb,.pop::-webkit-scrollbar-thumb{
+ul.list,#left,#right,pre.out,.popitems{scrollbar-width:thin; scrollbar-color:var(--line-hi) transparent}
+ul.list::-webkit-scrollbar,#left::-webkit-scrollbar,#right::-webkit-scrollbar,pre.out::-webkit-scrollbar,.popitems::-webkit-scrollbar{width:9px; height:9px}
+ul.list::-webkit-scrollbar-track,#right::-webkit-scrollbar-track,pre.out::-webkit-scrollbar-track,.popitems::-webkit-scrollbar-track{background:transparent}
+ul.list::-webkit-scrollbar-thumb,#right::-webkit-scrollbar-thumb,pre.out::-webkit-scrollbar-thumb,.popitems::-webkit-scrollbar-thumb{
   background:var(--line); border-radius:5px; border:2px solid var(--panel);
 }
 ul.list::-webkit-scrollbar-thumb:hover,#right::-webkit-scrollbar-thumb:hover,pre.out::-webkit-scrollbar-thumb:hover{background:var(--line-hi)}
@@ -186,22 +186,38 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none; margin:0}
 .pick > button.bad{border-color:var(--warn); color:var(--warn)}
 /* 挂在 body 上用 fixed 定位：右栏有 overflow-y，弹层留在里面会被裁掉半截 */
 .pop{
-  position:fixed; z-index:20; max-height:186px; overflow:auto;
+  position:fixed; z-index:20; display:flex; flex-direction:column; max-width:340px;
   background:var(--panel); border:1px solid var(--line-hi); border-radius:var(--r);
   padding:3px; box-shadow:0 8px 22px #0009;
 }
+/* ⚠️ 滚的是**里面这层**不是 .pop —— 筛选框得钉在顶上不跟着滚走 */
+.popitems{max-height:186px; overflow:auto}
+.popitems .empty{padding:6px 7px; font-family:var(--mono); font-size:11px; color:var(--faint)}
+.pop .pfind{
+  width:100%; margin-bottom:3px; padding:4px 7px; border-radius:3px;
+  border:1px solid var(--line); background:var(--sunk); color:var(--text);
+  font-family:var(--mono); font-size:12px;
+}
+.pop .pfind:focus{outline:none; border-color:var(--amber)}
 .pop button{
   display:block; width:100%; text-align:left; border:none; background:none;
   font-family:var(--mono); font-size:12px; color:var(--dim); padding:4px 7px; border-radius:3px;
 }
-.pop button:hover{background:var(--amber-soft); color:var(--text)}
+.pop button:hover,.pop button.at{background:var(--amber-soft); color:var(--text)}
 .pop button.on{color:var(--amber)}
 .veil{position:fixed; inset:0; z-index:10}
 
 .group{
   border:1px solid var(--line); border-radius:var(--r); padding:9px;
-  margin-bottom:8px; background:var(--sunk);
+  margin-bottom:8px; background:var(--sunk); cursor:pointer;
 }
+/* 选中那群 = 画布上正在摆的那群。边框跟控制点同一个琥珀色：手里正在动的东西 */
+.group.on{border-color:var(--amber); background:var(--amber-soft); cursor:default}
+.group.on .ghead span{color:var(--amber)}
+/* 「重排」那一行：四个模板 + 间距。按下去整群重摆，微调靠在画布上拖 */
+.shapes{display:flex; gap:3px; flex:1; min-width:0}
+.shapes button{flex:1; padding:3px 0; font-size:11px; min-width:0}
+.shapes input{width:46px; flex:none; text-align:center}
 .ghead{display:flex; align-items:center; gap:6px; margin-bottom:7px}
 .ghead span{flex:1; font-family:var(--mono); font-size:10px; color:var(--faint); letter-spacing:.08em}
 .ghead button{padding:2px 7px; font-size:11px}

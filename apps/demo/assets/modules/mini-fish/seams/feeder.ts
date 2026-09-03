@@ -12,11 +12,21 @@ import { FISH_KINDS } from '../content/fish-kinds';
 import { PATHS } from '../content/paths';
 import type { FishContent } from '../content/content-types';
 
-/** 放一条鱼进来：什么种、走哪条路、多快（像素/秒）。 */
+/**
+ * 放一条鱼进来：什么种、走哪条路、多快（像素/秒），以及**它站在群里的哪个位置**。
+ *
+ * 后三个都可省 —— 省了就是一条散鱼，跟改造之前一模一样。随机底噪、单测逐条摆鱼都不必关心队形。
+ */
 export interface FishSpawn {
   readonly kind: number;
   readonly pathId: number;
   readonly speed: number;
+  /** 侧向偏移（像素，正 = 前进方向左手边）。省略 = 0，正好压在路径中线上。 */
+  readonly offset?: number;
+  /** 群 id。同一群共享，**0 = 散鱼**（不参与分离、不摆）。 */
+  readonly school?: number;
+  /** 相位种子 ∈[0,1)。同群的鱼靠它摆得不同步。 */
+  readonly seed?: number;
 }
 
 export interface FishFeeder {
@@ -140,6 +150,10 @@ const DEFAULT_WAVE_GAP = 3;
  * 稳定字符串 id。**引用不到当场抛**，不许静默跳过 —— 静默跳过就是「这一阵少了两条鱼」，
  * 找起来极贵。
  *
+ * **队形也在这里落地**：`dy` 原样传下去当侧向偏移，`dx` 换算成**进场延迟**
+ * `(领队的 dx − 自己的 dx) / speed` 秒 —— 路径起点之前没有路可站，纵深只能用时间表达。
+ * 于是「谁是领队」是算出来的（`dx` 最大那条），`at` 永远指领队进场那一刻。
+ *
  * **接续判据是「上一阵投喂完毕 + `gap`」，不是等清场**：投喂器不动已经在场的鱼，下一阵开始
  * 不截断任何东西；等清场则每阵之间要空出十几秒（一队 8 条 `gap 0.3` 的阵 2.1 秒投完、
  * 却要 19 秒才游干净）。⚠️「清场」那个判据只属**编辑器的预览窗口**，别搬进来。
@@ -152,6 +166,9 @@ export function waveFeeder(content: FishContent, options: WaveFeederOptions = {}
   const gap = options.gap ?? DEFAULT_WAVE_GAP;
   const loop = options.loop ?? false;
 
+  // 群 id 在**载入时**发一遍，全表不重号。loop 播到第二遍时同一群会重号 —— 上一遍那群
+  // 早游远了，最坏也只是两批同路径的鱼互相让一下位。
+  let school = 0;
   // 载入即展开成「第几秒放哪条鱼」。运行期只做比较，不再查表。
   const plan = order.map((id) => {
     const wave = waveById.get(id);
@@ -166,9 +183,28 @@ export function waveFeeder(content: FishContent, options: WaveFeederOptions = {}
       if (kind === undefined) {
         throw new Error(`[mini-fish] 鱼阵 '${id}' 引用了未知鱼种 '${g.kind}'`);
       }
-      const step = g.gap ?? 0;
-      for (let i = 0; i < g.count; i++) {
-        queue.push({ at: g.at + i * step, spawn: { kind, pathId, speed: g.speed } });
+      const n = g.formation.length / 2;
+      if (n < 1 || !Number.isInteger(n)) {
+        throw new Error(`[mini-fish] 鱼阵 '${id}' 有一群的队形是 ${g.formation.length} 个数，该是 2n（n≥1）`);
+      }
+      // 速度是除数：0 会让延迟变成 Infinity ⇒ 这一群一条都不出，还不报错
+      if (!(g.speed > 0)) throw new Error(`[mini-fish] 鱼阵 '${id}' 有一群的速度是 ${g.speed}`);
+      // ui16 装不下就绕回来（跑一整天才可能撞上，撞上也只是两群互相躲一下）
+      school = (school % 65535) + 1;
+      let lead = -Infinity;
+      for (let i = 0; i < n; i++) lead = Math.max(lead, g.formation[i * 2]);
+      for (let i = 0; i < n; i++) {
+        queue.push({
+          at: g.at + (lead - g.formation[i * 2]) / g.speed,
+          spawn: {
+            kind,
+            pathId,
+            speed: g.speed,
+            offset: g.formation[i * 2 + 1],
+            school,
+            seed: i / n,
+          },
+        });
       }
     }
     queue.sort((a, b) => a.at - b.at);

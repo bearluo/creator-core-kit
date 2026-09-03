@@ -5,7 +5,7 @@
  *
  * ```
  * tick ─ 清事件 ─ 拍鱼池快照 ─ 逐门炮问指令源 ─ 开票扣钱 ─ 生子弹
- *      └ runner.tick ─ feed → path → movement → spatialIndex → bullet → net → despawn
+ *      └ runner.tick ─ feed → path → school → movement → spatialIndex → bullet → net → despawn
  *      └ 同步余额 ─ 破产保底
  * ```
  *
@@ -35,6 +35,7 @@ import { createFeedSystem } from './ecs/feedSystem';
 import { createNetSystem } from './ecs/netSystem';
 import { despawnSystem } from './ecs/despawnSystem';
 import { pathSystem } from './ecs/pathSystem';
+import { schoolSystem } from './ecs/schoolSystem';
 import { combineFeeders, randomFeeder, waveFeeder, type FishFeeder } from './seams/feeder';
 import { CONTENT } from './content/content';
 import { MAX_FISH_R } from './content/fish-kinds';
@@ -157,6 +158,9 @@ export class FishVM {
     this.runner = createEcsRunner(this.world, [
       createFeedSystem(options.feeder ?? defaultFeeder(rand)),
       pathSystem,
+      // ⚠️ 摆动必须夹在 pathSystem 与 spatialIndex **中间**：它改 Position，排在建索引之后
+      // 就等于拿旧位置建的索引去判网 —— 网边上那条鱼会时中时不中。
+      schoolSystem,
       movementSystem,
       createSpatialIndexSystem(this.hash),
       createBulletSystem(this.hash, this.tickets),

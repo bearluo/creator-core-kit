@@ -18,6 +18,15 @@ describe('鱼种表', () => {
     }
   });
 
+  /**
+   * `r` 是短边的一半、`body` 是长边，两列都从图集同一帧抄来，所以 `body ≥ 2r` 是恒等式。
+   * 抄错一位没有别的地方会红：`pathSystem` 那条「大鱼转得稳」只比大鱼小鱼的相对快慢，
+   * 鲨鱼抄成 49 照样过 —— 只有这条量纲关系抓得住。
+   */
+  it('体长不短于判定直径 —— 两列抄自同一帧，长边不可能比短边小', () => {
+    for (const k of FISH_KINDS) expect(k.body, k.name).toBeGreaterThanOrEqual(2 * k.r);
+  });
+
   it('全表只有一条炸弹鱼（决策 D3：做一种就够，做四种是重复付第一种付过的钱）', () => {
     expect(FISH_KINDS.filter((k) => k.bomb).map((k) => k.id)).toEqual(['fish_hetun']);
   });

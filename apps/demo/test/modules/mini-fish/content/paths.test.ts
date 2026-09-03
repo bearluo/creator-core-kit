@@ -6,6 +6,7 @@ import {
   fishPath,
   makeFishPath,
   pointAt,
+  poseAt,
   segmentCount,
 } from '../../../../assets/modules/mini-fish/content/paths';
 
@@ -129,5 +130,44 @@ describe('弧长参数化', () => {
     const atJoint = seg0.length / corner.length;
     expect(angleAt(corner, atJoint - 1e-4)).toBeCloseTo(0, 3); // 进：向右
     expect(angleAt(corner, atJoint + 1e-4)).toBeCloseTo(Math.PI / 2, 3); // 出：向上
+  });
+});
+
+describe('poseAt', () => {
+  it('offset 0 时跟 pointAt / angleAt 一模一样 —— 三个函数只有一份求值代码', () => {
+    for (const path of PATHS) {
+      for (const s of [0, 0.13, 0.5, 0.87, 1]) {
+        const q = poseAt(path, s);
+        expect(q.x).toBe(pointAt(path, s).x);
+        expect(q.y).toBe(pointAt(path, s).y);
+        expect(q.angle).toBe(angleAt(path, s));
+      }
+    }
+  });
+
+  it('偏移量就是到中线的距离，且**垂直于**前进方向', () => {
+    for (const path of PATHS) {
+      for (const s of [0.1, 0.45, 0.8]) {
+        const mid = poseAt(path, s);
+        const off = poseAt(path, s, 70);
+        const vx = off.x - mid.x;
+        const vy = off.y - mid.y;
+        expect(Math.hypot(vx, vy)).toBeCloseTo(70, 6);
+        // 点积为 0 = 垂直
+        expect(Math.cos(mid.angle) * vx + Math.sin(mid.angle) * vy).toBeCloseTo(0, 6);
+      }
+    }
+  });
+
+  it('正的 offset 在**左手边**：一条朝 +x 的直路，偏出去的鱼在 +y', () => {
+    const q = poseAt(PATHS[0], 0.5, 100); // cross-lr：从左到右
+    expect(poseAt(PATHS[0], 0.5).angle).toBeCloseTo(0, 6);
+    expect(q.y - poseAt(PATHS[0], 0.5).y).toBeCloseTo(100, 6);
+  });
+
+  it('朝向**不跟着偏移转** —— 偏在旁边那条鱼跟领队是平行的，不是斜着游', () => {
+    for (const off of [-120, 0, 120]) {
+      expect(poseAt(PATHS[4], 0.3, off).angle).toBe(poseAt(PATHS[4], 0.3).angle);
+    }
   });
 });

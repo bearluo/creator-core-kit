@@ -20,6 +20,31 @@ export const PathFollow = defineComponent({
   pathId: Types.ui16,
   progress: Types.f32,
   speed: Types.f32,
+  /**
+   * 侧向偏移（像素，正 = 前进方向左手边）—— 队形里「并排」那一维，见 {@link ../paths.poseAt}。
+   * 队形的另一维（纵深）不在这儿：它在 `waveFeeder` 里已经变成进场延迟了。
+   */
+  offset: Types.f32,
+});
+
+/**
+ * 这条鱼属于哪一群，以及它此刻**偏离自己槽位多远**。
+ *
+ * **群不是实体，只有一个 id**：`schoolSystem` 每帧按 `gid` 分桶，分离力只在同群之间算。
+ * `gid = 0` 是散鱼（随机底噪那些）—— 不摆、不挤，跟改造之前一模一样。
+ *
+ * `dx/dy` 是**相对槽位**的位移、`vx/vy` 是它的速度：槽位本身每帧由 `pathSystem` 重写，
+ * 位移必须自己存着才连得起来。⚠️ 生鱼时**六个字段全要清零** —— bitECS 的 eid 会回收，
+ * 不清就继承上一条鱼摆到一半的状态。
+ */
+export const School = defineComponent({
+  gid: Types.ui16,
+  /** 相位种子 ∈[0,1)：同群的鱼靠它摆得不同步。由投喂源按群内序号给，**不是随机数**。 */
+  seed: Types.f32,
+  dx: Types.f32,
+  dy: Types.f32,
+  vx: Types.f32,
+  vy: Types.f32,
 });
 
 /** 朝向（弧度）。`pathSystem` 每帧算好放这儿，View 直接拿去转节点，不自己做数学。 */

@@ -89,20 +89,79 @@ const FIXTURE = {
     { id: 'b', p: [1160, 260, 400, 260, -400, 260, -1160, 260] },
   ],
   waves: [
-    { id: 'w1', groups: [{ at: 0, path: 'a', kind: 'fish_yellow', count: 3, gap: 0.5, speed: 120 }] },
-    { id: 'w2', groups: [{ at: 0, path: 'b', kind: 'fish_red', count: 1, speed: 90 }] },
+    // 队形三条排成一列（纵深 60 像素 ÷ 120 像素/秒 = 每条晚 0.5 秒进场），外加左右各岔开 40
+    {
+      id: 'w1',
+      groups: [{ at: 0, path: 'a', kind: 'fish_yellow', speed: 120, formation: [0, 0, -60, 40, -120, -40] }],
+    },
+    { id: 'w2', groups: [{ at: 0, path: 'b', kind: 'fish_red', speed: 90, formation: [0, 0] }] },
   ],
 } as const;
 
 describe('waveFeeder', () => {
-  it('时刻表：count/gap 展开成「第几秒放哪条」，逐字段对得上', () => {
+  it('时刻表：队形的纵深换算成进场延迟（dx ÷ speed），逐字段对得上', () => {
     const f = waveFeeder(FIXTURE, { order: ['w1'] });
     const at = (dt: number) => f.next(dt);
-    expect(at(0)).toEqual([{ kind: 2, pathId: 0, speed: 120 }]); // fish_yellow 是第 3 种
+    // fish_yellow 是第 3 种；offset 就是队形的 dy；一群共一个 school id；seed = 群内序号 / 条数
+    expect(at(0)).toEqual([{ kind: 2, pathId: 0, speed: 120, offset: 0, school: 1, seed: 0 }]);
     expect(at(0.25)).toEqual([]);
-    expect(at(0.25)).toEqual([{ kind: 2, pathId: 0, speed: 120 }]);
-    expect(at(0.5)).toEqual([{ kind: 2, pathId: 0, speed: 120 }]);
+    expect(at(0.25)).toEqual([{ kind: 2, pathId: 0, speed: 120, offset: 40, school: 1, seed: 1 / 3 }]);
+    expect(at(0.5)).toEqual([{ kind: 2, pathId: 0, speed: 120, offset: -40, school: 1, seed: 2 / 3 }]);
     expect(at(0.5)).toEqual([]);
+  });
+
+  /**
+   * `at` 指的是**领队**进场那一刻，领队 = `dx` 最大那条。所以整条队形一起往前挪，
+   * 出场时刻不动 —— 编的人拖队形时不会顺手把这一群的入场时间也改了。
+   */
+  it('at 锚在领队身上：整条队形平移，第一条鱼的出场时刻不变', () => {
+    const shifted = {
+      ...FIXTURE,
+      waves: [
+        {
+          id: 'w1',
+          // 每个 dx 都 +500：还是同一个形状，只是整体往前挪
+          groups: [{ at: 0, path: 'a', kind: 'fish_yellow', speed: 120, formation: [500, 0, 440, 40, 380, -40] }],
+        },
+      ],
+    };
+    const f = waveFeeder(shifted, { order: ['w1'] });
+    expect(f.next(0)).toHaveLength(1);
+    expect(f.next(0.5)).toHaveLength(1);
+    expect(f.next(0.5)).toHaveLength(1);
+  });
+
+  it('同一群共一个 school id，不同群不同 —— 分离力只在群内算', () => {
+    const two = {
+      ...FIXTURE,
+      waves: [
+        {
+          id: 'w1',
+          groups: [
+            { at: 0, path: 'a', kind: 'fish_yellow', speed: 120, formation: [0, 0, 0, 60] },
+            { at: 0, path: 'b', kind: 'fish_red', speed: 120, formation: [0, 0, 0, 60] },
+          ],
+        },
+      ],
+    };
+    const out = waveFeeder(two, { order: ['w1'] }).next(0);
+    expect(out.map((s) => s.school)).toEqual([1, 1, 2, 2]);
+    expect(new Set(out.map((s) => s.school)).size).toBe(2);
+  });
+
+  it('坏队形 / 零速度在**载入时**就抛：不许静默变成「这一群一条都不出」', () => {
+    const bad = (g: unknown) => ({
+      rev: 1,
+      paths: [{ id: 'a', p: [0, 0, 1, 0, 2, 0, 3, 0] }],
+      waves: [{ id: 'w', groups: [g] }],
+    });
+    expect(() => waveFeeder(bad({ at: 0, path: 'a', kind: 'fish_red', speed: 1, formation: [0] }) as never))
+      .toThrow(/队形/);
+    expect(() => waveFeeder(bad({ at: 0, path: 'a', kind: 'fish_red', speed: 1, formation: [] }) as never))
+      .toThrow(/队形/);
+    // speed 是除数：0 会让延迟变成 Infinity，这一群一条都放不出来，还不报错
+    expect(() => waveFeeder(bad({ at: 0, path: 'a', kind: 'fish_red', speed: 0, formation: [0, 0] }) as never))
+      .toThrow(/速度/);
   });
 
   it('大 dt 等价：一步 tick(5) 与 300 步 1/60 吐出同一串', () => {
@@ -118,7 +177,7 @@ describe('waveFeeder', () => {
     expect(f.next(0)).toHaveLength(1); // w1 第 1 条
     expect(f.next(1)).toHaveLength(2); // w1 第 2、3 条（最后一条在 1.0s 出生）
     expect(f.next(1.9)).toEqual([]); // 还在 gap 里
-    expect(f.next(0.2)).toEqual([{ kind: 0, pathId: 1, speed: 90 }]); // w2 来了
+    expect(f.next(0.2)).toEqual([{ kind: 0, pathId: 1, speed: 90, offset: 0, school: 2, seed: 0 }]); // w2 来了
   });
 
   it('loop:false 放完就停 —— 编辑器要的是「放一次看看」', () => {
@@ -142,7 +201,7 @@ describe('waveFeeder', () => {
     const bad = {
       rev: 1,
       paths: [{ id: 'a', p: [0, 0, 1, 0, 2, 0, 3, 0] }],
-      waves: [{ id: 'w', groups: [{ at: 0, path: 'nope', kind: 'fish_red', count: 1, speed: 1 }] }],
+      waves: [{ id: 'w', groups: [{ at: 0, path: 'nope', kind: 'fish_red', speed: 1, formation: [0, 0] }] }],
     } as const;
     expect(() => waveFeeder(bad)).toThrow(/未知路径/);
     expect(() => waveFeeder(FIXTURE, { order: ['没这个阵'] })).toThrow(/未知鱼阵/);
