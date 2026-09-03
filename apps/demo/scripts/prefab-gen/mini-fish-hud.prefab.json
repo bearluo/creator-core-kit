@@ -1,0 +1,213 @@
+{
+  "_": "mini-fish 的界面层：余额 / 炮档读数 + 加减档控件 + 返回 + 竖屏提示。鱼 / 子弹 / 网 / 特效 / 炮台 / 海底 / 水面 RT 是世界，不进这里。",
+  "_landscape": "本款横屏，四个角都用上了：余额贴左上、返回贴右上、加减档贴右下。原 layout() 按 view.getVisibleSize() 每次转屏重算，现在交给 Widget。",
+  "_cover": "竖屏提示拆成 RotateHint（空节点）+ Cover（半透明底）+ Tip（字）三层：底跟字同节点的话，半透明会连字一起调暗（`test/prefab-alpha.test.ts` 那道闸管的就是这个）。",
+  "url": "db://assets/modules/mini-fish/Hud.prefab",
+  "root": {
+    "name": "Hud",
+    "size": [
+      1920,
+      1080
+    ],
+    "widget": {
+      "left": 0,
+      "right": 0,
+      "top": 0,
+      "bottom": 0
+    },
+    "children": [
+      {
+        "name": "Balance",
+        "pos": [
+          0,
+          0
+        ],
+        "size": [
+          420,
+          60
+        ],
+        "widget": {
+          "left": 20,
+          "top": 20
+        },
+        "label": {
+          "string": "",
+          "fontSize": 40,
+          "lineHeight": 50,
+          "color": [
+            255,
+            214,
+            90
+          ]
+        }
+      },
+      {
+        "name": "Back",
+        "pos": [
+          0,
+          0
+        ],
+        "size": [
+          300,
+          90
+        ],
+        "widget": {
+          "right": 30,
+          "top": 5
+        },
+        "label": {
+          "string": "← 返回大厅",
+          "fontSize": 44,
+          "lineHeight": 54,
+          "color": [
+            120,
+            220,
+            160
+          ]
+        }
+      },
+      {
+        "name": "Minus",
+        "pos": [
+          0,
+          0
+        ],
+        "size": [
+          80,
+          60
+        ],
+        "widget": {
+          "right": 360,
+          "bottom": 30
+        },
+        "label": {
+          "string": "－",
+          "fontSize": 44,
+          "lineHeight": 54,
+          "color": [
+            210,
+            210,
+            210
+          ]
+        }
+      },
+      {
+        "name": "Level",
+        "pos": [
+          0,
+          0
+        ],
+        "size": [
+          300,
+          56
+        ],
+        "widget": {
+          "right": 100,
+          "bottom": 32
+        },
+        "label": {
+          "string": "",
+          "fontSize": 36,
+          "lineHeight": 46,
+          "color": [
+            180,
+            230,
+            255
+          ]
+        }
+      },
+      {
+        "name": "Plus",
+        "pos": [
+          0,
+          0
+        ],
+        "size": [
+          80,
+          60
+        ],
+        "widget": {
+          "right": 60,
+          "bottom": 30
+        },
+        "label": {
+          "string": "＋",
+          "fontSize": 44,
+          "lineHeight": 54,
+          "color": [
+            210,
+            210,
+            210
+          ]
+        }
+      },
+      {
+        "name": "RotateHint",
+        "pos": [
+          0,
+          0
+        ],
+        "size": [
+          1920,
+          1080
+        ],
+        "widget": {
+          "left": 0,
+          "right": 0,
+          "top": 0,
+          "bottom": 0
+        },
+        "children": [
+          {
+            "name": "Cover",
+            "pos": [
+              0,
+              0
+            ],
+            "size": [
+              1920,
+              1080
+            ],
+            "widget": {
+              "left": 0,
+              "right": 0,
+              "top": 0,
+              "bottom": 0
+            },
+            "sprite": {
+              "frame": "7d8f9b89-4fd1-4c9f-a3ab-38ec7cded7ca@f9941",
+              "color": [
+                6,
+                12,
+                26,
+                235
+              ]
+            }
+          },
+          {
+            "name": "Tip",
+            "pos": [
+              0,
+              0
+            ],
+            "size": [
+              760,
+              280
+            ],
+            "label": {
+              "string": "请把手机横过来\n\n捕鱼是横屏玩法",
+              "fontSize": 48,
+              "lineHeight": 58,
+              "color": [
+                230,
+                240,
+                255
+              ],
+              "overflow": "none"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

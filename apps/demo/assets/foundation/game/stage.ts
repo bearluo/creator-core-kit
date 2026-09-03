@@ -1,12 +1,13 @@
 import {
-  Color,
   Label,
   Layers,
   Node,
+  Prefab,
   Sprite,
   SpriteAtlas,
   SpriteFrame,
   UITransform,
+  instantiate,
   view,
   type EventTouch,
 } from 'cc';
@@ -17,9 +18,10 @@ import { getGameHost } from './host';
  * 子游戏场景的**建场小工具** —— 每个 `kind:'game'` 模块的 View 都要的那几件事。
  *
  * 不是 UI 框架，也不给「脸」：本文件一张图、一个 prefab 都没有，只有「建个节点记得置层」
- * 「按同一套姿势加载 bundle 内的贴图」「返回按钮长什么样、按下去干什么」这种在四个游戏里
- * 一模一样的十几行。地基「只有逻辑、没有脸」说的是**美术资产**不许住这层（`login/LoginView.ts`
- * 同样 import `cc`），代码工具不在此列。
+ * 「按同一套姿势加载 bundle 内的贴图」「界面 prefab 怎么装、返回按钮按下去干什么」这种在
+ * 七个游戏里一模一样的十几行。**脸住各模块自己的 `Hud.prefab`**（见 {@link loadHud}），
+ * 地基这层只有接线。地基「只有逻辑、没有脸」说的是**美术资产**不许住这层
+ *（`login/LoginView.ts` 同样 import `cc`），代码工具不在此列。
  *
  * 游戏 View 仍然只做那四件事（取组件 / 建绑定 / 转发事件 / 转发生命周期），玩法全在各自的 VM。
  */
@@ -52,54 +54,71 @@ export function gameSprite(
   return node;
 }
 
-/** 建一个居中文字。 */
-export function gameLabel(
-  parent: Node,
-  name: string,
-  fontSize: number,
-  color: Color,
-  box: readonly [number, number],
-): Label {
-  const node = gameNode(parent, name);
-  node.addComponent(UITransform).setContentSize(box[0], box[1]);
-  const text = node.addComponent(Label);
-  text.fontSize = fontSize;
-  text.lineHeight = fontSize + 10;
-  text.color = color;
-  text.horizontalAlign = Label.HorizontalAlign.CENTER;
-  text.verticalAlign = Label.VerticalAlign.CENTER;
-  return text;
-}
-
-/** {@link exitButton} 的可调项。位置由调用方 `node.setPosition` 自己定。 */
-export interface ExitButtonOptions {
-  readonly fontSize?: number;
-  readonly color?: Color;
-  readonly box?: readonly [number, number];
-  readonly text?: string;
+/**
+ * 装本模块的**界面层** `Hud.prefab`，挂到 `owner` 底下，返回它的根节点。
+ *
+ * 每个 `kind:'game'` 子游戏一张，住自己 bundle 的根上（`modules/<id>/Hud.prefab`），
+ * 描述在 `apps/demo/scripts/prefab-gen/<id>-hud.prefab.json`。**字号 / 颜色 / 盒子 / 贴边全在
+ * prefab 里**，代码只负责接线 —— 这就是「UI 一律走 prefab」那条仓规对子游戏这一层的兑现。
+ *
+ * **界面与世界的分界**：这个节点的**数量和位置是不是由 VM 每帧算出来的** —— 是就是世界
+ *（鱼 / 砖 / 岩石 / 敌机 / 牌 / 关卡砖 / 炮台），归 View 按 VM 建；否就是界面
+ *（读数 / 提示 / 返回 / 加减档 / 虚拟按键），归这张 prefab。
+ *
+ * 贴屏幕边靠 prefab 里的 `Widget`（子游戏场景根自带 `align=45` 的 Widget 拉满屏，
+ * 所以挂进来就有一个跟屏幕同大的父节点），**不再由 TS 拿 `halfScreenHeight` 现算**。
+ *
+ * 取消语义同 {@link loadGameArt}：宿主已死返回 `undefined`，别在尸体上挂节点。
+ */
+export async function loadHud(owner: Node, bundle: string): Promise<Node | undefined> {
+  const prefab = await loadGameAsset<Prefab>(owner, bundle, 'Hud', 'prefab');
+  if (!prefab) return undefined;
+  const hud = instantiate(prefab);
+  owner.addChild(hud);
+  return hud;
 }
 
 /**
- * 「← 返回大厅」按钮 —— **子游戏出去的唯一姿势**。
+ * 按名字取 HUD 里的一个节点（支持 `A/B` 这样的层级路径）。**取不到当场抛**。
  *
- * 里头就一句 `getGameHost().exit()`：游戏不 import 大厅、不认识 EventBus、不知道自己是被
- * `loadScene` 切进来的还是别的什么。`propagationStopped` 是必须的 —— 不然这一下会顺着冒泡
- * 被场景根当成一次操作（在 mini-plane 里就是「点返回顺便拉升一次」）。
+ * 抛比返回 `undefined` 重要得多：View 有几十处按名字取节点，prefab 里改个名字就静默少一个
+ * 绑定 —— 界面照常显示、什么都不报，只是那个读数永远不动。`test/foundation/game/hud.test.ts`
+ * 把这两边的名字对了账，这里再兜一道运行时的。
  */
-export function exitButton(parent: Node, opts: ExitButtonOptions = {}): Label {
-  const label = gameLabel(
-    parent,
-    'Back',
-    opts.fontSize ?? 44,
-    opts.color ?? new Color(120, 220, 160),
-    opts.box ?? [300, 90],
-  );
-  label.string = opts.text ?? '← 返回大厅';
-  label.node.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
+export function hudNode(hud: Node, path: string): Node {
+  const node = hud.getChildByPath(path);
+  if (!node) throw new Error(`[game] ${hud.name}.prefab 里没有节点 '${path}'`);
+  return node;
+}
+
+/** 同 {@link hudNode}，取它的 `Label`。 */
+export function hudLabel(hud: Node, path: string): Label {
+  const label = hudNode(hud, path).getComponent(Label);
+  if (!label) throw new Error(`[game] ${hud.name}.prefab 的 '${path}' 上没有 Label`);
+  return label;
+}
+
+/**
+ * 把界面层**接上** —— 每个子游戏 `buildHud` 的最后一句，干两件事：
+ *
+ * 1. **把 HUD 提到最上层**。`loadHud` 是跟美术并行 `await` 的，回来时世界还没建；
+ *    随后 `buildField` 建的背景是**后来的兄弟节点**，而 2D 渲染顺序就是子节点顺序 ⇒
+ *    满屏的天空 / 海底会把整张 HUD 盖掉。表现是「世界正常、读数和返回键全没了」，
+ *    不报错、不崩，只有把游戏点开才看得见（mini-plane 上实测过一次）。
+ * 2. **给「← 返回大厅」接线** —— 子游戏出去的唯一姿势。里头就一句 `getGameHost().exit()`：
+ *    游戏不 import 大厅、不认识 EventBus、不知道自己是被 `loadScene` 切进来的还是别的什么。
+ *    `propagationStopped` 是必须的 —— 不然这一下会顺着冒泡被场景根当成一次操作
+ *    （在 mini-plane 里就是「点返回顺便拉升一次」）。
+ *
+ * 按钮的**脸**（文案 / 字号 / 颜色 / 贴哪个角）在各自的 `Hud.prefab` 里，各游戏各画各的。
+ */
+export function wireHud(hud: Node, exitPath = 'Back'): void {
+  const parent = hud.parent;
+  if (parent) hud.setSiblingIndex(parent.children.length - 1);
+  hudNode(hud, exitPath).on(Node.EventType.TOUCH_END, (e: EventTouch) => {
     e.propagationStopped = true;
     getGameHost().exit();
   });
-  return label;
 }
 
 /**

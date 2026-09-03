@@ -94,16 +94,18 @@ new BrickVM({ scoreboard: memoryScoreboard(50) })          // 单测里
 
 | 步 | 做什么 |
 |---|---|
-| 1 | 新建 `assets/modules/<id>/`（目录 meta 置 `isBundle: true, priority: 1`），放 `<X>VM.ts`（零 `cc` 玩法）、`<X>Game.ts`（薄壳 View）、`<X>.scene`、`art/` |
+| 1 | 新建 `assets/modules/<id>/`（目录 meta 置 `isBundle: true, priority: 1`），放 `<X>VM.ts`（零 `cc` 玩法）、`<X>Game.ts`（薄壳 View）、`<X>.scene`、`art/`、**`Hud.prefab`**（界面层，描述写 `scripts/prefab-gen/<id>-hud.prefab.json` 再生成） |
 | 2 | `foundation/catalog.ts` 的 `MODULE_CATALOG` 加一行 `{ id, title, bundle, kind: 'game', scene }` |
-| 3 | View 里三句接上契约：`scoreboardFor(BUNDLE)` 喂 VM、`exitButton(this.node)` 放返回键、`onDestroy` 里 `releaseGameArt(BUNDLE)` |
+| 3 | View 里三句接上契约：`scoreboardFor(BUNDLE)` 喂 VM、`loadHud(this.node, BUNDLE)` + `hudLabel` 绑读数 + `wireHud(hud)` 收尾、`onDestroy` 里 `releaseGameArt(BUNDLE)` |
 | 4 | `test/modules/<id>/<X>VM.test.ts` 写玩法判据（`pnpm check:vm-tests` 强制每个 `*VM.ts` 都有） |
 
 **大厅代码零改**；bundle 依赖表（`foundation/bundles.ts`）按 catalog 现推，也零改。
 
 建场的十几行公共代码在 `foundation/game/stage.ts`：`gameNode`（**必须置 `UI_2D` 层**，不置就黑屏且无日志）/
 `gameSprite` / `gameLabel` / `loadGameArt`（按 `group=bundle` 统一登记；**第一个参数是宿主节点**，加载期间被切走返回 `undefined`，
-忘了判类型就红 —— 顺带把「取消」和「失败」分开：宿主已死不抛，宿主还活着的失败照抛）/ `releaseGameArt` / `exitButton` /
+忘了判类型就红 —— 顺带把「取消」和「失败」分开：宿主已死不抛，宿主还活着的失败照抛）/ `releaseGameArt` /
+`loadHud`、`hudNode`、`hudLabel`、`wireHud`（界面层那四件事：装 prefab / 按名字取节点（**取不到当场抛**）/ 取 Label /
+把 HUD 提到最上层并给返回键接线）/
 `fieldByHeight`、`fieldByWidth`（场地按高还是按宽定尺 —— 砖墙那种横向摆死的必须按宽，否则竖屏放不下）。
 它**不含任何美术资产**：地基「只有逻辑、没有脸」说的是资产不许住这层，代码工具不在此列。
 

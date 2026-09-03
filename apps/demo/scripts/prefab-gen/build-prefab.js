@@ -27,8 +27,10 @@
  *   { url, root: Node }
  *   Node = {
  *     name, pos?: [x,y], size?: [w,h], anchor?: [x,y], active?: bool,
- *     label?:  { string?, fontSize?, lineHeight?, color?: [r,g,b,a?], align?: 'left'|'center'|'right' },
- *                // 给了 size 就锁 overflow=CLAMP（不锁的话文字会反过来把节点撑成自己的尺寸）
+ *     label?:  { string?, fontSize?, lineHeight?, color?: [r,g,b,a?], align?: 'left'|'center'|'right',
+ *                overflow?: 'clamp'|'none'|'shrink'|'resize' },
+ *                // 给了 size 就锁 overflow=CLAMP（不锁的话文字会反过来把节点撑成自己的尺寸）；
+ *                // 要「文字多长节点就多宽」的读数 / 提示，显式写 overflow:'none'（那时 size 只是个初值）
  *     sprite?: { frame: <uuid>, type?: 'simple'|'sliced'|'filled', fill?: 'horizontal'|'vertical',
  *                fillStart?: 0..1, fillRange?: 0..1, color?: [r,g,b,a?], sizeMode?: 'custom'|'trimmed'|'raw' },
  *     editBox?: { placeholder?, string?, password?: bool, maxLength?, fontSize?,
@@ -59,6 +61,7 @@ const _pgSizeMode = { custom: cc.Sprite.SizeMode.CUSTOM, trimmed: cc.Sprite.Size
 const _pgLayoutType = { none: cc.Layout.Type.NONE, horizontal: cc.Layout.Type.HORIZONTAL, vertical: cc.Layout.Type.VERTICAL, grid: cc.Layout.Type.GRID };
 const _pgResize = { none: cc.Layout.ResizeMode.NONE, container: cc.Layout.ResizeMode.CONTAINER, children: cc.Layout.ResizeMode.CHILDREN };
 const _pgSliderDir = { horizontal: cc.Slider.Direction.Horizontal, vertical: cc.Slider.Direction.Vertical };
+const _pgOverflow = { none: cc.Label.Overflow.NONE, clamp: cc.Label.Overflow.CLAMP, shrink: cc.Label.Overflow.SHRINK, resize: cc.Label.Overflow.RESIZE_HEIGHT };
 
 /** 按 uuid 取资源（scene 进程走 editor 的资源管线，缓存没有就异步拉一次）。 */
 const _pgLoad = (uuid) =>
@@ -90,7 +93,7 @@ async function _pgBuild(desc, parent) {
     //    于是 align 失效、外面那层 Layout 按错的宽度排版（且什么时候顶掉取决于 Label
     //    什么时候刷新，同一份描述两次生成可能不一样）。写了 size 就锁成 CLAMP。
     if (desc.size) {
-      label.overflow = cc.Label.Overflow.CLAMP;
+      label.overflow = _pgOverflow[l.overflow ?? 'clamp'];
       ui.setContentSize(desc.size[0], desc.size[1]);
     }
   }

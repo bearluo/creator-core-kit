@@ -1,14 +1,15 @@
-import { _decorator, Color, Component, Node, Sprite, SpriteFrame, UITransform } from 'cc';
+import { _decorator, Component, Node, Sprite, SpriteFrame, UITransform } from 'cc';
 import { bindText, BindingScope } from '@cck/engine';
 import { scoreboardFor } from '../../foundation/game/host';
 import {
-  exitButton,
   fieldByHeight,
-  gameLabel,
   gameNode,
   gameSprite,
+  hudLabel,
   loadGameArt,
+  loadHud,
   releaseGameArt,
+  wireHud,
 } from '../../foundation/game/stage';
 import { PLANE_ART, PlaneVM, ROCK_ART_HEIGHT, ROCK_HALF_WIDTH, TILE } from './PlaneVM';
 
@@ -90,8 +91,11 @@ export class PlaneGame extends Component {
   async start(): Promise<void> {
     const metrics = fieldByHeight(FIELD_HEIGHT);
 
-    const frames = await loadGameArt(this.node, BUNDLE, ART);
-    if (!frames) return; // 加载期间被切走了
+    const [frames, hud] = await Promise.all([
+      loadGameArt(this.node, BUNDLE, ART),
+      loadHud(this.node, BUNDLE),
+    ]);
+    if (!frames || !hud) return; // 加载期间被切走了
     this.frames = frames;
 
     this.vm = new PlaneVM({
@@ -100,7 +104,7 @@ export class PlaneGame extends Component {
       scoreboard: scoreboardFor(BUNDLE),
     });
     this.buildField(metrics.scale);
-    this.buildHud(metrics.halfScreenHeight);
+    this.buildHud(hud);
     this.node.on(Node.EventType.TOUCH_END, () => this.vm?.tap());
     console.log(
       `${TAG} Plane.scene 启动（场 ${(metrics.halfWidth * 2).toFixed(0)}×${FIELD_HEIGHT}，缩放 ${metrics.scale.toFixed(2)}）`,
@@ -142,22 +146,19 @@ export class PlaneGame extends Component {
     this.tapHint.setPosition(vm.planeX + 150, vm.y, 0);
   }
 
-  private buildHud(halfScreenHeight: number): void {
+  /**
+   * 界面层只剩**接线**：字号 / 颜色 / 盒子 / 贴哪条边全在 `Hud.prefab` 里
+   *（描述见 `scripts/prefab-gen/mini-plane-hud.prefab.json`），美术策划改它不用碰这个文件。
+   *
+   * 「返回大厅」走 `foundation/game` 的 {@link wireHud}：里头就一句 `getGameHost().exit()`，
+   * 本文件不再认识 EventBus，也不必自己记得「别让这一下顺带被当成拉升」。
+   */
+  private buildHud(hud: Node): void {
     const vm = this.vm!;
     this.binds = new BindingScope();
-
-    const score = gameLabel(this.node, 'Score', 96, new Color(255, 255, 255), [600, 130]);
-    score.node.setPosition(0, halfScreenHeight - 160, 0);
-    this.binds.add(bindText(score, () => `${vm.score.value}`));
-
-    const hint = gameLabel(this.node, 'Hint', 52, new Color(70, 85, 95), [760, 280]);
-    hint.node.setPosition(0, -180, 0);
-    this.binds.add(bindText(hint, () => vm.hint.value));
-
-    // 「返回大厅」现在走 `foundation/game` 的统一按钮：里头就一句 `getGameHost().exit()`，
-    // 本文件不再认识 EventBus，也不必自己记得「别让这一下顺带被当成拉升」。
-    const back = exitButton(this.node, { color: new Color(50, 105, 85) });
-    back.node.setPosition(-330, halfScreenHeight - 90, 0);
+    this.binds.add(bindText(hudLabel(hud, 'Score'), () => `${vm.score.value}`));
+    this.binds.add(bindText(hudLabel(hud, 'Hint'), () => vm.hint.value));
+    wireHud(hud);
   }
 
   // —— 每帧照抄 VM ————————————————————————————————————————

@@ -1,0 +1,165 @@
+{
+  "_": "mini-hop 的界面层：分数读数 + 提示 + 返回 + 三个虚拟按键。关卡砖 / 硬币 / 敌人 / 小人是世界，不进这里。",
+  "_pads": "虚拟按键是屏上控件（位置固定、不随场地缩放、不由 VM 每帧算），按边界判据算界面。原 PAD = { size 170, bottom 190, left -340, right -150, jump 330 }。",
+  "url": "db://assets/modules/mini-hop/Hud.prefab",
+  "root": {
+    "name": "Hud",
+    "size": [
+      1080,
+      1920
+    ],
+    "widget": {
+      "left": 0,
+      "right": 0,
+      "top": 0,
+      "bottom": 0
+    },
+    "children": [
+      {
+        "name": "Score",
+        "pos": [
+          0,
+          0
+        ],
+        "size": [
+          920,
+          110
+        ],
+        "widget": {
+          "top": 95
+        },
+        "label": {
+          "string": "0 分",
+          "fontSize": 72,
+          "lineHeight": 82,
+          "color": [
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      {
+        "name": "Hint",
+        "pos": [
+          0,
+          120
+        ],
+        "size": [
+          820,
+          300
+        ],
+        "label": {
+          "string": "",
+          "fontSize": 52,
+          "lineHeight": 62,
+          "color": [
+            255,
+            250,
+            235
+          ],
+          "overflow": "none"
+        }
+      },
+      {
+        "name": "Back",
+        "pos": [
+          -330,
+          0
+        ],
+        "size": [
+          300,
+          90
+        ],
+        "widget": {
+          "top": 45
+        },
+        "label": {
+          "string": "← 返回大厅",
+          "fontSize": 44,
+          "lineHeight": 54,
+          "color": [
+            255,
+            220,
+            150
+          ]
+        }
+      },
+      {
+        "name": "PadLeft",
+        "pos": [
+          -340,
+          0
+        ],
+        "size": [
+          170,
+          170
+        ],
+        "widget": {
+          "bottom": 105
+        },
+        "label": {
+          "string": "◀",
+          "fontSize": 92,
+          "lineHeight": 102,
+          "color": [
+            255,
+            255,
+            255,
+            200
+          ]
+        }
+      },
+      {
+        "name": "PadRight",
+        "pos": [
+          -150,
+          0
+        ],
+        "size": [
+          170,
+          170
+        ],
+        "widget": {
+          "bottom": 105
+        },
+        "label": {
+          "string": "▶",
+          "fontSize": 92,
+          "lineHeight": 102,
+          "color": [
+            255,
+            255,
+            255,
+            200
+          ]
+        }
+      },
+      {
+        "name": "PadJump",
+        "pos": [
+          330,
+          0
+        ],
+        "size": [
+          170,
+          170
+        ],
+        "widget": {
+          "bottom": 105
+        },
+        "label": {
+          "string": "⤒",
+          "fontSize": 92,
+          "lineHeight": 102,
+          "color": [
+            255,
+            255,
+            255,
+            200
+          ]
+        }
+      }
+    ]
+  }
+}

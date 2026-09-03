@@ -12,7 +12,6 @@ import {
   SpriteAtlas,
   SpriteFrame,
   Texture2D,
-  UIOpacity,
   UITransform,
   Vec4,
   view,
@@ -21,13 +20,15 @@ import {
 import { bindText, BindingScope } from '@cck/engine';
 import { defineQuery, enterQuery, exitQuery, Position, Velocity } from '@cck/ecs-bitecs';
 import {
-  exitButton,
-  gameLabel,
   gameNode,
+  hudLabel,
+  hudNode,
   loadGameArt,
   loadGameAsset,
   loadGameAtlas,
+  loadHud,
   releaseGameArt,
+  wireHud,
 } from '../../foundation/game/stage';
 import { Angle, Bullet, Fish } from './ecs/components';
 import { reconcileNodes } from './ecs/reconcile';
@@ -154,18 +155,19 @@ export class FishGame extends Component {
   private readonly hurting = new Map<number, number>();
 
   async start(): Promise<void> {
-    const [atlas, art, water, flash, wallet] = await Promise.all([
+    const [atlas, art, water, flash, wallet, hud] = await Promise.all([
       loadGameAtlas(this.node, BUNDLE, 'textures'),
       loadGameArt(this.node, BUNDLE, ['seabed', 'noise'] as const),
       loadGameAsset<EffectAsset>(this.node, BUNDLE, 'art/water'),
       loadGameAsset<EffectAsset>(this.node, BUNDLE, 'art/hit-flash'),
       accountWallet(INITIAL_COINS),
+      loadHud(this.node, BUNDLE),
     ]);
-    if (!atlas || !art || !this.node.isValid) return; // 加载期间被切走了 —— 那是取消，不是失败
+    if (!atlas || !art || !hud || !this.node.isValid) return; // 加载期间被切走了 —— 那是取消，不是失败
     this.atlas = atlas;
 
     this.vm = new FishVM({ wallet });
-    this.build(art.seabed);
+    this.build(art.seabed, hud);
     // 两样都是「有更好，没有照玩」：effect 没加载上就退回没水效、没闪白的普通画面
     if (water) this.buildWater(water, art.noise);
     if (flash) {
@@ -266,7 +268,7 @@ export class FishGame extends Component {
     this.waterFrame = frame;
   }
 
-  private build(seabed: SpriteFrame): void {
+  private build(seabed: SpriteFrame, hud: Node): void {
     const field = gameNode(this.node, 'Field');
     this.field = field;
 
@@ -295,46 +297,36 @@ export class FishGame extends Component {
       this.muzzle.push(0);
     });
 
-    this.buildHud();
+    this.buildHud(hud);
     this.node.on(Node.EventType.TOUCH_END, (e: EventTouch) => this.aim(e));
   }
 
-  private buildHud(): void {
+  /**
+   * 界面层只剩**接线**：字号 / 颜色 / 盒子 / 贴哪个角、以及那张竖屏提示，全在 `Hud.prefab` 里
+   *（描述见 `scripts/prefab-gen/mini-fish-hud.prefab.json`）。本款横屏，四个角都用上了 ——
+   * 贴边归 prefab 里的 `Widget`，{@link layout} 不再逐个 `setPosition`。
+   */
+  private buildHud(hud: Node): void {
     const vm = this.vm!;
-    const hud = gameNode(this.node, 'Hud');
     this.binds = new BindingScope();
 
-    const balance = gameLabel(hud, 'Balance', 40, new Color(255, 214, 90), [420, 60]);
-    this.binds.add(bindText(balance, () => `金币 ${vm.balance.value}`));
-
-    const level = gameLabel(hud, 'Level', 36, new Color(180, 230, 255), [300, 56]);
-    this.binds.add(bindText(level, () => `炮 ${vm.level.value} 级`));
-
-    const minus = gameLabel(hud, 'Minus', 44, new Color(210, 210, 210), [80, 60]);
-    minus.string = '－';
-    minus.node.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
-      e.propagationStopped = true;
-      vm.setLevel(vm.level.value - 1);
-    });
-
-    const plus = gameLabel(hud, 'Plus', 44, new Color(210, 210, 210), [80, 60]);
-    plus.string = '＋';
-    plus.node.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
-      e.propagationStopped = true;
-      vm.setLevel(vm.level.value + 1);
-    });
-
-    exitButton(hud);
+    this.binds.add(bindText(hudLabel(hud, 'Balance'), () => `金币 ${vm.balance.value}`));
+    this.binds.add(bindText(hudLabel(hud, 'Level'), () => `炮 ${vm.level.value} 级`));
+    this.levelButton(hudNode(hud, 'Minus'), -1);
+    this.levelButton(hudNode(hud, 'Plus'), +1);
+    wireHud(hud);
 
     // 竖屏提示：盖住整屏（`layout` 按方向开关它）。
-    const hint = gameNode(this.node, 'RotateHint');
-    const cover = hint.addComponent(Sprite);
-    cover.sizeMode = Sprite.SizeMode.CUSTOM;
-    cover.color = new Color(6, 12, 26);
-    hint.addComponent(UIOpacity).opacity = 235;
-    const tip = gameLabel(hint, 'Tip', 48, new Color(230, 240, 255), [760, 280]);
-    tip.string = '请把手机横过来\n\n捕鱼是横屏玩法';
-    this.rotateHint = hint;
+    this.rotateHint = hudNode(hud, 'RotateHint');
+  }
+
+  /** 加 / 减一档炮。`propagationStopped` 是必须的 —— 不然这一下会顺着冒泡变成一次开火。 */
+  private levelButton(node: Node, step: number): void {
+    node.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
+      e.propagationStopped = true;
+      const vm = this.vm!;
+      vm.setLevel(vm.level.value + step);
+    });
   }
 
   /**
@@ -346,11 +338,9 @@ export class FishGame extends Component {
     const size = view.getVisibleSize();
     const portrait = size.height > size.width;
 
-    const hint = this.rotateHint;
-    if (hint) {
-      hint.active = portrait;
-      hint.getComponent(UITransform)!.setContentSize(size.width, size.height);
-    }
+    // 提示盖多大、HUD 贴哪个角，都归 prefab 里的 `Widget`（`alignMode = ALWAYS`），
+    // 这里只管开关。
+    if (this.rotateHint) this.rotateHint.active = portrait;
     // 竖屏不推进玩法，那张全屏 RT 也别白画
     if (this.waterCam) this.waterCam.enabled = !portrait;
     if (portrait) return;
@@ -358,14 +348,6 @@ export class FishGame extends Component {
 
     this.scale = fieldScale(size.width, size.height);
     this.field?.setScale(this.scale, this.scale, 1);
-
-    const halfW = size.width / 2;
-    const halfH = size.height / 2;
-    this.hudNode('Balance')?.setPosition(-halfW + 230, halfH - 50);
-    this.hudNode('Back')?.setPosition(halfW - 180, halfH - 50);
-    this.hudNode('Minus')?.setPosition(halfW - 400, -halfH + 60);
-    this.hudNode('Level')?.setPosition(halfW - 250, -halfH + 60);
-    this.hudNode('Plus')?.setPosition(halfW - 100, -halfH + 60);
   }
 
   /** 屏幕变了：RT 跟着改尺寸，相机的正交高度和水面 quad 一起对齐过去。 */
@@ -384,10 +366,6 @@ export class FishGame extends Component {
     }
     this.waterCam!.orthoHeight = h / 2;
     sprite.node.getComponent(UITransform)!.setContentSize(w, h);
-  }
-
-  private hudNode(name: string): Node | undefined {
-    return this.node.getChildByName('Hud')?.getChildByName(name) ?? undefined;
   }
 
   // —— 每帧同步 ————————————————————————————————————————————

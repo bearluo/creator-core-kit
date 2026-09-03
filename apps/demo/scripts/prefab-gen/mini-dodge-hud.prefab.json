@@ -1,0 +1,106 @@
+{
+  "_": "mini-dodge 的界面层。这一款没有玩法，整个场景就是这张 HUD —— 标题三行字 + 返回。",
+  "url": "db://assets/modules/mini-dodge/Hud.prefab",
+  "root": {
+    "name": "Hud",
+    "size": [
+      1080,
+      1920
+    ],
+    "widget": {
+      "left": 0,
+      "right": 0,
+      "top": 0,
+      "bottom": 0
+    },
+    "children": [
+      {
+        "name": "Title",
+        "pos": [
+          0,
+          140
+        ],
+        "size": [
+          620,
+          56
+        ],
+        "label": {
+          "string": "🎮 mini-dodge",
+          "fontSize": 44,
+          "lineHeight": 54,
+          "color": [
+            255,
+            180,
+            120
+          ],
+          "overflow": "none"
+        }
+      },
+      {
+        "name": "Line1",
+        "pos": [
+          0,
+          70
+        ],
+        "size": [
+          620,
+          34
+        ],
+        "label": {
+          "string": "这是 mini-dodge 自己 bundle 里的 Dodge.scene（kind:game）",
+          "fontSize": 22,
+          "lineHeight": 32,
+          "color": [
+            180,
+            185,
+            195
+          ],
+          "overflow": "none"
+        }
+      },
+      {
+        "name": "Line2",
+        "pos": [
+          0,
+          30
+        ],
+        "size": [
+          620,
+          32
+        ],
+        "label": {
+          "string": "本场景无相机无 Canvas——kit 常驻相机组在渲染它",
+          "fontSize": 20,
+          "lineHeight": 30,
+          "color": [
+            140,
+            160,
+            180
+          ],
+          "overflow": "none"
+        }
+      },
+      {
+        "name": "Back",
+        "pos": [
+          0,
+          -70
+        ],
+        "size": [
+          340,
+          64
+        ],
+        "label": {
+          "string": "← 返回大厅",
+          "fontSize": 34,
+          "lineHeight": 44,
+          "color": [
+            120,
+            220,
+            160
+          ]
+        }
+      }
+    ]
+  }
+}

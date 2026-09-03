@@ -1,14 +1,16 @@
-import { _decorator, Color, Component, Node, Sprite, SpriteFrame, type EventTouch } from 'cc';
+import { _decorator, Component, Node, Sprite, SpriteFrame, type EventTouch } from 'cc';
 import { bindText, BindingScope } from '@cck/engine';
 import { scoreboardFor } from '../../foundation/game/host';
 import {
-  exitButton,
   fieldByHeight,
-  gameLabel,
   gameNode,
   gameSprite,
+  hudLabel,
+  hudNode,
   loadGameArt,
+  loadHud,
   releaseGameArt,
+  wireHud,
 } from '../../foundation/game/stage';
 import { ALIEN_ART, COIN_SIZE, HopVM } from './HopVM';
 import { DECORS, GOAL, HAZARDS, LEVEL_WIDTH, SOLIDS, TILE_SIZE } from './level';
@@ -48,9 +50,6 @@ const CAMERA_Y = 340;
 /** 走路两帧的切换间隔。 */
 const WALK_FRAME_TIME = 0.12;
 
-/** 虚拟按键的大小与位置（屏幕像素，不随场地缩放）。 */
-const PAD = { size: 170, bottom: 190, left: -340, right: -150, jump: 330 } as const;
-
 /**
  * mini-hop · Kenney「Platformer」的 Cocos 版（kind:'game'）。
  *
@@ -81,14 +80,17 @@ export class HopGame extends Component {
     const metrics = fieldByHeight(FIELD_HEIGHT);
     this.halfViewWidth = metrics.halfWidth;
 
-    const frames = await loadGameArt(this.node, BUNDLE, ART);
-    if (!frames) return; // 加载期间被切走了
+    const [frames, hud] = await Promise.all([
+      loadGameArt(this.node, BUNDLE, ART),
+      loadHud(this.node, BUNDLE),
+    ]);
+    if (!frames || !hud) return; // 加载期间被切走了
     this.frames = frames;
 
     this.vm = new HopVM({ scoreboard: scoreboardFor(BUNDLE) });
     this.buildWorld(metrics.scale);
-    this.buildPad(metrics.halfScreenHeight);
-    this.buildHud(metrics.halfScreenHeight);
+    this.buildPad(hud);
+    this.buildHud(hud);
 
     // 摔了 / 通关之后点空白处重来。三个虚拟键和返回键都吃掉自己的事件，不会误触发。
     this.node.on(Node.EventType.TOUCH_END, () => this.vm?.restart());
@@ -154,57 +156,53 @@ export class HopGame extends Component {
     this.alien = gameSprite(world, 'Alien', this.frames['alien-idle'], [0.5, 0], ALIEN_ART.width, ALIEN_ART.height);
   }
 
-  /** 三个虚拟键。按住走、点一下跳 —— 都只是把输入转给 VM。 */
-  private buildPad(halfScreenHeight: number): void {
+  /**
+   * 三个虚拟键。按住走、点一下跳 —— 都只是把输入转给 VM。
+   *
+   * 它们是**屏上控件**（位置固定、不随场地缩放、不由 VM 每帧算），所以按界面 / 世界那条判据
+   * 归 `Hud.prefab`；这里只剩接线。
+   */
+  private buildPad(hud: Node): void {
     const vm = this.vm!;
-    const y = -halfScreenHeight + PAD.bottom;
-    this.padButton('◀', PAD.left, y, () => vm.setDir(-1), () => vm.setDir(0));
-    this.padButton('▶', PAD.right, y, () => vm.setDir(1), () => vm.setDir(0));
-    this.padButton('⤒', PAD.jump, y, () => vm.jump(), () => undefined);
+    this.padButton(hudNode(hud, 'PadLeft'), () => vm.setDir(-1), () => vm.setDir(0));
+    this.padButton(hudNode(hud, 'PadRight'), () => vm.setDir(1), () => vm.setDir(0));
+    this.padButton(hudNode(hud, 'PadJump'), () => vm.jump(), () => undefined);
   }
 
-  private padButton(
-    text: string,
-    x: number,
-    y: number,
-    onDown: () => void,
-    onUp: () => void,
-  ): void {
-    const label = gameLabel(this.node, `Pad${text}`, 92, new Color(255, 255, 255, 200), [PAD.size, PAD.size]);
-    label.string = text;
-    label.node.setPosition(x, y, 0);
+  private padButton(node: Node, onDown: () => void, onUp: () => void): void {
     const stop = (e: EventTouch): void => {
       e.propagationStopped = true; // 别让按键这一下顺带被当成「点空白处重来」
     };
-    label.node.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
+    node.on(Node.EventType.TOUCH_START, (e: EventTouch) => {
       stop(e);
       onDown();
     });
-    label.node.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
+    node.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
       stop(e);
       onUp();
     });
     // 手指滑出按键范围也算松手，否则人会一直往那个方向走。
-    label.node.on(Node.EventType.TOUCH_CANCEL, (e: EventTouch) => {
+    node.on(Node.EventType.TOUCH_CANCEL, (e: EventTouch) => {
       stop(e);
       onUp();
     });
   }
 
-  private buildHud(halfScreenHeight: number): void {
+  /**
+   * 界面层只剩**接线**：字号 / 颜色 / 盒子 / 贴哪条边全在 `Hud.prefab` 里
+   *（描述见 `scripts/prefab-gen/mini-hop-hud.prefab.json`）。
+   */
+  private buildHud(hud: Node): void {
     const vm = this.vm!;
     this.binds = new BindingScope();
-
-    const score = gameLabel(this.node, 'Score', 72, new Color(255, 255, 255), [700, 110]);
-    score.node.setPosition(0, halfScreenHeight - 150, 0);
-    this.binds.add(bindText(score, () => `${vm.score.value} 分 · 硬币 ${vm.coinsTaken.value}/${vm.coins.length}`));
-
-    const hint = gameLabel(this.node, 'Hint', 52, new Color(255, 250, 235), [820, 300]);
-    hint.node.setPosition(0, 120, 0);
-    this.binds.add(bindText(hint, () => vm.hint.value));
-
-    const back = exitButton(this.node, { color: new Color(255, 220, 150) });
-    back.node.setPosition(-330, halfScreenHeight - 90, 0);
+    this.binds.add(
+      bindText(
+        hudLabel(hud, 'Score'),
+        () => `${vm.score.value} 分 · 硬币 ${vm.coinsTaken.value}/${vm.coins.length}`,
+      ),
+    );
+    this.binds.add(bindText(hudLabel(hud, 'Hint'), () => vm.hint.value));
+    wireHud(hud);
   }
 
   // —— 每帧照抄 VM ————————————————————————————————————————

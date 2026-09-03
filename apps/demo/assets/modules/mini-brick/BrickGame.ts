@@ -1,14 +1,15 @@
-import { _decorator, Color, Component, Node, SpriteFrame, view, type EventTouch } from 'cc';
+import { _decorator, Component, Node, SpriteFrame, view, type EventTouch } from 'cc';
 import { bindText, BindingScope } from '@cck/engine';
 import { scoreboardFor } from '../../foundation/game/host';
 import {
-  exitButton,
   fieldByWidth,
-  gameLabel,
   gameNode,
   gameSprite,
+  hudLabel,
   loadGameArt,
+  loadHud,
   releaseGameArt,
+  wireHud,
 } from '../../foundation/game/stage';
 import {
   BALL_RADIUS,
@@ -62,8 +63,11 @@ export class BrickGame extends Component {
     const metrics = fieldByWidth(FIELD_WIDTH);
     this.scale = metrics.scale;
 
-    const frames = await loadGameArt(this.node, BUNDLE, ART);
-    if (!frames) return; // 加载期间被切走了
+    const [frames, hud] = await Promise.all([
+      loadGameArt(this.node, BUNDLE, ART),
+      loadHud(this.node, BUNDLE),
+    ]);
+    if (!frames || !hud) return; // 加载期间被切走了
     this.frames = frames;
 
     this.vm = new BrickVM({
@@ -72,7 +76,7 @@ export class BrickGame extends Component {
       scoreboard: scoreboardFor(BUNDLE),
     });
     this.buildField(metrics.scale);
-    this.buildHud(metrics.halfScreenHeight);
+    this.buildHud(hud);
 
     // 手指按住拖 = 移板；抬手 = 发球 / 重来。两件事分开，才不会「想瞄准结果先把球发了」。
     this.node.on(Node.EventType.TOUCH_START, (e: EventTouch) => this.aim(e));
@@ -145,20 +149,16 @@ export class BrickGame extends Component {
     return node;
   }
 
-  private buildHud(halfScreenHeight: number): void {
+  /**
+   * 界面层只剩**接线**：字号 / 颜色 / 盒子 / 贴哪条边全在 `Hud.prefab` 里
+   *（描述见 `scripts/prefab-gen/mini-brick-hud.prefab.json`）。
+   */
+  private buildHud(hud: Node): void {
     const vm = this.vm!;
     this.binds = new BindingScope();
-
-    const score = gameLabel(this.node, 'Score', 96, new Color(255, 255, 255), [600, 130]);
-    score.node.setPosition(0, halfScreenHeight - 160, 0);
-    this.binds.add(bindText(score, () => `${vm.score.value}`));
-
-    const hint = gameLabel(this.node, 'Hint', 52, new Color(240, 240, 245), [820, 300]);
-    hint.node.setPosition(0, 0, 0);
-    this.binds.add(bindText(hint, () => vm.hint.value));
-
-    const back = exitButton(this.node, { color: new Color(150, 230, 190) });
-    back.node.setPosition(-330, halfScreenHeight - 90, 0);
+    this.binds.add(bindText(hudLabel(hud, 'Score'), () => `${vm.score.value}`));
+    this.binds.add(bindText(hudLabel(hud, 'Hint'), () => vm.hint.value));
+    wireHud(hud);
   }
 
   // —— 转发触摸 ————————————————————————————————————————————

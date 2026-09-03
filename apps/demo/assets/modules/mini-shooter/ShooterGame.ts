@@ -1,14 +1,15 @@
-import { _decorator, Color, Component, Node, Sprite, SpriteFrame, view, type EventTouch } from 'cc';
+import { _decorator, Component, Node, Sprite, SpriteFrame, view, type EventTouch } from 'cc';
 import { bindText, BindingScope } from '@cck/engine';
 import { scoreboardFor } from '../../foundation/game/host';
 import {
-  exitButton,
   fieldByWidth,
-  gameLabel,
   gameNode,
   gameSprite,
+  hudLabel,
   loadGameArt,
+  loadHud,
   releaseGameArt,
+  wireHud,
 } from '../../foundation/game/stage';
 import {
   BG_TILE,
@@ -62,8 +63,11 @@ export class ShooterGame extends Component {
     const metrics = fieldByWidth(FIELD_WIDTH);
     this.scale = metrics.scale;
 
-    const frames = await loadGameArt(this.node, BUNDLE, ART);
-    if (!frames) return; // 加载期间被切走了
+    const [frames, hud] = await Promise.all([
+      loadGameArt(this.node, BUNDLE, ART),
+      loadHud(this.node, BUNDLE),
+    ]);
+    if (!frames || !hud) return; // 加载期间被切走了
     this.frames = frames;
 
     this.vm = new ShooterVM({
@@ -72,7 +76,7 @@ export class ShooterGame extends Component {
       scoreboard: scoreboardFor(BUNDLE),
     });
     this.buildField(metrics.scale);
-    this.buildHud(metrics.halfScreenHeight);
+    this.buildHud(hud);
 
     this.node.on(Node.EventType.TOUCH_START, (e: EventTouch) => this.aim(e));
     this.node.on(Node.EventType.TOUCH_MOVE, (e: EventTouch) => this.aim(e));
@@ -137,19 +141,16 @@ export class ShooterGame extends Component {
     return gameSprite(this.enemyLayer!, `Enemy${i}`, this.frames.enemy0, [0.5, 0.5], ENEMY_SIZE.width, ENEMY_SIZE.height);
   }
 
-  private buildHud(halfScreenHeight: number): void {
+  /**
+   * 界面层只剩**接线**：字号 / 颜色 / 盒子 / 贴哪条边全在 `Hud.prefab` 里
+   *（描述见 `scripts/prefab-gen/mini-shooter-hud.prefab.json`）。
+   */
+  private buildHud(hud: Node): void {
     const vm = this.vm!;
     this.binds = new BindingScope();
-
-    const score = gameLabel(this.node, 'Score', 96, new Color(255, 255, 255), [600, 130]);
-    score.node.setPosition(0, halfScreenHeight - 160, 0);
-    this.binds.add(bindText(score, () => `${vm.score.value}`));
-
-    const hint = gameLabel(this.node, 'Hint', 52, new Color(235, 240, 255), [820, 300]);
-    this.binds.add(bindText(hint, () => vm.hint.value));
-
-    const back = exitButton(this.node, { color: new Color(150, 200, 255) });
-    back.node.setPosition(-330, halfScreenHeight - 90, 0);
+    this.binds.add(bindText(hudLabel(hud, 'Score'), () => `${vm.score.value}`));
+    this.binds.add(bindText(hudLabel(hud, 'Hint'), () => vm.hint.value));
+    wireHud(hud);
   }
 
   private aim(e: EventTouch): void {

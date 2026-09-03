@@ -1,14 +1,15 @@
-import { _decorator, Color, Component, Node, Sprite, SpriteFrame, type EventTouch } from 'cc';
+import { _decorator, Component, Node, Sprite, SpriteFrame, type EventTouch } from 'cc';
 import { bindText, BindingScope } from '@cck/engine';
 import { getGameHost } from '../../foundation/game/host';
 import {
-  exitButton,
   fieldByWidth,
-  gameLabel,
   gameNode,
   gameSprite,
+  hudLabel,
   loadGameArt,
+  loadHud,
   releaseGameArt,
+  wireHud,
 } from '../../foundation/game/stage';
 import { CARD_SIZE, CardsVM, DECK_SIZE, DIE_FACES, DIE_SIZE } from './CardsVM';
 
@@ -68,13 +69,16 @@ export class CardsGame extends Component {
   async start(): Promise<void> {
     const metrics = fieldByWidth(FIELD_WIDTH);
 
-    const frames = await loadGameArt(this.node, BUNDLE, ART);
-    if (!frames) return; // 加载期间被切走了
+    const [frames, hud] = await Promise.all([
+      loadGameArt(this.node, BUNDLE, ART),
+      loadHud(this.node, BUNDLE),
+    ]);
+    if (!frames || !hud) return; // 加载期间被切走了
     this.frames = frames;
 
     this.vm = new CardsVM();
     this.buildTable(metrics.scale);
-    this.buildHud(metrics.halfScreenHeight);
+    this.buildHud(hud);
     this.sync();
     console.log(`${TAG} Cards.scene 启动（${ART.length} 张图，${DECK_SIZE} 张牌一副）`);
   }
@@ -116,27 +120,27 @@ export class CardsGame extends Component {
     return node;
   }
 
-  private buildHud(halfScreenHeight: number): void {
+  /**
+   * 界面层只剩**接线**：字号 / 颜色 / 盒子 / 贴哪条边全在 `Hud.prefab` 里
+   *（描述见 `scripts/prefab-gen/mini-cards-hud.prefab.json`）。
+   */
+  private buildHud(hud: Node): void {
     const vm = this.vm!;
     this.binds = new BindingScope();
 
     // 玩家名来自 GameHost —— 子游戏不自己去翻登录态，也不认识 auth 那一层。
-    const who = gameLabel(this.node, 'Player', 48, new Color(230, 235, 245), [820, 90]);
-    who.string = `${getGameHost().player.name} 的牌桌`;
-    who.node.setPosition(0, halfScreenHeight - 170, 0);
+    hudLabel(hud, 'Player').string = `${getGameHost().player.name} 的牌桌`;
 
-    const deckInfo = gameLabel(this.node, 'Deck', 44, new Color(190, 200, 215), [820, 90]);
-    deckInfo.node.setPosition(0, halfScreenHeight - 250, 0);
     this.binds.add(
-      bindText(deckInfo, () => `第 ${vm.shuffles.value} 副 · 还剩 ${vm.remaining.value} 张${vm.lastCard.value ? ` · 刚发 ${vm.lastCard.value}` : ''}`),
+      bindText(
+        hudLabel(hud, 'Deck'),
+        () => `第 ${vm.shuffles.value} 副 · 还剩 ${vm.remaining.value} 张${vm.lastCard.value ? ` · 刚发 ${vm.lastCard.value}` : ''}`,
+      ),
     );
-
-    const hint = gameLabel(this.node, 'Hint', 44, new Color(200, 210, 225), [820, 200]);
-    hint.node.setPosition(0, -430, 0);
-    this.binds.add(bindText(hint, () => `点牌堆发牌 · 点骰子重掷（${vm.diceTotal.value} 点）`));
-
-    const back = exitButton(this.node, { color: new Color(230, 200, 150) });
-    back.node.setPosition(-330, halfScreenHeight - 90, 0);
+    this.binds.add(
+      bindText(hudLabel(hud, 'Hint'), () => `点牌堆发牌 · 点骰子重掷（${vm.diceTotal.value} 点）`),
+    );
+    wireHud(hud);
   }
 
   // —— 点完同步一次 ————————————————————————————————————————

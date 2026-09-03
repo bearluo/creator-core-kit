@@ -1,0 +1,113 @@
+{
+  "_": "mini-cards 的界面层：玩家名 + 牌堆读数 + 提示 + 返回。牌堆 / 出牌位 / 两颗骰子是世界（那就是这一款的玩法本体），不进这里。",
+  "url": "db://assets/modules/mini-cards/Hud.prefab",
+  "root": {
+    "name": "Hud",
+    "size": [
+      1080,
+      1920
+    ],
+    "widget": {
+      "left": 0,
+      "right": 0,
+      "top": 0,
+      "bottom": 0
+    },
+    "children": [
+      {
+        "name": "Player",
+        "pos": [
+          0,
+          0
+        ],
+        "size": [
+          820,
+          90
+        ],
+        "widget": {
+          "top": 125
+        },
+        "label": {
+          "string": "",
+          "fontSize": 48,
+          "lineHeight": 58,
+          "color": [
+            230,
+            235,
+            245
+          ]
+        }
+      },
+      {
+        "name": "Deck",
+        "pos": [
+          0,
+          0
+        ],
+        "size": [
+          900,
+          90
+        ],
+        "widget": {
+          "top": 205
+        },
+        "label": {
+          "string": "",
+          "fontSize": 44,
+          "lineHeight": 54,
+          "color": [
+            190,
+            200,
+            215
+          ]
+        }
+      },
+      {
+        "name": "Hint",
+        "pos": [
+          0,
+          -430
+        ],
+        "size": [
+          820,
+          200
+        ],
+        "label": {
+          "string": "",
+          "fontSize": 44,
+          "lineHeight": 54,
+          "color": [
+            200,
+            210,
+            225
+          ],
+          "overflow": "none"
+        }
+      },
+      {
+        "name": "Back",
+        "pos": [
+          -330,
+          0
+        ],
+        "size": [
+          300,
+          90
+        ],
+        "widget": {
+          "top": 45
+        },
+        "label": {
+          "string": "← 返回大厅",
+          "fontSize": 44,
+          "lineHeight": 54,
+          "color": [
+            230,
+            200,
+            150
+          ]
+        }
+      }
+    ]
+  }
+}

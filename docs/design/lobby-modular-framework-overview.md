@@ -118,13 +118,18 @@ new BrickVM({ scoreboard: scoreboardFor('mini-brick') })   new BrickVM({ scorebo
 
 **回路是闭的、且看得见**：游戏结束 `submit` → 回大厅（`Lobby.scene` 重新加载 → 重建按钮）→ 按钮上多出「最好 N」。**大厅不认识任何一个游戏**，它只按 id 读一个数，不知道那分是打砖块还是吃硬币来的。
 
-配套的建场小工具在 `foundation/game/stage.ts`（`gameNode` / `gameSprite` / `gameLabel` / `loadGameArt` / `exitButton` / `fieldByHeight` / `fieldByWidth`）——六个 game 模块共用的那十几行，不含任何美术资产。
+配套的建场小工具在 `foundation/game/stage.ts`（`gameNode` / `gameSprite` / `loadGameArt` / `loadHud` / `hudNode` / `hudLabel` / `wireHud` / `fieldByHeight` / `fieldByWidth`）——七个 game 模块共用的那十几行，不含任何美术资产。
+
+**界面层走 prefab，不在代码里拼**（仓规「UI 一律走 prefab」）：一个子游戏一张 `Hud.prefab`，住自己 bundle 的根上。
+分界判据一句话 —— **这个节点的数量和位置是不是由 VM 每帧算出来的**：是就是世界（鱼 / 砖 / 岩石 / 敌机 / 牌 / 关卡砖 / 炮台），
+归 View 按 VM 建；否就是界面（读数 / 提示 / 返回 / 加减档 / 虚拟按键），归那张 prefab。
+贴屏幕边靠 prefab 里的 `Widget`（子游戏场景根自带 `align=45` 的 Widget 拉满屏），代码里不再有 `halfScreenHeight` 那种布局算式。
 
 ### 接入一个新子游戏要做的事
 
 1. 新建 `assets/modules/<id>/`（目录 meta 置 `isBundle: true, priority: 1`），里头放 `<X>VM.ts`（零 `cc` 的玩法）、`<X>Game.ts`（薄壳 View）、`<X>.scene`、`art/`；
 2. `foundation/catalog.ts` 的 `MODULE_CATALOG` 加一行 `{ id, title, bundle, kind: 'game', scene }`；
-3. View 里三句话接上契约：`scoreboardFor(BUNDLE)` 喂给 VM、`exitButton(this.node)` 放返回键、`releaseGameArt(BUNDLE)` 在 `onDestroy` 里还引用；
+3. View 里三句话接上契约：`scoreboardFor(BUNDLE)` 喂给 VM、`loadHud(this.node, BUNDLE)` 装界面层（`hudLabel` 绑读数、`wireHud(hud)` 收尾）、`releaseGameArt(BUNDLE)` 在 `onDestroy` 里还引用；
    贴图走 `const frames = await loadGameArt(this.node, BUNDLE, ART); if (!frames) return;` —— 第一个参数是**宿主节点**，加载期间被切走就返回 `undefined`（类型带 `| undefined`，忘了判 `pnpm typecheck` 当场红）；
 4. `test/modules/<id>/<X>VM.test.ts` 写玩法判据（`pnpm check:vm-tests` 强制）。
 
@@ -165,7 +170,7 @@ apps/demo/assets/
 │  ├─ game/                    **game 类**的契约（见 §3）
 │  │  ├─ host.ts               GameHost：player / exit / best / submit + installGameHost
 │  │  ├─ scoreboard.ts         GameScoreboard（零依赖）：VM 只认这两个方法
-│  │  └─ stage.ts              建场小工具（gameNode / gameSprite / exitButton / fieldBy*）
+│  │  └─ stage.ts              建场小工具（gameNode / gameSprite / loadHud / wireHud / fieldBy*）
 │  ├─ net/                     协议 / 连接 / 认证 / 网关搬家
 │  └─ login/                   登录闸门的 VM 与 View（脸在皮包里）
 ├─ shared/                     shared bundle：跨模块公共资源（全局 i18n 基表…）

@@ -1,0 +1,89 @@
+{
+  "_": "mini-shooter 的界面层：分数读数 + 提示 + 返回。飞船 / 激光 / 陨石 / 星空瓦片是世界，不进这里。",
+  "url": "db://assets/modules/mini-shooter/Hud.prefab",
+  "root": {
+    "name": "Hud",
+    "size": [
+      1080,
+      1920
+    ],
+    "widget": {
+      "left": 0,
+      "right": 0,
+      "top": 0,
+      "bottom": 0
+    },
+    "children": [
+      {
+        "name": "Score",
+        "pos": [
+          0,
+          0
+        ],
+        "size": [
+          600,
+          130
+        ],
+        "widget": {
+          "top": 95
+        },
+        "label": {
+          "string": "0",
+          "fontSize": 96,
+          "lineHeight": 106,
+          "color": [
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      {
+        "name": "Hint",
+        "pos": [
+          0,
+          0
+        ],
+        "size": [
+          820,
+          300
+        ],
+        "label": {
+          "string": "",
+          "fontSize": 52,
+          "lineHeight": 62,
+          "color": [
+            235,
+            240,
+            255
+          ],
+          "overflow": "none"
+        }
+      },
+      {
+        "name": "Back",
+        "pos": [
+          -330,
+          0
+        ],
+        "size": [
+          300,
+          90
+        ],
+        "widget": {
+          "top": 45
+        },
+        "label": {
+          "string": "← 返回大厅",
+          "fontSize": 44,
+          "lineHeight": 54,
+          "color": [
+            150,
+            200,
+            255
+          ]
+        }
+      }
+    ]
+  }
+}
