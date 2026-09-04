@@ -94,3 +94,6 @@ export type { ResolutionOptions } from './resolution';
 
 // —— App 层 · 启动编排的引擎半（平台重启 + bundle 脚本失效接缝）——
 export { appModule, createCcBundleReloader } from './app-module';
+
+// —— 崩溃上报 · 引擎半（装 __errorHandler，转发给 flavor 决定的 Java 实现）——
+export { installCrashReporter } from './crash-reporter';

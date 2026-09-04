@@ -1,11 +1,11 @@
 ---
 模块: crash-reporting
 所在包: packages/core（收敛逻辑）+ packages/engine（钩子与原生转发）
-状态: 已定稿
+状态: 已实现（JS 半；Java 半见 hlgit #50）
 跟踪: hlgit #42（wayfinder 图）· 接缝定稿见 #47 · 渠道组装见 ADR-0022
 摘要: JS 未捕获异常送到崩溃平台。接缝只有两个函数——core 一个纯逻辑收敛器、engine 一个 install；上下文用 getter 现取，不用谁来推。
 何时读: 要接一家崩溃上报 SDK，或要改「哪些异常值得上报」的规则时。
-日期: 2026-09-03
+日期: 2026-09-04
 依赖: logging · di-container
 ---
 
@@ -66,6 +66,17 @@ export interface CrashFilter {
  *                 （一次会话只保留最近 8 条非致命）。
  */
 export function createCrashFilter(opts?: { maxKinds?: number }): CrashFilter;
+
+/**
+ * 拼成过河的 JSON。`fingerprint` **不进载荷**。
+ *
+ * @param getContext 上报**这一刻**现取。它自己抛不会打断上报，取不到就是空表——
+ *                   少一块上下文远好过整条崩溃报不出去。
+ */
+export function crashPayload(
+  event: CrashEvent,
+  getContext: () => Record<string, string>,
+): string;
 ```
 
 **没有单例**。`createCrashFilter()` 每次返回新实例，状态存在闭包里（硬规则二）。
@@ -81,6 +92,12 @@ export function createCrashFilter(opts?: { maxKinds?: number }): CrashFilter;
  */
 export function installCrashReporter(getContext: () => Record<string, string>): void;
 ```
+
+**Android 以外 no-op** —— 判据是 `sys.os !== sys.OS.ANDROID`，不是 `sys.isNative`：`CckReport`
+是个 Java 类，而 iOS 的 `callStaticMethod` 连签名那个参数都不吃，形状根本不同。
+
+这个函数里**没有分支逻辑**：装钩子、拿 `filter.accept` 的结果、非 `null` 就调一次 JNI，
+完。判定 / 截断 / 载荷拼装全在 core（见下面决策 #7 与「测试」一节）。
 
 调用点在接入方的启动序列里，一次，之后不用管：
 
@@ -150,29 +167,29 @@ JS 抛了一个没人接的异常
 | 环境 | 行为 |
 |---|---|
 | Android native | 全链路。flavor 决定是 Bugly 还是 Crashlytics（[ADR-0022](../../../../docs/adr/0022-capability-sdk-as-channel-attribute.md)） |
-| iOS | `__errorHandler` 是跨平台的 C++ 逻辑，理论上一处 override 两端都有。**没验过** |
-| Web / 小游戏 | `installCrashReporter` **no-op**（没有 `native.reflection`）。要接的话是另一套 SDK，另说 |
+| iOS | **no-op**（判据是 `sys.os === sys.OS.ANDROID`）。`__errorHandler` 本身是跨平台的，但 `CckReport` 是 Java 类、`callStaticMethod` 在 iOS 上连签名参数都不吃 —— 要接得另写 ObjC 那半 |
+| Web / 小游戏 | `installCrashReporter` **no-op**。要接的话是另一套 SDK，另说 |
 | 编辑器预览 | 同上，no-op。异常照常进 console |
 
 **与三种「热」的关系**：钩子与收敛逻辑都在 **base 层**，改「哪些异常值得上报」「上下文带什么」是热更 + 重启；**Java 那半在引擎层，改它必须发新包**。所以「Java 侧尽量薄」在这里同样是硬约束 —— Java 只负责 `JSON.parse` 加一次 SDK 调用。
 
-## Testable seams + test plan
+## Testable seams + 测试
 
-core 侧零 `cc`，全部 node 直跑（`packages/core/src/crash/__tests__/`）：
+**逻辑全在 core，所以测试也全在 core** —— `packages/core/src/crash/__tests__/crash.test.ts`，15 条，node 直跑：
 
-- **去重**：同一指纹喂 100 次，`accept` 只有第一次返回非 `null`。
-- **上限**：喂 9 种不同指纹，只有前 8 种过。
-- **指纹**：`message` 相同但 `stack` 首帧不同 → 算两种；`stack` 首帧相同但后续帧不同 → 算一种。
-- **截首行**：喂一个带整行源码回显的 `location`（几十 KB），产出的 `location` 只有第一行。
-- **`maxKinds` 可配**：传 2 就只过 2 种。
+- **去重**：同一指纹喂 100 次只过一次；`message` 同而 `stack` 首帧不同算两种；首帧同而后续帧不同算一种；首帧同而 `message` 不同算两种。
+- **上限**：默认喂 9 种只过前 8 种；`maxKinds: 2` 只过 2 种；**达到上限后连已报过的那种也不再报**（`size >= maxKinds` 先于 `has` 之后判，两条路都堵死）。
+- **无单例**：两次 `createCrashFilter()` 状态不串（硬规则二）。
+- **截首行**：喂一个带整行源码回显的 `location`（约 54 KB）只留首行；CRLF 产物的 `
+` 与尾随空白一并去掉。
+- **载荷**：`fingerprint` 不在 JSON 里（顶层键恰好是 `ctx/linenum/location/message/stack` 五个）；`ctx` 是**上报那一刻**现取而非装钩子那一刻；getter 抛异常 / 返回 `undefined` 都退化成空表且不打断上报。
 
-engine 侧（cc mock 封顶，ADR-0002）：
+**engine 那半没有单测，这是刻意的。** `native.reflection.callStaticMethod` 是 JNI 调用，按
+[ADR-0002](../../../../docs/adr/0002-engine-test-strategy-capped-cc-mock.md) 属「需要真实引擎行为」那一类，
+**禁止进 cc mock**（同仓先例：`hotupdate-backend.ts` 重 cc、无单测）。与其为了凑一条断言把 mock 撑大，
+不如让 engine 那半薄到**没有逻辑可测** —— 这正是把判定与载荷拼装下沉 core 的原因。它的验证走真机（#50）。
 
-- `installCrashReporter`：装完之后 `globalThis.__errorHandler` 是个函数；喂一次异常 → `callStaticMethod` 被调、JSON 里字段齐、`ctx` 来自 getter。
-- **getter 自己抛**：不打断上报，`ctx` 退化成空表。
-- **非 native**：`installCrashReporter` 不装钩子、不抛。
-
-只能真机验、不写单测的：Java 侧那一次 SDK 调用、后台真收到（ADR-0002）。
+只能真机验的：那一次 JNI 调用、Java 侧的 SDK 调用、后台真收到。
 
 ---
 
@@ -180,7 +197,7 @@ engine 侧（cc mock 封顶，ADR-0002）：
 
 **`location` 会回显整行源码，release 下单次约 100 KB。** 引擎给的 `location` 不是一个路径，它把出错那一行的源码连同等长空格一起附在后面。release 产物压缩后单行可达 5 万字符 → **必须只取第一行**再上报，否则一条崩溃就能吃掉配额。
 
-**`Error.stackTraceLimit` 默认只有 10 帧。** 想要更深的调用链得在启动时调大（一行 `Error.stackTraceLimit = 30`）。10 帧在 Cocos 的事件派发链里经常不够到业务代码。
+**`Error.stackTraceLimit` 默认只有 10 帧**，在 Cocos 的事件派发链里经常还没走到业务代码就用完了。`installCrashReporter` 已把它调到 **30**。它是 V8 独有属性，engine 的 tsconfig 不含 node 类型，所以那行带一次显式收窄（`(Error as { stackTraceLimit?: number })`）。
 
 **`error.stack` 不覆盖 fatal / OOM。** 那两条走 `onFatalErrorCallback`，`stack` 是字面量 `"(no stack information)"`。所以「进程直接没了」这类现场，本模块收不到。
 

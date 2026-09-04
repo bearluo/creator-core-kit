@@ -1,0 +1,127 @@
+import { describe, expect, it } from 'vitest';
+import { crashPayload, createCrashFilter, type RawCrash } from '../crash';
+
+/**
+ * 崩溃上报的**全部判定逻辑**都在这里——engine 那半按 ADR-0002 薄到没有逻辑可测
+ * （`native.reflection` 是 JNI，禁止进 cc mock）。所以这份测试的覆盖面就是接缝的覆盖面。
+ */
+
+function raw(over: Partial<RawCrash> = {}): RawCrash {
+  return {
+    location: 'src/foo/Bar.ts:42',
+    linenum: 42,
+    message: 'TypeError: x is undefined',
+    stack: 'at Bar.update (bundle.fa0b0.js:1:52341)\nat director.tick (cc.js:1:9)',
+    ...over,
+  };
+}
+
+describe('createCrashFilter — 去重', () => {
+  it('1. 同一指纹喂 100 次，只有第一次过', () => {
+    const f = createCrashFilter();
+    const passed = Array.from({ length: 100 }, () => f.accept(raw())).filter((e) => e !== null);
+    expect(passed).toHaveLength(1);
+  });
+
+  it('2. message 相同但 stack 首帧不同 → 算两种', () => {
+    const f = createCrashFilter();
+    expect(f.accept(raw({ stack: 'at A (a.js:1:1)\nat tick (cc.js:1:9)' }))).not.toBeNull();
+    expect(f.accept(raw({ stack: 'at B (b.js:2:2)\nat tick (cc.js:1:9)' }))).not.toBeNull();
+  });
+
+  it('3. stack 首帧相同但后续帧不同 → 算一种', () => {
+    const f = createCrashFilter();
+    expect(f.accept(raw({ stack: 'at A (a.js:1:1)\nat X (x.js:1:1)' }))).not.toBeNull();
+    expect(f.accept(raw({ stack: 'at A (a.js:1:1)\nat Y (y.js:9:9)' }))).toBeNull();
+  });
+
+  it('4. stack 首帧相同但 message 不同 → 算两种', () => {
+    const f = createCrashFilter();
+    expect(f.accept(raw({ message: 'boom' }))).not.toBeNull();
+    expect(f.accept(raw({ message: 'bang' }))).not.toBeNull();
+  });
+
+  it('5. 每次 createCrashFilter 都是新实例，状态不串（硬规则二）', () => {
+    expect(createCrashFilter().accept(raw())).not.toBeNull();
+    expect(createCrashFilter().accept(raw())).not.toBeNull();
+  });
+});
+
+describe('createCrashFilter — 种类上限', () => {
+  it('6. 默认 8 种：喂 9 种只过前 8 种', () => {
+    const f = createCrashFilter();
+    const passed = Array.from({ length: 9 }, (_, i) => f.accept(raw({ message: `e${i}` }))).filter(
+      (e) => e !== null,
+    );
+    expect(passed.map((e) => e.message)).toEqual(['e0', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7']);
+  });
+
+  it('7. maxKinds 可配：传 2 就只过 2 种', () => {
+    const f = createCrashFilter({ maxKinds: 2 });
+    expect(f.accept(raw({ message: 'a' }))).not.toBeNull();
+    expect(f.accept(raw({ message: 'b' }))).not.toBeNull();
+    expect(f.accept(raw({ message: 'c' }))).toBeNull();
+  });
+
+  it('8. 达到上限后，已报过的那种也不再重复上报', () => {
+    const f = createCrashFilter({ maxKinds: 1 });
+    expect(f.accept(raw({ message: 'a' }))).not.toBeNull();
+    expect(f.accept(raw({ message: 'b' }))).toBeNull();
+    expect(f.accept(raw({ message: 'a' }))).toBeNull();
+  });
+});
+
+describe('createCrashFilter — 规整', () => {
+  it('9. location 只留首行（引擎会把出错那行源码连同等长空格附在后面）', () => {
+    const bloated = `src/foo/Bar.ts:42\n${'const x='.repeat(6000)}\n${' '.repeat(48000)}^`;
+    const e = createCrashFilter().accept(raw({ location: bloated }));
+    expect(e?.location).toBe('src/foo/Bar.ts:42');
+  });
+
+  it('10. 首行末尾的 \\r 与空白一并去掉（CRLF 产物）', () => {
+    const e = createCrashFilter().accept(raw({ location: 'src/a.ts:1  \r\nsource line' }));
+    expect(e?.location).toBe('src/a.ts:1');
+  });
+
+  it('11. stack 原样保留（截断会毁掉后续帧的定位价值）', () => {
+    const e = createCrashFilter().accept(raw());
+    expect(e?.stack).toBe(raw().stack);
+    expect(e?.linenum).toBe(42);
+    expect(e?.message).toBe(raw().message);
+  });
+});
+
+describe('crashPayload', () => {
+  it('12. 指纹不进上报载荷（它只供调试与单测断言）', () => {
+    const e = createCrashFilter().accept(raw())!;
+    const p = JSON.parse(crashPayload(e, () => ({})));
+    expect(e.fingerprint).toBeTruthy();
+    expect(p).not.toHaveProperty('fingerprint');
+    expect(Object.keys(p).sort()).toEqual(['ctx', 'linenum', 'location', 'message', 'stack']);
+  });
+
+  it('13. ctx 是**上报那一刻**现取的，不是装钩子那一刻', () => {
+    const e = createCrashFilter().accept(raw())!;
+    let scene = 'Boot';
+    const get = (): Record<string, string> => ({ scene });
+    scene = 'Lobby';
+    expect(JSON.parse(crashPayload(e, get)).ctx).toEqual({ scene: 'Lobby' });
+  });
+
+  it('14. getter 自己抛也不打断上报，ctx 退化成空表', () => {
+    const e = createCrashFilter().accept(raw())!;
+    const p = JSON.parse(
+      crashPayload(e, () => {
+        throw new Error('登录态还没就绪');
+      }),
+    );
+    expect(p.ctx).toEqual({});
+    expect(p.message).toBe(raw().message);
+  });
+
+  it('15. getter 返回 undefined 也不炸', () => {
+    const e = createCrashFilter().accept(raw())!;
+    const get = (): Record<string, string> => undefined as unknown as Record<string, string>;
+    expect(JSON.parse(crashPayload(e, get)).ctx).toEqual({});
+  });
+});
