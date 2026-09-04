@@ -57,7 +57,7 @@
 | 归属 | Bugly 原班 | Bugly + Shiply/TDS 体系 | 腾讯 WeTest |
 | 身份 | **QQ 号** | 手机号（可与 QQ 号关联迁移） | 邮箱 / 企业微信 |
 | Android SDK | `com.tencent.bugly:crashreport` **4.1.9.3**（2023-10-30） | `com.tencent.bugly:bugly-pro` **4.4.8.2**（2026-08-25） | CrashSight Android SDK 4.2.14（**创建项目后才能下载**） |
-| 凭证 | 只有 **APP ID** | AppID + AppKey | AppID + AppKey |
+| 凭证 | **APP ID + App Key**（客户端只用 APP ID）[^appkey] | AppID + AppKey | AppID + AppKey |
 | 钱 | **全平台免费** | **必须买资源包**，事件量套餐 6 亿条/年 = 32,000 元/年起；月活套餐 5 万 MAU = 50,000 元/年起 | 商务谈 |
 | 门槛 | 无 | 「**如果产品没有绑定生效中的资源包，或者绑定的资源包已经用完，则该产品无法上报数据**」 | 「商务沟通 → 平台开通项目 → SDK 接入 → 试用结束，**签订正式使用合同**后，转正式使用」 |
 | 结论 | ✅ **选它** | ❌ 要钱、要发票抬头、要企业主体 | ❌ 要合同 |
@@ -87,7 +87,11 @@
 2. **完善开发者信息**：「在创建产品之前完善开发者信息：按照要求填写**邮箱，微信号和手机号**以便及时收到产品的动态」。
 3. **创建应用**：「按照要求添加**应用名称、选择应用平台、产品类型、产品图标和描述信息**。**保存后即创建成功**。」
 
-三步里**没有**任何一项要求提供营业执照、身份证、软著、备案号，也**没有人工审核环节**（「保存后即创建成功」）。创建完在产品设置里拿 **APP ID**（免费版只有 APP ID，没有 AppKey——AppKey 是专业版才有的东西）。
+三步里**没有**任何一项要求提供营业执照、身份证、软著、备案号，也**没有人工审核环节**（「保存后即创建成功」）。创建完在产品设置里拿 **APP ID**。
+
+> ⚠️ **2026-09-04 实注册更正**：本节原写「免费版只有 APP ID，没有 AppKey——AppKey 是专业版才有的东西」，**错的**。免费版**也发 App Key**（UUID 形状）。但**接入侧结论不变**：客户端 `initCrashReport(ctx, appId, isDebug)` 只吃 APP ID；App Key 是给符号表上传工具（`buglyqq-upload-symbol.jar`）与开放 API 用的，属密钥，不进仓库。见 hlgit #48。
+>
+> 同一次注册也**证实**了本节的主结论：全程零资质、无人工审核。
 
 **这条是本次调研最要紧的结论，但它的可信度必须说清楚**：
 
@@ -480,3 +484,5 @@ Bugly 的问题聚合是按 **版本号 + 堆栈** 分组的，而本仓的 base
 - `javap -public -cp classes.jar com.tencent.bugly.crashreport.{CrashReport,BuglyLog}` — 公开 API 全表
 - 本机 Cocos Creator 3.8.7 / 3.8.8：`resources/resources/3d/engine/templates/android/template/app/AndroidManifest.xml`（三条权限）、`templates/android/build/gradle.properties:30`（`PROP_MIN_SDK_VERSION=21`）
 - 本机 Cocos Creator 3.8.7 引擎源码：`native/cocos/bindings/manual/jsb_cocos_manual.cpp:642-680,849`（`jsb.onError` → `setJSExceptionCallback`，单槽覆盖）、`platforms/native/engine/jsb-game.js:33`（引擎自己注册的那个）
+
+[^appkey]: 免费版确实发 App Key（2026-09-04 实注册证实），只是客户端接入用不到它。
