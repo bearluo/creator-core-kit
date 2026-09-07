@@ -40,6 +40,30 @@ if (!name || flag('help')) {
   process.exit(name ? 0 : 1);
 }
 
+/**
+ * 出处（commit / 分支 / 工作区脏不脏），发布时写进 `releases/<v>/source.json`。
+ *
+ * ⚠️ **必须在这里取，不能等到归档那步** —— 构建自己会改两个跟踪文件（`assets/resources/`
+ * 里的 app 戳、Creator 回写的 `settings/v2/packages/information.json`），等到归档时再问
+ * `git status`，`dirty` 就永远是 true，这个字段等于废的。
+ *
+ * 取不到 git 不中断发布（出包机可能从 tarball 构建），但要吵一声 —— 静默写 null 等于白写。
+ */
+const SOURCE = (() => {
+  const git = (args) => {
+    const r = spawnSync('git', args, { cwd: DEMO, encoding: 'utf8' });
+    return r.status === 0 ? r.stdout.trim() : null;
+  };
+  const commit = git(['rev-parse', 'HEAD']);
+  if (commit === null) console.warn('⚠ 取不到 git commit，releases/ 的 source.json 记不下出处');
+  return {
+    commit,
+    branch: git(['rev-parse', '--abbrev-ref', 'HEAD']),
+    // 带脏工作区出的包，commit 号本身不足以复现产物 —— 得让人一眼看见。
+    dirty: commit === null ? null : git(['status', '--porcelain']) !== '',
+  };
+})();
+
 /** 深合并：对象递归，其余后者覆盖。 */
 const merge = (a, b) => {
   const out = { ...a };
@@ -221,33 +245,17 @@ if (flag('manifest') && !isNative) {
 }
 
 /**
- * 往归档目录写一份**出处**：后台那条崩溃里的 `index.<md5>.js` 能查到是哪一版
- * （在 releases 各版本目录里 grep 一遍），但「那一版是哪个 commit」此前没人记 —— manifest 里只有文件和 md5。
+ * 把出处落到归档目录。后台那条崩溃里的 `index.<md5>.js` 能查到是哪一版
+ * （在 releases 各版本目录里 grep 一遍），但「那一版是哪个 commit」此前没人记 ——
+ * manifest 里只有文件和 md5。
  *
  * 只在 native 写。web 那条链没有 releases/ 目录、也还没有崩溃上报，先不发明。
- * 取不到 git 不中断发布（出包机可能从 tarball 构建），但要吵一声 —— 静默写个 null
- * 等于这份文件白写。
  */
 function writeSourceStamp(dir, version) {
-  const git = (args) => {
-    const r = spawnSync('git', args, { cwd: DEMO, encoding: 'utf8' });
-    return r.status === 0 ? r.stdout.trim() : null;
-  };
-  const commit = git(['rev-parse', 'HEAD']);
-  if (commit === null) console.warn('⚠ 取不到 git commit，releases/ 的 source.json 记不下出处');
-  const stamp = {
-    version,
-    commit,
-    branch: git(['rev-parse', '--abbrev-ref', 'HEAD']),
-    // 带脏工作区出的包，commit 号本身就不足以复现产物 —— 得让人一眼看见。
-    dirty: commit === null ? null : git(['status', '--porcelain']) !== '',
-    builtAt: new Date().toISOString(),
-    vest: vest ?? null,
-    channel,
-  };
+  const stamp = { version, ...SOURCE, builtAt: new Date().toISOString(), vest: vest ?? null, channel };
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'source.json'), JSON.stringify(stamp, null, 2) + '\n');
-  console.log(`▶ 出处 releases/${version}/source.json（commit=${commit?.slice(0, 8) ?? '?'}${stamp.dirty ? ' 脏工作区' : ''}）`);
+  console.log(`▶ 出处 releases/${version}/source.json（commit=${SOURCE.commit?.slice(0, 8) ?? '?'}${SOURCE.dirty ? ' 脏工作区' : ''}）`);
 }
 
 if (flag('manifest')) {
