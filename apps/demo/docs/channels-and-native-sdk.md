@@ -87,7 +87,15 @@ native.reflection.callStaticMethod(
 
 **挡不住的**：某个渠道的 SDK 依赖版本冲突、aar 缺失、manifest 合并失败——这些只有真编一遍才知道。
 
-⚠️ **ADR-0021 要求「CI 跑全 flavor 的 assemble」，本仓 CI 现在做不到**：runner 是 `node:22-slim-git` 容器且**没有公网**，既没有 Android SDK/NDK 也拉不到 Maven 依赖。等有 Android 镜像时补上，在那之前全 flavor 编译只能本地跑：
+⚠️ **ADR-0021 要求「CI 跑全 flavor 的 assemble」，本仓 CI 现在做不到 —— 但拦路的不是网络，是 Cocos Creator。**
+
+网络那半已排除（2026-09-07 实测）：`aigc` 那台 runner（id 5 `AI-base`，跑在 dev139 上）出得了网，Maven Central / Google Maven / Gradle 发行版 / Android SDK 仓库 / npm 全可达；公共 Docker 镜像走 `docker.m.daocloud.io/` 前缀也拿得到（gitlab-runner 的 `config.toml` 里配了这个加速源，**裸写 `alpine:3.20` 会走 docker.io 而挂**）。⚠️ 这些只在 `aigc` runner 上成立，默认那台（untagged）仍要走内网 Harbor —— job 不写 `tags: [aigc]` 就落不到它上面。
+
+真正的拦路虎：gradle 要的 `apps/demo/build/android/proj/` 是 **Creator 的构建产物、不入库**，其中 `settings.gradle` 还把 `:libcocos` 指向 Creator 安装目录下的 `cocos/platform/android/libcocos2dx`。没有 Creator，gradle 连 configure 都过不去 —— 跟有没有 SDK、通不通网无关。
+
+要做成得二选一：**① 把 Creator 装进 CI 镜像**（Linux 版编辑器约 2–3 G）+ 每次跑一遍 Creator 构建，最忠实也最重；**② 只在 CI 编 Java 那一层**，把 `proj/` 脚手架与 `libcocos2dx` 的 java 源当 fixture 固化进镜像 —— 轻，但它是 Creator 版本的快照，**升引擎时会悄悄过期且不报错**，CI 编的会是另一个版本的东西。
+
+在那之前，全 flavor 编译只能本地跑：
 
 ```bash
 cd apps/demo/build/android/proj

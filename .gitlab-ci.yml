@@ -44,9 +44,12 @@ verify:
     - pnpm build
     - pnpm coverage
     - pnpm lint
-    # 渠道表 ↔ 能力目录。**不是**「CI 跑全 flavor 的 assemble」（ADR-0021 的纪律）——
-    # 这个 runner 是 node 容器且没有公网，既没有 Android SDK/NDK 也拉不到 Maven 依赖，
-    # 编不了 APK。全 flavor 编译要等有 Android 镜像时补上，见 hlgit #52。
+    # 渠道表 ↔ 能力目录。**不是**「CI 跑全 flavor 的 assemble」（ADR-0021 的纪律）。
+    # 那条现在做不到，但**不是因为网络** —— 拦路的是 Cocos Creator：gradle 要的
+    # `apps/demo/build/android/proj/` 是 Creator 的构建产物、不入库，其中 settings.gradle
+    # 还把 `:libcocos` 指向 Creator 安装目录。没有 Creator，gradle 连 configure 都过不去。
+    # （网络这半已在 2026-09-07 实测排除：`aigc` runner 出得了网，Maven Central / Google
+    #  Maven / Gradle 发行版 / Android SDK 仓库全可达；公共镜像走 `docker.m.daocloud.io/` 前缀。）
     # 这道闸只挡它能挡的那一类：表里写了 report:'bugly' 却没建 src/cap-report-bugly/ ——
     # gradle 对不存在的 srcDir 不报错，那个渠道会静默地没有实现。
     - pnpm check:channels
