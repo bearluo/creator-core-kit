@@ -52,3 +52,15 @@
 -dontwarn android.hardware.lights.LightsRequest
 -dontwarn android.net.ssl.SSLSockets
 -dontwarn android.os.VibratorManager
+# ==== cck ====
+#
+# 崩溃上报的 JNI 入口。调用点在 JS 里（native.reflection.callStaticMethod），**R8 看不见**，
+# 不 keep 就会被当死代码删掉 / 改名 —— debug 全对、release 才炸，且症状是「上报没了」，很安静。
+# 各渠道的实现同名同包（gradle flavor 选一份），一条规则通吃。
+-keep class com.cck.report.CckReport { *; }
+
+# 让混淆后的 Java 堆栈还带得上文件名和行号。Cocos 模板原本一条都没有，于是正式包里
+# 所有 Java 帧都长成 `Unknown Source` —— 崩溃上报接了也定位不到。
+# 配套 -renamesourcefileattribute：源文件名统一改成 SourceFile，不泄漏原始文件名。
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

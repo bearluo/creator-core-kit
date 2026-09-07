@@ -6,6 +6,10 @@ RES_PATH = RES_PATH.replace("\\", "/")
 COCOS_ENGINE_PATH = COCOS_ENGINE_PATH.replace("\\", "/")
 
 buildDir = "${RES_PATH}/proj/build/${project.name ==~ /^[_a-zA-Z0-9-]+$/ ? project.name : 'CocosGame'}"
+
+// 渠道 → 能力 → 厂商。单一真源，另两个消费者是 scripts/build.mjs 与 pnpm check:channels。
+def CHANNELS = new groovy.json.JsonSlurper().parse(file("../channels.json")).channels
+
 android {
     compileSdkVersion PROP_COMPILE_SDK_VERSION.toInteger()
     buildToolsVersion PROP_BUILD_TOOLS_VERSION
@@ -31,6 +35,23 @@ android {
             }
             ndk { abiFilters PROP_APP_ABI.split(':') }
         }
+    }
+
+    // ==== 渠道 flavor + 能力目录（ADR-0021 / ADR-0022）====
+    //
+    // 表在 `../channels.json`，**不写在这里**：`scripts/build.mjs` 要用它校验 `--channel`，
+    // `pnpm check:channels` 要用它比对目录，从 groovy 里读回去比给三处各存一份可靠。
+    //
+    // 一个渠道一个 flavor；**能力代码不按渠道抄**，而是单独成 `src/cap-<能力>-<厂商>/`，
+    // 由表 `+=` 进用到它的那几个 flavor 的 srcDirs —— 五个国内渠道共用一份 Bugly 代码。
+    // ⚠️ 同一个类名只能有一个来源：不能同时出现在 `src/<flavor>/` 和某个 `src/cap-*/` 里。
+    //
+    // ⚠️ 有了 productFlavors 之后 `assembleDebug` = 「编**所有** flavor 的 debug」。
+    // 出包一律经 `build.mjs --channel <渠道>`，它会拼出明确的 `assemble<Channel>Debug`。
+    flavorDimensions "channel"
+
+    productFlavors {
+        CHANNELS.each { channel, caps -> create(channel) { dimension "channel" } }
     }
 
     sourceSets.main {
@@ -96,6 +117,16 @@ android {
             renderscriptDebuggable true
             // resValue  "string", "app_name", "${PROP_APP_NAME}-dbg"
             // applicationIdSuffix ".debug"
+        }
+    }
+}
+
+// flavor 创建完才能往它的 sourceSet 上加目录，所以这段在 android {} 之后。
+// vendor == 'none' 表示这个渠道不接这种能力（目录不存在也不该被加进来）。
+CHANNELS.each { channel, caps ->
+    caps.each { cap, vendor ->
+        if (vendor != 'none') {
+            android.sourceSets.getByName(channel).java.srcDirs += "src/cap-${cap}-${vendor}/java"
         }
     }
 }

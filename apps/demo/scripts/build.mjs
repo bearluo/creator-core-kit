@@ -5,6 +5,7 @@
  *   node scripts/build.mjs boot                    # Creator 构建，起始场景 Boot
  *   node scripts/build.mjs boot --manifest --apk   # 再夹一步热更 manifest + 同步 CDN
  *   node scripts/build.mjs boot --vest vest --apk  # 换马甲
+ *   node scripts/build.mjs boot --channel qq --apk # 换渠道（决定接哪家 SDK）
  *
  * 配置来自 `build-configs/<name>.json`（构建意图，进 git）叠加 `build-configs/local.json`
  * （本机 SDK/NDK/JDK 与 Creator 路径，gitignore）。命令行模式**不读 Creator 的偏好设置**，
@@ -35,7 +36,7 @@ if (!name || flag('help')) {
         .filter((l) => l.startsWith('| `') && l.includes('.json`'))
         .map((l) => l.split('`')[1].replace(/\.json$/, ''))
     : [];
-  console.log(`用法: node scripts/build.mjs <${avail.join('|') || 'name'}> [--manifest] [--apk] [--vest <马甲>] [--dispatcher <url>] [--min-app-version <v>]`);
+  console.log(`用法: node scripts/build.mjs <${avail.join('|') || 'name'}> [--manifest] [--apk] [--vest <马甲>] [--channel <渠道>] [--dispatcher <url>] [--min-app-version <v>]`);
   process.exit(name ? 0 : 1);
 }
 
@@ -64,6 +65,20 @@ let cfg = merge(read(basePath), localOpts);
 // —— 命令行覆盖（马甲等正交维度不另存配置文件）——
 const vest = opt('vest');
 if (vest) cfg.packages['cck-build'].vest = vest;
+
+// —— 渠道：**一个参数喂两处**（ADR-0022 决策 1）——
+//
+// 既写进 `cck-build.channel`（JS 侧 `buildValue('channel')` 读它），又拼成 gradle 的
+// `assemble<Channel>Debug`。两处若能各填各的，迟早出现「JS 以为自己是 qq 包、APK 里
+// 装的却是 Firebase」这种**静默**错配 —— 两边都不报错，只是少接了一块。
+//
+// 合法值来自 `native/engine/android/channels.json`（gradle 与 `pnpm check:channels` 读同一份）。
+// 拼错渠道名在这里当场报，而不是等 gradle 抛一句「task 'assembleQQDebug' not found」。
+const CHANNELS = read(join(DEMO, 'native', 'engine', 'android', 'channels.json')).channels;
+const channel = opt('channel') ?? 'dev';
+if (!Object.hasOwn(CHANNELS, channel))
+  throw new Error(`没有这个渠道：'${channel}' —— channels.json 里有 ${Object.keys(CHANNELS).join(' / ')}`);
+cfg.packages['cck-build'].channel = channel;
 const dispatcher = opt('dispatcher');
 if (dispatcher) cfg.packages['cck-build'].dispatcherUrl = dispatcher;
 
@@ -128,6 +143,7 @@ writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
 console.log(`▶ Creator 构建 '${name}'`);
 console.log(`  起始场景 ${sceneUrl}`);
 console.log(`  马甲     ${cfg.packages['cck-build'].vest || '(默认 base)'}`);
+console.log(`  渠道     ${channel}（能力：${Object.entries(CHANNELS[channel]).map(([c, v]) => `${c}=${v}`).join(' ') || '无'}）`);
 
 // 判据取产物本身：Creator 命令行构建**失败时退出码照样是 0**，日志里成功和失败
 // 也都只打一行 `Finished in (…)`，唯一可靠的信号是 settings 有没有被重新写出来。
@@ -302,12 +318,15 @@ if (!flag('apk')) {
 }
 
 const proj = join(DEMO, 'build', 'android', 'proj');
-console.log('▶ gradle assembleDebug');
+// ⚠️ **不能再裸调 `assembleDebug`** —— 有了 productFlavors 之后它的语义是「编**所有** flavor
+// 的 debug」，一次多编几倍、而且分不清出来的是哪个包。任务名里的 flavor 段首字母大写。
+const variant = `${channel[0].toUpperCase()}${channel.slice(1)}Debug`;
+console.log(`▶ gradle assemble${variant}`);
 // shell:true 是必须的 —— Node 20 起（CVE-2024-27980）不再直接 exec `.bat`/`.cmd`，
 // 少了它会抛 EINVAL，而且抛在 spawn 那层、stdout 是空的，错误看着像「gradle 没输出」。
 // 参数直接拼进命令串而不走 args 数组：shell:true 下传 args 会触发 DEP0190（不转义只拼接）。
 const gradlew = JSON.stringify(join(proj, 'gradlew.bat'));
-const g = spawnSync(`${gradlew} assembleDebug --console=plain`, {
+const g = spawnSync(`${gradlew} assemble${variant} --console=plain`, {
   cwd: proj,
   shell: true,
   encoding: 'utf8',
@@ -319,4 +338,5 @@ if (g.status !== 0) {
   console.error(`✗ gradle 失败（exit ${g.status}）\n${out.split('\n').slice(-25).join('\n')}`);
   process.exit(1);
 }
-console.log(`✓ APK → build/android/proj/build/demo/outputs/apk/debug/demo-debug.apk`);
+// 有 flavor 之后产物路径多一层，文件名也带上渠道 —— 三个渠道的包同时躺着不会互相覆盖。
+console.log(`✓ APK → build/android/proj/build/demo/outputs/apk/${channel}/debug/demo-${channel}-debug.apk`);

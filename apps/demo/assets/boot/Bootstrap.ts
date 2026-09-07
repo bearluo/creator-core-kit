@@ -1,4 +1,4 @@
-import { _decorator, Component, Prefab, js } from 'cc';
+import { _decorator, Component, Prefab, director, js } from 'cc';
 import { EDITOR } from 'cc/env';
 import {
   createBundleUpdater,
@@ -31,7 +31,10 @@ import {
   ccNetworkModule,
   ccStorageModule,
   ccUIModule,
+  installCrashReporter,
   loadLocaleTable,
+  packagedBaseEntry,
+  baseStamp,
   resetCcHotUpdateOnAppChange,
   resolutionModule,
 } from '@cck/engine';
@@ -189,6 +192,22 @@ export class Bootstrap extends Component {
   launchOverlay: Prefab | null = null;
 
   async start(): Promise<void> {
+    // 崩溃上报 —— **第一件事**，这样启动序列自己抛的异常也报得出去。
+    // Android 以外整个 no-op（web / 小游戏 / 编辑器预览都不进这条路）。
+    //
+    // 上下文是**现取**的：这个箭头函数在每次上报时才跑，所以不需要谁在登录成功 / 切场景 /
+    // 热更完之后记得来通知它 —— 那种 `setUser()` 式的 API 忘了调就是静默少一块信息。
+    // ⚠️ `apk` 是**包内** base 入口名（`__cckBaseEntry`），即「这是哪个 APK」；它**不是**
+    // 「当前跑的是哪一版 base」—— base 热更后跑的是 `src/cck-base.json` 指向的那份，而那个
+    // 名字没有暴露到全局。热更后堆栈对哪一版，这一半还没解决（hlgit #42 的 fog）。
+    installCrashReporter(() => ({
+      vest: VEST,
+      channel: APP_CONFIG.channel,
+      ver: APP_CONFIG.version,
+      apk: baseStamp(packagedBaseEntry()) ?? '-',
+      scene: director.getScene()?.name ?? '-',
+    }));
+
     // 开发期守卫：Creator 的 Game View 停止再播放**不重载 JS 上下文**，模块级状态（含挂在
     // globalThis 上的 DI 根容器）会活着 → 二次 bootCoreKit 抛 'already booted'。
     // 这里 shutdown 后走同一条重启路径（而不是「跳过 boot」）——因为场景已被重置，

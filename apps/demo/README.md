@@ -114,6 +114,7 @@ new BrickVM({ scoreboard: memoryScoreboard(50) })          // 单测里
 - [`docs/ui-style-guide.md`](docs/ui-style-guide.md) —— **界面视觉风格**（明亮休闲卡通）：调色板、造型语言、「同界面多状态不换皮」规则，以及当前只用内置资源能落地到哪一步。做任何界面前先看这个。
 - [`docs/scene-and-camera-architecture.md`](docs/scene-and-camera-architecture.md) —— **场景三分职责**（Boot 一次性引导 / Lobby 主场 / 子游戏自带场景）、**相机组规格**（背景 + UI 两台，priority 与 layer 双阶梯）、**多分辨率与转屏适配**，以及开发期踩坑清单。
 - [`docs/design/lobby-modular-framework-overview.md`](../../docs/design/lobby-modular-framework-overview.md) —— 大厅框架范式：承载矩阵（panel / game）、模块契约、模块作用域资源、catalog。
+- [`docs/channels-and-native-sdk.md`](docs/channels-and-native-sdk.md) —— **原生侧怎么按渠道组装**：一张 `channels.json` 驱动 gradle productFlavor 与能力目录，`--channel` 一个参数同时喂 JS 常量和 gradle 任务名。接原生 SDK / 加渠道 / 加能力之前看这个。
 - kit 侧实现见 [`camera-rig.md`](../../packages/engine/docs/modules/camera-rig.md)、[`app.md`](../../packages/core/docs/modules/app.md)（启动序列）、[`bundle-manager.md`](../../packages/core/docs/modules/bundle-manager.md)（`BundleScope` + 免重启换代码）。
 
 > **包分层**：main 包（Boot + Bootstrap + AppConfig）必须重启才更新；`shared` / `lobby` 在启动序列里 load，更新下次启动天然生效；`modules/*` 可运行期换。判据见 [`ADR-0009`](../../docs/adr/0009-bundle-layering-criterion.md)。

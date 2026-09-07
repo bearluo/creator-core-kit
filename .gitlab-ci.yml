@@ -1,4 +1,4 @@
-# creator-core-kit CI —— 五门：typecheck / build / test(coverage) / lint / api-docs
+# creator-core-kit CI —— 六门：typecheck / build / test(coverage) / lint / channels / api-docs
 #
 # 铁律由 lint 强制执行（core 禁 import 'cc'，规则见 eslint.config.js / CLAUDE.md）。
 # runner：hlgit 共享 docker runner（linux/amd64，run_untagged=true，故不加 tags）。
@@ -44,6 +44,12 @@ verify:
     - pnpm build
     - pnpm coverage
     - pnpm lint
+    # 渠道表 ↔ 能力目录。**不是**「CI 跑全 flavor 的 assemble」（ADR-0021 的纪律）——
+    # 这个 runner 是 node 容器且没有公网，既没有 Android SDK/NDK 也拉不到 Maven 依赖，
+    # 编不了 APK。全 flavor 编译要等有 Android 镜像时补上，见 hlgit #52。
+    # 这道闸只挡它能挡的那一类：表里写了 report:'bugly' 却没建 src/cap-report-bugly/ ——
+    # gradle 对不存在的 srcDir 不报错，那个渠道会静默地没有实现。
+    - pnpm check:channels
     # core 的 API 文档是 typedoc 生成物且入库（本实例未配 GitLab Pages，Pages 域名还是
     # 默认的 example.com，HTML artifact 也因此不能在线渲染 → 只有入库的 md 能在 GitLab 上直接看）。
     # 这里不推回仓库，只挡「生成物与代码不同步」：本地 pnpm docs:api 后一起提交。

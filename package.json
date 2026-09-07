@@ -21,6 +21,7 @@
     "gen:masks": "node apps/demo/scripts/gen-collision-mask.mjs",
     "gen:noise": "node apps/demo/scripts/gen-noise.mjs",
     "check:masks": "node apps/demo/scripts/gen-collision-mask.mjs --check",
+    "check:channels": "node apps/demo/scripts/check-channels.mjs",
     "proto:sync": "node scripts/sync-proto.mjs",
     "docs:api": "typedoc",
     "typecheck": "pnpm typecheck:pkgs && pnpm typecheck:demo && pnpm typecheck:editor",

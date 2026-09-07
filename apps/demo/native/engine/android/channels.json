@@ -1,0 +1,7 @@
+{
+  "channels": {
+    "dev": { "report": "logcat" },
+    "qq": { "report": "logcat" },
+    "google": { "report": "logcat" }
+  }
+}
