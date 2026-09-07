@@ -78,29 +78,47 @@ native.reflection.callStaticMethod(
 
 ⚠️ 反射调用点 **R8 看不见**，`proguard-rules.pro` 里必须有对应的 `-keep`。不加是 debug 全对、**release 才炸**，而且症状是「上报静静地没了」。
 
-## 闸挡得住什么、挡不住什么
+## 两道闸
 
-**`pnpm check:channels`（在 CI 里）** 挡两类静默错：
+**① `pnpm check:channels`** —— 每次 push 都跑，秒级。挡两类**静默**错：
 
 - 表里写了 `report: 'bugly'` 却没建 `src/cap-report-bugly/` —— **gradle 对不存在的 srcDir 不报错**，照编照出包，那个渠道的实现就这么消失了，直到真机上崩溃一条也报不出来才发现。
 - 建了 `cap-*` 目录却没有任何渠道引用 —— 那份代码不进任何 flavor，改了也编不到，正在悄悄腐烂。
 
-**挡不住的**：某个渠道的 SDK 依赖版本冲突、aar 缺失、manifest 合并失败——这些只有真编一遍才知道。
+它挡不住依赖版本冲突、aar 缺失、manifest 合并失败 —— 那些只有真编一遍才知道，归下面这道。
 
-⚠️ **ADR-0021 要求「CI 跑全 flavor 的 assemble」，本仓 CI 现在做不到 —— 但拦路的不是网络，是 Cocos Creator。**
+**② `android-flavors`（[[adr-0021]] 决策 2）** —— MR 与主干上跑，一次编全部三个 flavor：
 
-网络那半已排除（2026-09-07 实测）：`aigc` 那台 runner（id 5 `AI-base`，跑在 dev139 上）出得了网，Maven Central / Google Maven / Gradle 发行版 / Android SDK 仓库 / npm 全可达；公共 Docker 镜像走 `docker.m.daocloud.io/` 前缀也拿得到（gitlab-runner 的 `config.toml` 里配了这个加速源，**裸写 `alpine:3.20` 会走 docker.io 而挂**）。⚠️ 这些只在 `aigc` runner 上成立，默认那台（untagged）仍要走内网 Harbor —— job 不写 `tags: [aigc]` 就落不到它上面。
-
-真正的拦路虎：gradle 要的 `apps/demo/build/android/proj/` 是 **Creator 的构建产物、不入库**，其中 `settings.gradle` 还把 `:libcocos` 指向 Creator 安装目录下的 `cocos/platform/android/libcocos2dx`。没有 Creator，gradle 连 configure 都过不去 —— 跟有没有 SDK、通不通网无关。
-
-要做成得二选一：**① 把 Creator 装进 CI 镜像**（Linux 版编辑器约 2–3 G）+ 每次跑一遍 Creator 构建，最忠实也最重；**② 只在 CI 编 Java 那一层**，把 `proj/` 脚手架与 `libcocos2dx` 的 java 源当 fixture 固化进镜像 —— 轻，但它是 Creator 版本的快照，**升引擎时会悄悄过期且不报错**，CI 编的会是另一个版本的东西。
-
-在那之前，全 flavor 编译只能本地跑：
-
-```bash
-cd apps/demo/build/android/proj
-./gradlew :demo:compileDevDebugJavaWithJavac :demo:compileQqDebugJavaWithJavac :demo:compileGoogleDebugJavaWithJavac
+```yaml
+tags: [cocos-mac]
+script:
+  - pnpm build
+  - node apps/demo/scripts/build.mjs boot
+  - cd apps/demo/build/android/proj && ./gradlew assembleDebug --console=plain
 ```
+
+有 productFlavors 之后 `assembleDebug` 的语义正是「编**所有** flavor 的 debug」—— 出包时这是坑
+（分不清出来的是哪个包，所以 `build.mjs` 总拼明确的 `assemble<Channel>Debug`），**当闸时它恰好就是要的那件事**。
+产物是三个 APK，`CckReport.class` 在 `intermediates/javac/{dev,qq,google}Debug/` 三份里各有一份。
+
+**跑在 mac 上，不是容器里**：Cocos Creator **没有 Linux 版编辑器**，而 gradle 要的
+`build/android/proj/` 是 Creator 的构建产物、不入库，其中 `settings.gradle` 还把 `:libcocos`
+指向 Creator 安装目录 —— 没有 Creator，gradle 连 configure 都过不去。跟有没有 Android SDK、
+通不通网都无关。宿主与 runner 的搭建记在 hlgit #53。
+
+耗时（Intel i5-8500B，单 ABI `x86_64`）：
+
+| | 冷 | 热 |
+|---|---|---|
+| Creator 构建 | 首次全量导入资源，分钟级 | 65 s |
+| `assembleDebug` | 7 min（NDK 从零编 704 个目标文件） | 4 s（151 个任务里 149 个 up-to-date） |
+
+三个 flavor **共用一份原生构建**（`build/Debug/<hash>/x86_64` 全程只有一个目录 —— cmake 参数不随
+flavor 变），所以不是编三遍。
+
+⚠️ **热态成立的前提是 job 里写了 `GIT_CLEAN_FLAGS: -ffd`（不加 `-x`）。** 默认的 `-ffdx` 连
+gitignore 的文件一起清，`apps/demo/{library,build}/` 首当其冲，于是每次 CI 都从零重导资源 +
+重编引擎，7 分钟变成常态而不是首次代价。
 
 ## 已知行为与坑
 
@@ -113,3 +131,11 @@ cd apps/demo/build/android/proj
 **`--channel` 不传 = `dev`。** 与 `APP_CONFIG.channel` 的默认值 (`buildValue('channel', 'dev')`) 对齐。
 
 **`channels.json` 在 `native/engine/android/` 下，是源不是产物**（`native/` 已入库，见 [[adr-0021]]）。别往 `build/android/proj/` 里改任何东西，那整个目录每次构建重生成。
+
+**gradle 发行版得预先塞进 `~/.gradle`。** `services.gradle.org` 在国内会握手失败
+（`SSLHandshakeException: Remote host terminated the handshake`），而 wrapper 的 `distributionUrl`
+写在 `build/android/proj/gradle/wrapper/gradle-wrapper.properties` 里 —— 那是 **Creator 每次重新
+生成的产物**，在那儿改镜像下次构建就没了。做法是从国内镜像下好放进 wrapper 的缓存目录
+`~/.gradle/wrapper/dists/gradle-<版本>-bin/<hash>/`（`<hash>` 不用自己算，wrapper 第一次下载失败
+时已经把目录建好了），`~/.gradle` 在 HOME 下，Creator 冲不掉、CI job 之间还能复用。
+Maven 依赖（AGP / androidx / Maven Central）不需要镜像，直连就通。

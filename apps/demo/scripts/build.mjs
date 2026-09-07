@@ -325,7 +325,7 @@ console.log(`▶ gradle assemble${variant}`);
 // shell:true 是必须的 —— Node 20 起（CVE-2024-27980）不再直接 exec `.bat`/`.cmd`，
 // 少了它会抛 EINVAL，而且抛在 spawn 那层、stdout 是空的，错误看着像「gradle 没输出」。
 // 参数直接拼进命令串而不走 args 数组：shell:true 下传 args 会触发 DEP0190（不转义只拼接）。
-const gradlew = JSON.stringify(join(proj, 'gradlew.bat'));
+const gradlew = JSON.stringify(join(proj, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew'));
 const g = spawnSync(`${gradlew} assemble${variant} --console=plain`, {
   cwd: proj,
   shell: true,

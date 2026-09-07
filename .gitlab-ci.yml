@@ -1,4 +1,6 @@
-# creator-core-kit CI —— 六门：typecheck / build / test(coverage) / lint / channels / api-docs
+# creator-core-kit CI —— 两个 job：
+#   verify         六门（typecheck / build / test(coverage) / lint / channels / api-docs），共享 docker runner
+#   android-flavors 全 flavor 的 Android 编译（ADR-0021 决策 2），mac runner，见文件末尾
 #
 # 铁律由 lint 强制执行（core 禁 import 'cc'，规则见 eslint.config.js / CLAUDE.md）。
 # runner：hlgit 共享 docker runner（linux/amd64，run_untagged=true，故不加 tags）。
@@ -44,14 +46,9 @@ verify:
     - pnpm build
     - pnpm coverage
     - pnpm lint
-    # 渠道表 ↔ 能力目录。**不是**「CI 跑全 flavor 的 assemble」（ADR-0021 的纪律）。
-    # 那条现在做不到，但**不是因为网络** —— 拦路的是 Cocos Creator：gradle 要的
-    # `apps/demo/build/android/proj/` 是 Creator 的构建产物、不入库，其中 settings.gradle
-    # 还把 `:libcocos` 指向 Creator 安装目录。没有 Creator，gradle 连 configure 都过不去。
-    # （网络这半已在 2026-09-07 实测排除：`aigc` runner 出得了网，Maven Central / Google
-    #  Maven / Gradle 发行版 / Android SDK 仓库全可达；公共镜像走 `docker.m.daocloud.io/` 前缀。）
-    # 这道闸只挡它能挡的那一类：表里写了 report:'bugly' 却没建 src/cap-report-bugly/ ——
-    # gradle 对不存在的 srcDir 不报错，那个渠道会静默地没有实现。
+    # 渠道表 ↔ 能力目录。它**不是**「CI 跑全 flavor 的 assemble」（那是下面的 android-flavors），
+    # 只挡自己那一类：表里写了 report:'bugly' 却没建 src/cap-report-bugly/ —— gradle 对不存在的
+    # srcDir 不报错，那个渠道会静默地没有实现。秒级，所以放在这里每次 push 都跑。
     - pnpm check:channels
     # core 的 API 文档是 typedoc 生成物且入库（本实例未配 GitLab Pages，Pages 域名还是
     # 默认的 example.com，HTML artifact 也因此不能在线渲染 → 只有入库的 md 能在 GitLab 上直接看）。
@@ -64,3 +61,57 @@ verify:
     - test -z "$(git status --porcelain -- 'apps/*/assets/**/*-proto.ts')" || { git status --short -- 'apps/*/assets/**/*-proto.ts'; echo '协议模块段与 @kit/proto 不同步：本地跑 pnpm proto:sync 并一起提交'; exit 1; }
   # 从 v8 text reporter 的 "All files | xx.xx |" 抓 core 总覆盖率
   coverage: '/All files\s*\|\s*([\d.]+)/'
+
+# —— 全 flavor 的 Android 编译（ADR-0021 决策 2）——
+#
+# 跑在 **mac** 上，不是容器里：Cocos Creator **没有 Linux 版编辑器**（官方安装文档的系统要求
+# 只有 Windows / macOS，命令行发布文档也只给这两个可执行文件路径），而 gradle 要的
+# `apps/demo/build/android/proj/` 是 Creator 的构建产物、不入库，其中 settings.gradle 还把
+# `:libcocos` 指向 Creator 安装目录。没有 Creator，gradle 连 configure 都过不去。
+# 宿主与 runner 的搭建记在 hlgit #53。
+#
+# 只在 MR 与主干上跑：一次要编 Cocos 引擎的 C++（704 个目标文件），不是每次 push 都值得。
+# 它挡的是「改了公共代码把某个 flavor 编坏了，本地选着 dev 一无所知」，在合入前挡住就够。
+android-flavors:
+  tags: [cocos-mac]
+  needs: []
+  interruptible: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    # **不加 `-x`**（默认是 `-ffdx`）：留住 gitignore 的 apps/demo/{library,build}/ 与 node_modules/。
+    # 全清一次 = Creator 重导全部资源 + NDK 从零重编整个引擎，十几分钟起步；留着则是增量。
+    # 代价是产物可能陈旧，所以这台 runner 只跑这一个 job（concurrent = 1）。
+    GIT_CLEAN_FLAGS: -ffd
+    COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+    # 把「全局」git 配置挪进 job 目录，**别碰宿主的 ~/.gitconfig**。docker executor 里
+    # HOME 是一次性的，shell executor 里它是那台机上真实的家目录，而这台 mac 是有人用的：
+    # 它的 ~/.gitconfig 配着 `credential.helper = store`，clone 用的 job token 会被原样
+    # 写进共享的明文 ~/.git-credentials。设成 job 变量（而不是 before_script 里 export）
+    # 是因为 runner **自己那次 clone** 发生在 before_script 之前。
+    GIT_CONFIG_GLOBAL: "$CI_PROJECT_DIR/.git-ci-config"
+  before_script:
+    # shell executor 起的是**非登录** bash，不会自动读 ~/.bash_profile —— JAVA_HOME /
+    # ANDROID_HOME / node 的 PATH 都在那里面。
+    - source ~/.bash_profile
+    # 拉私有契约仓 kit-proto 用本次 job 的令牌（同 verify）。落点是上面那份 job 内配置。
+    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@hlgit.5518game.com/".insteadOf "https://hlgit.5518game.com/"
+    - corepack enable
+    - pnpm install --frozen-lockfile
+    # 本机路径（Creator / SDK / NDK / JDK）不入库，常驻宿主 ~/ci/。放 checkout 里没用 ——
+    # 它是 gitignore 的文件，会被 git clean 掉。
+    - cp ~/ci/local.json apps/demo/build-configs/local.json
+  script:
+    - pnpm build
+    - node apps/demo/scripts/build.mjs boot
+    # 有 productFlavors 之后 `assembleDebug` 的语义正是「编**所有** flavor 的 debug」——
+    # 出包时这是坑（分不清出来的是哪个包，见 build.mjs），当闸时它恰好就是要的那件事。
+    - cd apps/demo/build/android/proj && ./gradlew assembleDebug --console=plain
+  after_script:
+    - rm -f "$CI_PROJECT_DIR/.git-ci-config"
+  artifacts:
+    when: on_failure
+    paths:
+      - apps/demo/temp/build-configs/*.log
+    expire_in: 1 week
