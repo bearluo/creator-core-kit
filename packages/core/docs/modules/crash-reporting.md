@@ -268,7 +268,13 @@ Non-fatal Exception: com.cck.report.CckReport$JsException: Error: cck-crash-prob
 
 ⚠️ **Crashlytics 这条路会丢列号** —— `StackTraceElement` 的四个字段里根本没有「列」，
 所以 `FRAME_RE` 虽认列号，`JsFrame` 也没带它（带过去没处放）。sourcemap 还原要的是 line+column，
-所以 Crashlytics 后台那份堆栈**只够定位到行**；要精确还原得回到原始 `stack`（Bugly 那份是完整的）。
+所以 Crashlytics **渲染出来的那份堆栈只够定位到行**。补法是 `cap-report-firebase` 在 `recordException`
+之前多调一句 `fc.log(stack)` —— 原始文本原样挂在那条记录的 log 面板上（上限 64KB，够装 30 帧），
+列号保住了。Bugly 那边不用补，它存的本来就是原文。**还原工具要读的是这一份，不是渲染出来那份。**
+
+从后台那条堆栈回到源码分两段：**「哪一版 / 哪个 commit」已经成立**（产物指纹 → `grep releases/` →
+`releases/<v>/source.json`，见 [`hotupdate-pipeline`](../../../../apps/demo/docs/hotupdate-pipeline.md#从崩溃堆栈回到代码)）；
+**「行号 → 源码行」还没做** —— 两份 build-config 现在都是 `sourceMaps: false`，产物里一份 `.map` 都没有（hlgit #54）。
 
 验证手法：**往 `Bootstrap` 里临时种一个 `setTimeout` 抛异常，验完删**。没走 V8 inspector 注入 ——
 `Game.cpp` 那个 `#if CC_DEBUG` 分支在本工程的构建里没生效，6086 端口不监听。临时改代码的好处是

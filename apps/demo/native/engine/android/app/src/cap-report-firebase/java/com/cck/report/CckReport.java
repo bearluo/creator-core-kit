@@ -86,6 +86,15 @@ public final class CckReport {
             }
             fc.setCustomKey("where", o.optString("location") + ":" + o.optInt("linenum"));
 
+            // ⚠️ 原始 stack 也要原样留一份：`StackTraceElement` 的四个字段里**没有「列」**，
+            // 所以 recordException 那份堆栈只能定位到行 —— 而 sourcemap 还原要的是 line+column
+            // （压缩后一行塞着十几个函数，只喂 line 会还原到那行的第一个映射，多半是错的）。
+            // Crashlytics 的 log 会挂在紧随其后的那条记录上，上限 64KB，够装 30 帧。
+            String stack = o.optString("stack");
+            if (stack.length() > 0) {
+                fc.log(stack);
+            }
+
             JsException e = new JsException(o.optString("message"));
             e.setStackTrace(frames(o));
             fc.recordException(e);

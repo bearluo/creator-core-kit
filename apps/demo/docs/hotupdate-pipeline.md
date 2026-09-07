@@ -301,7 +301,28 @@ node scripts/build.mjs boot --manifest --manifest-version 1.0.1   # 只更新 CD
 
 **CDN 是叠加式的，只叠加、绝不清空**（与 web 同理，与开 `md5Cache` 之前相反）：文件名带 md5，
 历史各版本的字节留在 CDN 上正是「回滚只换 manifest」成立的前提。每次发布顺手把这一版的
-manifest 归档进 `releases/<version>/`。
+manifest 归档进 `releases/<version>/`，同时写一份 `source.json` 记**出处**。
+
+### 从崩溃堆栈回到代码
+
+后台那条崩溃里的文件名带产物指纹（`assets/main/index.f8c7f.js`）—— **指纹逐包，比整体版本号准**，
+因为各分包是各自独立热更的。两步定位：
+
+```bash
+grep -rl "index.f8c7f.js" <cdnDir>/releases/    # ① 哪一版
+cat <cdnDir>/releases/<那一版>/source.json      # ② 那一版是哪个 commit
+```
+
+`source.json` 由出包流程写，长这样；`dirty` 为真表示那次是带脏工作区出的包，**commit 号本身不足以
+复现产物**：
+
+```json
+{ "version": "1.4.0", "commit": "<40 位 sha>", "branch": "feat/platform-sdk",
+  "dirty": false, "builtAt": "...", "vest": null, "channel": "qq" }
+```
+
+只 native 写。web 那条链没有 `releases/` 目录、也还没有崩溃上报，不提前发明。
+**从行号回到源码行还差一步**（sourcemap 归档与还原，尚未实现，见 hlgit #54）。
 
 ### 回滚
 
