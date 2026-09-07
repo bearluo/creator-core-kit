@@ -240,6 +240,36 @@ x86_64 模拟器，hlgit #50）：
 | Bugly（`qq` 包） | `CRASH TYPE: H5` · `JsError` · 完整 JS 帧 · `APP VER: 1.3.0`（`setAppVersion` 喂的热更版本）· `[Upload] Success: crash` / HTTP 200 |
 | Firebase（`google` 包） | `FirebaseApp 就绪：[DEFAULT] / 1:414118306834:...` · `Initializing Firebase Crashlytics 19.0.3` · 服务端配置 `status: activated` · 重启后 `POST crashlyticsreports-pa.googleapis.com/v1/firelog/legacy/batchlog` |
 
+两家后台的条目长这样。**Bugly 存的是原始 `stack` 文本**，路径、行、列原样保留：
+
+```
+#2 JsError
+Error: cck-crash-probe: 真机验证用的假异常
+
+at deep (assets/main/index.f8c7f.js:339:21)
+```
+
+Crashlytics 后台那条长这样 —— **五帧全是 JS 帧，一条 Java 帧都没混进来**（`fillInStackTrace`
+那个空实现的作用），类名就是分组维度：
+
+```
+Non-fatal Exception: com.cck.report.CckReport$JsException: Error: cck-crash-probe: 真机验证用的假异常
+       at js.deep(index.f8c7f.js:339)
+       at js.outer(index.f8c7f.js:341)
+       at js.<anonymous>(index.f8c7f.js:342)
+       at js.fireTimeout(web-adapter.js:586)
+       at js.tick(web-adapter.js:546)
+```
+
+`StackTraceElement("js", fn, file, line)` 在后台渲染成 `js.<fn>(<file>:<line>)`，`fn` 缺名时是
+`<anonymous>` —— 跟 `parseJsFrames` 的兜底对上了。**每帧自带产物指纹**（`index.f8c7f.js`）也在这里
+兑现：不需要「一个全局 release 号」就能知道该拿哪份 sourcemap 还原。末两帧的 `web-adapter.js` 没有
+指纹，那是 jsb-adapter，不走热更、也不参与还原。
+
+⚠️ **Crashlytics 这条路会丢列号** —— `StackTraceElement` 的四个字段里根本没有「列」，
+所以 `FRAME_RE` 虽认列号，`JsFrame` 也没带它（带过去没处放）。sourcemap 还原要的是 line+column，
+所以 Crashlytics 后台那份堆栈**只够定位到行**；要精确还原得回到原始 `stack`（Bugly 那份是完整的）。
+
 验证手法：**往 `Bootstrap` 里临时种一个 `setTimeout` 抛异常，验完删**。没走 V8 inspector 注入 ——
 `Game.cpp` 那个 `#if CC_DEBUG` 分支在本工程的构建里没生效，6086 端口不监听。临时改代码的好处是
 走的就是引擎真正的 `reportException` 路径，比注入更实。
