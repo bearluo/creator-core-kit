@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Firebase 的客户端配置。**手写，不 apply google-services plugin**（ADR-0022 决策 3）：
+  plugin 是模块级的、对所有 variant 生效，而 qq 那个包没有 google-services.json，
+  构建会被它一起拖下水；顺带还绕开了「Crashlytics plugin v3 要 AGP 8.1+、模板是 8.0.2」那堵墙。
+
+  依据：FirebaseOptions.fromResource() 本来就是按下面这几个名字读 string 资源拼出配置的，
+  plugin 干的事只是把 google-services.json 转成它们。名字对、值对，有没有 plugin 运行时没区别。
+
+  这些值**不是密钥**。Firebase 的客户端配置按设计就随 APK 分发、反编译可见，Google 侧靠
+  包名 + SHA-1 限制调用方 —— 跟 Bugly 的 App Key（那个才是真密钥，不进仓）不是一回事。
+  Google 原话："API keys for Firebase services are OK to include in code or checked-in config files."
+
+  它落在 src/google/ 而不是 main/：res/ 本来就按 flavor 合并，不用 Firebase 的渠道压根看不到。
+  源 google-services.json 留在本机不入库（没有 plugin 会读它）。项目 creator-kit-android，
+  包名 com.cck.demo —— 换包名（比如马甲真的分成两个 App）要回控制台再加一个 Android 应用。
+-->
+<resources>
+    <string name="google_app_id" translatable="false">1:414118306834:android:83858c7e299a54a00024cb</string>
+    <string name="google_api_key" translatable="false">AIzaSyADZzcfdphnkEpSBgI-zYn6HOuQzGiJfQc</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyADZzcfdphnkEpSBgI-zYn6HOuQzGiJfQc</string>
+    <string name="gcm_defaultSenderId" translatable="false">414118306834</string>
+    <string name="project_id" translatable="false">creator-kit-android</string>
+    <string name="google_storage_bucket" translatable="false">creator-kit-android.firebasestorage.app</string>
+
+    <!--
+      ⚠️ **不加这条 google 包启动就崩。** Crashlytics 的 CrashlyticsCore.onPreExecute 会检查
+      plugin 生成的 build id（`com.google.firebase.crashlytics.build_ids_*` 那三个 string-array），
+      没有就抛 IllegalStateException("The Crashlytics build ID is missing")，而且是在
+      handleBindApplication 里抛 —— 整个进程起不来，不是「上报不了」而是「App 打不开」。
+
+      本仓按 ADR-0022 不 apply 那个 plugin，所以显式关掉这个要求。build id 的用处是把
+      NDK 符号表 / ProGuard mapping 对上号，而本仓要看的是 **JS 堆栈**（两家平台都不还原它），
+      用不上。这是 aar 常量池里读出来的官方开关，不是 hack。
+    -->
+    <!-- ⚠️ 名字是 `com.crashlytics.` 不是 `com.google.firebase.crashlytics.` —— 后者是 aar 里
+         另一个常量，写错了不报错也不生效（照崩）。判据是 CrashlyticsCore.onPreExecute 的字节码：
+         `ldc "com.crashlytics.RequireBuildId"` → CommonUtils.getBooleanResourceValue(ctx, key, true)。 -->
+    <bool name="com.crashlytics.RequireBuildId">false</bool>
+</resources>

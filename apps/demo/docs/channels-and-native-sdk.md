@@ -2,7 +2,7 @@
 状态: 活文档
 摘要: demo 的 Android 原生侧怎么按渠道组装 —— 一张 `channels.json` 表驱动 gradle productFlavor 与能力目录，`--channel` 一个参数同时喂 JS 常量和 gradle 任务名。含出包命令、加渠道 / 加能力的步骤、以及哪些闸挡得住哪些错。
 何时读: 要接一家原生 SDK、加一个渠道、加一种能力（支付 / 广告），或看到「某个渠道的 SDK 没生效」时。
-依赖: [[adr-0021]] 渠道 SDK 走 productFlavor · [[adr-0022]] 能力是渠道的属性 · [`crash-reporting.md`](../../../packages/core/docs/modules/crash-reporting.md)
+依赖: [[adr-0021]] 渠道 SDK 走 productFlavor · [[adr-0022]] 能力是渠道的属性 · [[adr-0023]] 不装 Crashlytics plugin 的两个前提 · [`crash-reporting.md`](../../../packages/core/docs/modules/crash-reporting.md)
 ---
 
 # 渠道与原生 SDK 组装
@@ -29,8 +29,8 @@ node scripts/build.mjs boot --vest vest --channel qq --apk
 {
   "channels": {
     "dev":    { "report": "logcat" },
-    "qq":     { "report": "logcat" },
-    "google": { "report": "logcat" }
+    "qq":     { "report": "bugly" },
+    "google": { "report": "firebase" }
   }
 }
 ```
@@ -50,14 +50,28 @@ native/engine/android/
 ├─ channels.json                        ← 表
 └─ app/src/
    ├─ com/cocos/game/AppActivity.java   ← main，所有 flavor 都有
-   ├─ dev/     qq/     google/          ← 各渠道**独有**的东西（现在都是空的）
-   └─ cap-report-logcat/java/           ← 能力实现，**一份**，按表进多个 flavor
+   ├─ dev/     qq/                      ← 各渠道**独有**的东西（这两个现在是空的）
+   ├─ google/res/values/firebase.xml    ← Firebase 的配置，手写、不用 plugin（ADR-0022/0023）
+   └─ cap-report-{logcat,bugly,firebase}/java/   ← 能力实现，一家一份，按表进对应 flavor
       └─ com/cck/report/CckReport.java
 ```
 
 **能力代码不按渠道抄。** 五个国内渠道都用 Bugly 时，`cap-report-bugly/` 只有一份，五个 flavor 共享它——改一次五个渠道一起生效。
 
 ⚠️ **同一个类名只能有一个来源**：不能同时出现在 `src/<flavor>/` 和某个 `src/cap-*/` 里，那是重复类，gradle 直接报错。
+
+⚠️ **`app/src` 本身是 main 的 java 源根**（模板写死的 `java.srcDirs "../src", "src"`），而源根是
+**递归**收 `.java` 的 —— 目录名跟 package 对不对得上它不管。所以 `src/cap-*/` 与 `src/<渠道>/`
+里的东西会被一起编进**每个** flavor，表整个失效。`app/build.gradle` 因此对 main 做了两条排除：
+
+```gradle
+java.exclude "cap-*/**"
+CHANNELS.keySet().each { java.exclude "${it}/**" }
+```
+
+这个坑**在只有一份能力实现时是隐形的**：那一份经 main 也能到达所有 flavor，「三个 flavor 里都有
+`CckReport.class`」照样成立。抓到它的是 ADR-0021 要求的全 flavor 编译 —— 加到第二、第三份能力实现
+时撞了「类重复」才暴露。
 
 ## 加东西的步骤
 
@@ -101,6 +115,16 @@ script:
 （分不清出来的是哪个包，所以 `build.mjs` 总拼明确的 `assemble<Channel>Debug`），**当闸时它恰好就是要的那件事**。
 产物是三个 APK，`CckReport.class` 在 `intermediates/javac/{dev,qq,google}Debug/` 三份里各有一份。
 
+**③ `node apps/demo/scripts/check-flavor-classes.mjs`** —— 跟在 gradle 之后，读每个 flavor 的
+`intermediates/javac/<渠道>Debug/.../CckReport.class`，确认**编出来了**，而且**是那一家的**
+（.class 的常量池是明文 ASCII，找 `com/tencent/bugly/...` 或 `com/google/firebase/...` 即可，
+不用反编译）。
+
+它挡的是**编译产物**这一环的静默错，前两道都看不见：能力目录被 main 的源根吞掉（上一节那个坑），
+以及 **AGP 增量陈旧** —— 任务报 `UP-TO-DATE`、构建全绿，产物里却一个 `CckReport.class` 都没有
+（源文件 `touch` 都唤不醒它，只有删掉 `intermediates/javac` 才恢复）。后者正是
+`GIT_CLEAN_FLAGS: -ffd` 换来的速度所附带的风险，所以这道闸不是可选项。
+
 **跑在 mac 上，不是容器里**：Cocos Creator **没有 Linux 版编辑器**，而 gradle 要的
 `build/android/proj/` 是 Creator 的构建产物、不入库，其中 `settings.gradle` 还把 `:libcocos`
 指向 Creator 安装目录 —— 没有 Creator，gradle 连 configure 都过不去。跟有没有 Android SDK、
@@ -139,3 +163,19 @@ gitignore 的文件一起清，`apps/demo/{library,build}/` 首当其冲，于�
 `~/.gradle/wrapper/dists/gradle-<版本>-bin/<hash>/`（`<hash>` 不用自己算，wrapper 第一次下载失败
 时已经把目录建好了），`~/.gradle` 在 HOME 下，Creator 冲不掉、CI job 之间还能复用。
 Maven 依赖（AGP / androidx / Maven Central）不需要镜像，直连就通。
+
+**接一家 SDK 要动的四处**（以本次两家为例）：
+
+| 落点 | Bugly（`qq`） | Firebase（`google`） |
+|---|---|---|
+| `channels.json` | `report: "bugly"` | `report: "firebase"` |
+| `app/build.gradle` 的能力依赖 | `com.tencent.bugly:crashreport:4.1.9.3`（**必须钉死版本**，官方教的 `latest.release` 会解析到更旧的 4.1.9） | `platform('...firebase-bom:33.1.2')` + `firebase-crashlytics`（**版本被 AGP 锁住，见 [[adr-0023]]**） |
+| `src/cap-report-<厂商>/java/` | 一份 `CckReport` | 一份 `CckReport` |
+| 资源 / 配置 | 无 | `src/google/res/values/firebase.xml`（六条 string + **一条 bool**） |
+
+**`minSdk` 被 Firebase 顶到 23**（模板是 21），全渠道统一，落点 `app/build.gradle` 的 `defaultConfig`。
+Bugly 自己只要 15。不改的话 manifest merger 构建期直接报错 —— 好在是硬失败，不会拖到运行时。
+
+⚠️ **改 `minSdk` 会让 NDK 缓存整个失效**：它进了 clang 的 target 三元组
+（`--target=x86_64-none-linux-android21` → `...23`），cmake 换一个构建目录 hash，704 个目标文件从头编。
+一次性代价，但别在赶时间的时候动它。

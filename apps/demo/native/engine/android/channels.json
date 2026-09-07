@@ -1,7 +1,7 @@
 {
   "channels": {
     "dev": { "report": "logcat" },
-    "qq": { "report": "logcat" },
-    "google": { "report": "logcat" }
+    "qq": { "report": "bugly" },
+    "google": { "report": "firebase" }
   }
 }

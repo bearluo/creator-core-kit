@@ -24,6 +24,15 @@ android {
     defaultConfig {
         applicationId APPLICATION_ID
         minSdkVersion PROP_MIN_SDK_VERSION
+        // ⚠️ 覆盖模板的 21（Groovy 后写的赢）。Firebase 的前置条件是 Android 6.0 = API 23，
+        // BoM 33.0.0 起各 SDK 的 minSdk 就是 23。不改的话 manifest merger 构建期直接报
+        // `uses-sdk:minSdkVersion 21 cannot be smaller than version 23 declared in library`
+        // —— 好在是构建期硬失败，不会拖到运行时。
+        //
+        // 全渠道统一提到 23，而不是只给 google 这个 flavor 覆盖：少一层 per-flavor 分叉，
+        // 而 API 23 是 2015 年的 Android 6.0，今天不在任何发行目标里。
+        // （Bugly 自己只要 minSdk 15，是 Firebase 这半在拉高门槛。）
+        minSdkVersion 23
         targetSdkVersion PROP_TARGET_SDK_VERSION
         versionCode 1
         versionName "1.0"
@@ -56,6 +65,23 @@ android {
 
     sourceSets.main {
         java.srcDirs "../src", "src"
+        // ⚠️ **能力目录必须从 main 里排掉。**
+        //
+        // 模板把 `app/src` 整个当成 java 源根，而源根是**递归**收 .java 的 —— 目录名跟
+        // package 对不对得上它不管。于是 `src/cap-report-*/java/com/cck/report/CckReport.java`
+        // 三份会被一起编进**每个** flavor：轻则「类重复」，重则 dev 包里混进 Firebase 代码
+        // （而 devImplementation 没有那个依赖，于是报「程序包不存在」）。
+        //
+        // 排掉之后能力代码**只**经下面那段按表 `+=` 的 srcDirs 进包，表才真正说了算。
+        //
+        // 这个坑在只有一份能力实现时是**隐形的**：那一份经 main 也能到达所有 flavor，
+        // 「三个 flavor 里都有 CckReport.class」照样成立，表驱动那条线根本没被验到。
+        // 抓到它的是 ADR-0021 要求的全 flavor 编译 —— 这条纪律的价值在这儿兑现了一次。
+        java.exclude "cap-*/**"
+        // 同一个坑还有一半：`src/<渠道>/` 也在这个源根底下。今天那几个目录是空的所以没炸，
+        // 但哪天往 `src/qq/` 放一份渠道专属实现，它会被编进**所有** flavor —— 而且很可能
+        // 编得过（不像上面那次撞了类重复），于是 google 包里静静躺着一份 qq 的代码。
+        CHANNELS.keySet().each { java.exclude "${it}/**" }
         res.srcDirs "../res", 'res', "${RES_PATH}/proj/res"
         jniLibs.srcDirs "../libs", 'libs'
         manifest.srcFile "AndroidManifest.xml"
@@ -140,5 +166,40 @@ dependencies {
     if (Boolean.parseBoolean(PROP_ENABLE_INPUTSDK)) {
         implementation 'com.google.android.libraries.play.games:inputmapping:1.1.0-beta'
         implementation "org.jetbrains.kotlin:kotlin-stdlib:1.4.10"
+    }
+
+    // ==== 能力 SDK：按表只加给用到它的那几个渠道 ====
+    //
+    // `<flavor>Implementation` 是 AGP 按 flavor 自动生成的配置名 —— qq 包里不会有 Firebase
+    // 的一个字节，google 包里也不会有 Bugly 的。用 `add(...)` 而不是直接写 `qqImplementation`，
+    // 是因为渠道名来自 channels.json，编译期才知道有哪些。
+    //
+    // 坐标写在这儿而不是 channels.json 里：那张表有三个消费者（gradle / build.mjs /
+    // check:channels），而 maven 坐标**只有 gradle 用得上**，塞进去只会让另两个消费者读到噪音。
+    // 依赖的形状也不统一（Firebase 要 BoM），硬做成表就得发明转义。
+    CHANNELS.each { channel, caps ->
+        if (caps.report == 'bugly') {
+            // ⚠️ **必须钉死版本。** 官方文档教的是 `latest.release`，但 Maven Central 上
+            // `com.tencent.bugly:crashreport` 的 maven-metadata.xml 里 <release> = 4.1.9
+            // （2022-09），**比 4.1.9.3 还旧** —— 照着文档写反而拿到更老的包。
+            add("${channel}Implementation", 'com.tencent.bugly:crashreport:4.1.9.3')
+        }
+        if (caps.report == 'firebase') {
+            // 不 apply 任何 Firebase gradle plugin（ADR-0022 决策 3），配置手写在
+            // src/google/res/values/firebase.xml。plugin 的作用是上传 ProGuard mapping /
+            // NDK 符号表，而本仓关心的是 JS 堆栈，两家平台都不还原它。
+            //
+            // ⚠️ **版本卡在这儿，不是随便挑的。** BoM 34.18.0（crashlytics 20.1.0）在本仓
+            // 启动就崩：firebase-sessions 3.x 依赖 KMP 化之后的 androidx.datastore，而
+            // AGP 8.0.2 + 纯 Java 工程解析不出它的 android 变体 →
+            // NoClassDefFoundError: androidx/datastore/DataStoreFile（Firebase 自己会打一段
+            // 警告点名 issuetracker.google.com/328687152，说「AGP ≤ 8.3.2 的已知问题」）。
+            // 而 AGP 版本声明在**不入库的构建产物** build/android/proj/build.gradle 里，
+            // 升不动。所以退到 v2 plugin 时代的 BoM，它拉的 datastore 还是非 KMP 的 1.0.x。
+            //
+            // 没加 firebase-analytics：Crashlytics 不依赖它（只影响面包屑与实时看板）。
+            add("${channel}Implementation", platform('com.google.firebase:firebase-bom:33.1.2'))
+            add("${channel}Implementation", 'com.google.firebase:firebase-crashlytics')
+        }
     }
 }

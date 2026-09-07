@@ -1,11 +1,11 @@
 ---
 模块: crash-reporting
 所在包: packages/core（收敛逻辑）+ packages/engine（钩子与原生转发）
-状态: 已实现（JS 半；Java 半见 hlgit #50）
-跟踪: hlgit #42（wayfinder 图）· 接缝定稿见 #47 · 渠道组装见 ADR-0022
+状态: 已实现，真机跑通（Bugly 与 Firebase 两家后台都收到了带堆栈的 JS 异常）
+跟踪: hlgit #42（wayfinder 图）· 接缝定稿见 #47 · 渠道组装见 ADR-0022 · 不装 plugin 的两个前提见 ADR-0023
 摘要: JS 未捕获异常送到崩溃平台。接缝只有两个函数——core 一个纯逻辑收敛器、engine 一个 install；上下文用 getter 现取，不用谁来推。
 何时读: 要接一家崩溃上报 SDK，或要改「哪些异常值得上报」的规则时。
-日期: 2026-09-04
+日期: 2026-09-07
 依赖: logging · di-container
 ---
 
@@ -16,7 +16,8 @@
 - **不用改 C++**。JS 侧的 `globalThis.__errorHandler` 就是出口，在 base 层、**热更可改**。
 - **kit 不出接口**。core 出一个零 `cc` 的收敛器，engine 出一个 `installCrashReporter(getContext)`。没有 `ICrashReporter`、没有 DI token、没有 `setUser()` —— 上下文用 **getter 现取**，登录成功 / 切场景 / 热更完谁都不用记得去通知它。
 - **必须收敛**。Cocos 的 JS 异常常常每帧重复，不去重的话一秒钟就把 Crashlytics 那 8 个格子刷满，而它保留的是**最近** 8 条 —— 被挤掉的恰恰是根因。
-- **往 Java 递结构化原始数据**，各渠道自己决定塞进自家 API —— 两家 SDK 的能力不对称（Bugly 吃任意堆栈文本，Crashlytics 只能造假 `Throwable`）。
+- **往 Java 递结构化原始数据**，各渠道自己决定塞进自家 API —— 两家 SDK 的能力不对称（Bugly 吃任意堆栈文本，Crashlytics 只能造假 `Throwable`，所以载荷里 `stack` 与 `frames` 两份都给）。
+- **Java 侧的契约是两个方法**：启动时一次 `init(ctxJson)`、每条异常一次 `report(json)`。Bugly 不 `init` 完全不工作，这个入口不是可选项。
 
 ## Purpose（目标与定位）
 
@@ -66,6 +67,25 @@ export interface CrashFilter {
  *                 （一次会话只保留最近 8 条非致命）。
  */
 export function createCrashFilter(opts?: { maxKinds?: number }): CrashFilter;
+
+/** 一帧 JS 堆栈。Java 侧照着造 `StackTraceElement(fn, file, line)`。 */
+export interface JsFrame {
+  readonly fn: string;    // 匿名帧记 `<anonymous>`（StackTraceElement 不吃 null）
+  readonly file: string;
+  readonly line: number;
+}
+
+/**
+ * 把 V8 的堆栈字符串拆成结构化帧。畸形行（`at [native code]`、空行）安静跳过。
+ * 默认最多 30 帧，与 `Error.stackTraceLimit` 对齐。
+ *
+ * 它**为 Crashlytics 而存在**：那边没有「上报一段自定义堆栈文本」的 API，只能造 `Throwable`
+ * 再 `setStackTrace(...)`。Bugly 不需要它。
+ */
+export function parseJsFrames(stack: string, max?: number): JsFrame[];
+
+/** 现取上下文；getter 自己抛不算错，退化成空表。上报与初始化两处都用它。 */
+export function crashContext(getContext: () => Record<string, string>): Record<string, string>;
 
 /**
  * 拼成过河的 JSON。`fingerprint` **不进载荷**。
@@ -131,18 +151,39 @@ JS 抛了一个没人接的异常
   "linenum": 42,
   "message": "TypeError: x is undefined",
   "stack": "at Bar.update (bundle.fa0b0.js:1:52341)\nat ...",
+  "frames": [{ "fn": "Bar.update", "file": "bundle.fa0b0.js", "line": 1 }],
   "ctx": { "player": "10086", "scene": "Lobby", "base": "a3f9c1" }
 }
 ```
+
+`stack` 与 `frames` 是**同一份东西的两种形状**，谁也不是冗余：Bugly 只要前者，Crashlytics 只能用后者。
 
 **结构化，不在 JS 侧拼成某一家的形状** —— 两家 SDK 的能力不对称：
 
 | | 自定义堆栈 | 一次会话的非致命上限 |
 |---|---|---|
-| Bugly | ✅ `postException(...)` 的 `stack` **吃任意字符串** | 未查到 |
-| Crashlytics | ❌ Android 无 API，只能造 `Throwable` + `setStackTrace`（**待实测**） | **最近 8 条** |
+| Bugly | ✅ `postException(8, "JsError", msg, stack, extra)` 的 `stack` **吃任意字符串** | 未查到 |
+| Crashlytics | ❌ Android 无此 API，造 `Throwable` + `setStackTrace(frames)`（**已实测可行**） | **最近 8 条** |
 
 各 flavor 的 `CckReport.report(String json)` 自己解、自己决定怎么塞。
+
+### Java 侧的两个入口
+
+```java
+package com.cck.report;
+public final class CckReport {
+    public static void init(String ctxJson);   // 启动时一次，参数是上下文表
+    public static void report(String json);    // 每条异常一次，参数是上面那份载荷
+}
+```
+
+两个都是 `(Ljava/lang/String;)V`。`init` 不是装饰：**Bugly 不 `initCrashReport` 就完全不工作**
+（Crashlytics 靠 `FirebaseInitProvider` 自动起，用 `init` 只是设上下文自定义键，顺带把
+`FirebaseApp` 拿没拿到打进 logcat）。`installCrashReporter` **先 `init` 再装钩子** ——
+钩子一装就可能有异常进来，而没 init 过的 Bugly 会直接把它丢掉。
+
+⚠️ **接不住引擎起来之前的原生崩溃**：`init` 发生在 `Bootstrap.start()` 里。要接得在 Java 的
+Application/Activity 里初始化，而那是所有渠道共用的 main 源集，放不下渠道专属代码。
 
 ### 收敛规则
 
@@ -175,7 +216,7 @@ JS 抛了一个没人接的异常
 
 ## Testable seams + 测试
 
-**逻辑全在 core，所以测试也全在 core** —— `packages/core/src/crash/__tests__/crash.test.ts`，15 条，node 直跑：
+**逻辑全在 core，所以测试也全在 core** —— `packages/core/src/crash/__tests__/crash.test.ts`，24 条，node 直跑：
 
 - **去重**：同一指纹喂 100 次只过一次；`message` 同而 `stack` 首帧不同算两种；首帧同而后续帧不同算一种；首帧同而 `message` 不同算两种。
 - **上限**：默认喂 9 种只过前 8 种；`maxKinds: 2` 只过 2 种；**达到上限后连已报过的那种也不再报**（`size >= maxKinds` 先于 `has` 之后判，两条路都堵死）。
@@ -184,12 +225,24 @@ JS 抛了一个没人接的异常
 ` 与尾随空白一并去掉。
 - **载荷**：`fingerprint` 不在 JSON 里（顶层键恰好是 `ctx/linenum/location/message/stack` 五个）；`ctx` 是**上报那一刻**现取而非装钩子那一刻；getter 抛异常 / 返回 `undefined` 都退化成空表且不打断上报。
 
+- **堆栈解析**：具名帧 / 匿名帧 / 首行的消息 / 多帧保序 / 畸形行跳过 / 空堆栈 / 帧数上限；**文件路径里带冒号**（`file:///D:/proj/main.js:42:7`）时认最后两段数字 —— 非贪婪匹配会把盘符当成行号。
+
 **engine 那半没有单测，这是刻意的。** `native.reflection.callStaticMethod` 是 JNI 调用，按
 [ADR-0002](../../../../docs/adr/0002-engine-test-strategy-capped-cc-mock.md) 属「需要真实引擎行为」那一类，
 **禁止进 cc mock**（同仓先例：`hotupdate-backend.ts` 重 cc、无单测）。与其为了凑一条断言把 mock 撑大，
 不如让 engine 那半薄到**没有逻辑可测** —— 这正是把判定与载荷拼装下沉 core 的原因。它的验证走真机（#50）。
 
-只能真机验的：那一次 JNI 调用、Java 侧的 SDK 调用、后台真收到。
+只能真机验的：那两次 JNI 调用、Java 侧的 SDK 调用、后台真收到。**已经验过了**（Android 14 /
+x86_64 模拟器，hlgit #50）：
+
+| | 证据 |
+|---|---|
+| Bugly（`qq` 包） | `CRASH TYPE: H5` · `JsError` · 完整 JS 帧 · `APP VER: 1.3.0`（`setAppVersion` 喂的热更版本）· `[Upload] Success: crash` / HTTP 200 |
+| Firebase（`google` 包） | `FirebaseApp 就绪：[DEFAULT] / 1:414118306834:...` · `Initializing Firebase Crashlytics 19.0.3` · 服务端配置 `status: activated` · 重启后 `POST crashlyticsreports-pa.googleapis.com/v1/firelog/legacy/batchlog` |
+
+验证手法：**往 `Bootstrap` 里临时种一个 `setTimeout` 抛异常，验完删**。没走 V8 inspector 注入 ——
+`Game.cpp` 那个 `#if CC_DEBUG` 分支在本工程的构建里没生效，6086 端口不监听。临时改代码的好处是
+走的就是引擎真正的 `reportException` 路径，比注入更实。
 
 ---
 
@@ -208,3 +261,14 @@ JS 抛了一个没人接的异常
 **引擎那句 `console.error` 还在。** 因为我们用的是 `__errorHandler` 而不是 `jsb.onError`（后者被 `platforms/native/engine/jsb-game.js:32` 占着）。这是被丢弃的重复异常仍然可见的原因，也是选它的理由之一 —— 别为了「统一」去接管 `jsb.onError`。
 
 **`__errorHandler` 在引擎源码里标着 `// For compatiblity`。** 它可能在未来的引擎版本里被移除。升引擎时这条要重新验一遍；真没了就退回 `jsb.onError`（记得补 `console.error`）或 C++ override。
+
+**上下文里的 `ver` 要喂给 Bugly 的 `setAppVersion`。** 不设的话后台读 APK 的 `versionName`，
+热更前后的问题全堆在出包那天的版本号下面，分不开。真机上确认过后台那条记录写的是 `APP VER: 1.3.0`
+（`APP_CONFIG.version`），不是 gradle 的 `versionName "1.0"`。
+
+**Crashlytics 那半有两个启动前提，少一个 App 直接打不开**（不是「上报不了」）：`firebase.xml` 里
+的 `com.crashlytics.RequireBuildId=false`，以及 Firebase BoM 钉在 33.1.2。两条的判据与代价见
+[ADR-0023](../../../../docs/adr/0023-crashlytics-without-gradle-plugin.md)。
+
+**`extraInfo` 的值会被截到 200 字节。** Bugly 官方限制：最多 50 对、key ≤ 50 字节、value ≤ 200 字节，
+**超长静默截断**。`cap-report-bugly` 里自己先截了一刀，免得后台看到半截 UTF-8。

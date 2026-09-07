@@ -28,7 +28,18 @@ public final class CckReport {
 
     private CckReport() {}
 
-    /** JS 侧唯一的入口。各渠道的同名类各写各的实现，由 gradle flavor 选中哪一份。 */
+    /**
+     * 启动时调一次，参数是 JS 侧的上下文表（不是崩溃载荷）。
+     *
+     * <p>本实现不接任何后台，所以只把上下文打一条出来 —— 但这个方法**必须存在**：
+     * 它跟 {@code report} 一样是 JS 侧的硬契约（{@code callStaticMethod} 找不到方法会抛），
+     * 而 Bugly 那份实现是靠它才初始化得起来的。
+     */
+    public static void init(String ctxJson) {
+        Log.i(TAG, "init " + ctxJson);
+    }
+
+    /** JS 侧唯一的上报入口。各渠道的同名类各写各的实现，由 gradle flavor 选中哪一份。 */
     public static void report(String json) {
         if (json == null) {
             return;

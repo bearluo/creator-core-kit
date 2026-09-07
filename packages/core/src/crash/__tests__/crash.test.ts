@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { crashPayload, createCrashFilter, type RawCrash } from '../crash';
+import { crashPayload, createCrashFilter, parseJsFrames, type RawCrash } from '../crash';
 
 /**
  * 崩溃上报的**全部判定逻辑**都在这里——engine 那半按 ADR-0002 薄到没有逻辑可测
@@ -97,7 +97,7 @@ describe('crashPayload', () => {
     const p = JSON.parse(crashPayload(e, () => ({})));
     expect(e.fingerprint).toBeTruthy();
     expect(p).not.toHaveProperty('fingerprint');
-    expect(Object.keys(p).sort()).toEqual(['ctx', 'linenum', 'location', 'message', 'stack']);
+    expect(Object.keys(p).sort()).toEqual(['ctx', 'frames', 'linenum', 'location', 'message', 'stack']);
   });
 
   it('13. ctx 是**上报那一刻**现取的，不是装钩子那一刻', () => {
@@ -123,5 +123,70 @@ describe('crashPayload', () => {
     const e = createCrashFilter().accept(raw())!;
     const get = (): Record<string, string> => undefined as unknown as Record<string, string>;
     expect(JSON.parse(crashPayload(e, get)).ctx).toEqual({});
+  });
+});
+
+/**
+ * 堆栈解析。它存在的唯一理由是 **Crashlytics 的 Android SDK 没有「上报一段自定义堆栈文本」
+ * 这个 API**（iOS 有 `ExceptionModel`，Android 没有对应物）——只能造一个 `Throwable` 再
+ * `setStackTrace(StackTraceElement[])`。那就得先把 V8 的堆栈字符串拆成帧。
+ *
+ * 拆在这边而不是 Java 侧，因为它是**有分支的逻辑**：格式有好几种、还有畸形行要跳过。
+ * 写进 `cap-report-firebase/` 的话，一行都测不到（硬规则一）。
+ */
+describe('parseJsFrames', () => {
+  it('16. 具名帧：函数名 / 文件 / 行号各就各位', () => {
+    expect(parseJsFrames('    at Foo.bar (assets/main/Foo.js:12:5)')).toEqual([
+      { fn: 'Foo.bar', file: 'assets/main/Foo.js', line: 12 },
+    ]);
+  });
+
+  it('17. 匿名帧（没有函数名那对括号）', () => {
+    expect(parseJsFrames('    at assets/main/Foo.js:3:1')).toEqual([
+      { fn: '<anonymous>', file: 'assets/main/Foo.js', line: 3 },
+    ]);
+  });
+
+  it('18. 首行是消息不是帧，跳过', () => {
+    const stack = 'Error: boom\n    at a.js:1:1';
+    expect(parseJsFrames(stack)).toEqual([{ fn: '<anonymous>', file: 'a.js', line: 1 }]);
+  });
+
+  it('19. 多帧保序', () => {
+    const stack = ['    at a (x.js:1:1)', '    at b (y.js:2:2)', '    at c (z.js:3:3)'].join('\n');
+    expect(parseJsFrames(stack).map((f) => f.fn)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('20. 文件路径里带冒号（file:/// 与盘符）时，认最后两段数字', () => {
+    expect(parseJsFrames('    at boot (file:///D:/proj/main.js:42:7)')).toEqual([
+      { fn: 'boot', file: 'file:///D:/proj/main.js', line: 42 },
+    ]);
+  });
+
+  it('21. 畸形行安静跳过，不炸也不产生垃圾帧', () => {
+    const stack = ['    at [native code]', '', '   at ', '    at ok (a.js:9:1)'].join('\n');
+    expect(parseJsFrames(stack)).toEqual([{ fn: 'ok', file: 'a.js', line: 9 }]);
+  });
+
+  it('22. 空堆栈是空数组，不是抛', () => {
+    expect(parseJsFrames('')).toEqual([]);
+  });
+
+  it('23. 截到上限（Crashlytics 对帧数没明说，但载荷不该无界）', () => {
+    const stack = Array.from({ length: 50 }, (_, i) => `    at f${i} (a.js:${i + 1}:1)`).join('\n');
+    expect(parseJsFrames(stack, 30)).toHaveLength(30);
+    expect(parseJsFrames(stack, 30)[29].fn).toBe('f29');
+  });
+
+  it('24. crashPayload 顺带带上 frames —— Bugly 用 stack、Firebase 用 frames，各取所需', () => {
+    const e = createCrashFilter().accept({
+      location: 'a.js',
+      linenum: 1,
+      message: 'boom',
+      stack: 'Error: boom\n    at f (a.js:7:2)',
+    })!;
+    const p = JSON.parse(crashPayload(e, () => ({})));
+    expect(p.frames).toEqual([{ fn: 'f', file: 'a.js', line: 7 }]);
+    expect(p.stack).toContain('at f (a.js:7:2)');
   });
 });

@@ -64,3 +64,12 @@
 # 配套 -renamesourcefileattribute：源文件名统一改成 SourceFile，不泄漏原始文件名。
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# Bugly。⚠️ 它的 aar 里那份 proguard.txt 是 **0 字节** —— 一条 keep 规则都没带，
+# 全靠使用方自己写。少了这段是 release 才炸。
+-keep public class com.tencent.bugly.**{*;}
+-dontwarn com.tencent.bugly.**
+
+# Crashlytics 的 aar 自带 consumer rules，不用手写 keep。但合成的 JS 异常类要留住类名 ——
+# 后台按 Throwable 的类名给问题分组，被混淆成 a.a.a 之后所有 JS 异常会挤成一堆。
+-keep class com.cck.report.CckReport$JsException { *; }

@@ -1,9 +1,12 @@
 import { native, sys } from 'cc';
-import { crashPayload, createCrashFilter } from '@cck/core';
+import { crashContext, crashPayload, createCrashFilter } from '@cck/core';
 
 /** Java 侧的固定入口。哪家 SDK 由 gradle flavor 决定（ADR-0022），JS 侧一行渠道分支都没有。 */
 const REPORT_CLASS = 'com/cck/report/CckReport';
 const REPORT_METHOD = 'report';
+/** 启动时调一次。Bugly 不显式初始化就完全不工作；Crashlytics 用它设上下文自定义键。 */
+const INIT_METHOD = 'init';
+/** 两个方法同签名，一个常量够用。 */
 const REPORT_SIG = '(Ljava/lang/String;)V';
 
 /** 默认 10 帧，在 Cocos 的事件派发链里经常还没走到业务代码就用完了。 */
@@ -31,6 +34,18 @@ export function installCrashReporter(getContext: () => Record<string, string>): 
 
   // V8 独有，非 V8 引擎上没有这个属性（engine 的 tsconfig 不含 node 类型，故显式收窄）。
   (Error as { stackTraceLimit?: number }).stackTraceLimit = STACK_FRAMES;
+
+  // 先初始化再装钩子：钩子装上就可能立刻有异常进来，而 Bugly 没 init 过的话那条会直接丢掉。
+  // ⚠️ 这一刻已经在 Bootstrap.start() 里了，**引擎起来之前**的原生崩溃这套接不住 ——
+  // 那需要在 Java 侧的 Application/Activity 里初始化，而那是所有渠道共用的 main 源集，
+  // 放不下渠道专属代码。真要接得等有了「所有渠道都要跑的启动钩子」这个东西。
+  native.reflection.callStaticMethod(
+    REPORT_CLASS,
+    INIT_METHOD,
+    REPORT_SIG,
+    JSON.stringify(crashContext(getContext)),
+  );
+
   const filter = createCrashFilter();
   const handler: ErrorHandler = (location, linenum, message, stack) => {
     const event = filter.accept({ location, linenum, message, stack });

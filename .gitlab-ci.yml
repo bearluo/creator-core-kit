@@ -108,6 +108,12 @@ android-flavors:
     # 有 productFlavors 之后 `assembleDebug` 的语义正是「编**所有** flavor 的 debug」——
     # 出包时这是坑（分不清出来的是哪个包，见 build.mjs），当闸时它恰好就是要的那件事。
     - cd apps/demo/build/android/proj && ./gradlew assembleDebug --console=plain
+    # 产物侧的闸：每个 flavor 真的编出了它那份能力实现吗（而且是**那一家**的）。
+    # `check:channels` 只比对「表 ↔ 目录」，看不见 gradle 到底把哪些文件喂给了 javac ——
+    # 而那一环出过两次静默事故：能力目录被 main 的源根整个吞掉（三份编进每个 flavor），
+    # 以及 AGP 增量陈旧（任务报 UP-TO-DATE、构建全绿、产物里一个 CckReport.class 都没有）。
+    # 后者正是 `GIT_CLEAN_FLAGS: -ffd` 换来的速度所附带的风险，所以这道闸不是可选项。
+    - cd "$CI_PROJECT_DIR" && node apps/demo/scripts/check-flavor-classes.mjs
   after_script:
     - rm -f "$CI_PROJECT_DIR/.git-ci-config"
   artifacts:

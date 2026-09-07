@@ -1,2 +1,2 @@
-export { createCrashFilter, crashPayload } from './crash';
-export type { CrashEvent, CrashFilter, RawCrash } from './crash';
+export { crashContext, crashPayload, createCrashFilter, parseJsFrames } from './crash';
+export type { CrashEvent, CrashFilter, JsFrame, RawCrash } from './crash';
