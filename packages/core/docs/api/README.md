@@ -20,6 +20,7 @@
 - [i18n](i18n.md)
 - [logging](logging.md)
 - [network](network.md)
+- [perf](perf.md)
 - [pool](pool.md)
 - [reactive](reactive.md)
 - [save](save.md)

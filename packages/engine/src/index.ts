@@ -100,3 +100,6 @@ export { installCrashReporter } from './crash-reporter';
 
 // —— 设备画像 · 引擎半（按平台取值；注册的是启动快照，不是取数器）——
 export { deviceProfileModule, readDeviceProfile } from './device-profile';
+
+// —— 性能采集 · 引擎半（把 PerfWindow 接到真实帧时钟；秒→毫秒的换算也在这里）——
+export { drivePerfWindow } from './perf-driver';

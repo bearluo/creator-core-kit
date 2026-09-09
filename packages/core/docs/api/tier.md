@@ -10,7 +10,7 @@
 
 ### DeviceTier
 
-Defined in: packages/core/src/tier/device-tier.ts:61
+Defined in: [packages/core/src/tier/device-tier.ts:61](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L61)
 
 #### Extended by
 
@@ -22,7 +22,7 @@ Defined in: packages/core/src/tier/device-tier.ts:61
 
 > `readonly` **serverOutcome**: [`ServerOutcome`](tier.md#serveroutcome-2)
 
-Defined in: packages/core/src/tier/device-tier.ts:67
+Defined in: [packages/core/src/tier/device-tier.ts:67](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L67)
 
 服务器那一趟的结局，只喂埋点。判档没跑过是 `'skipped'`。
 
@@ -30,7 +30,7 @@ Defined in: packages/core/src/tier/device-tier.ts:67
 
 > `readonly` **source**: `string`
 
-Defined in: packages/core/src/tier/device-tier.ts:65
+Defined in: [packages/core/src/tier/device-tier.ts:65](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L65)
 
 档位来源。埋点读它。
 
@@ -38,7 +38,7 @@ Defined in: packages/core/src/tier/device-tier.ts:65
 
 > `readonly` **tier**: `string`
 
-Defined in: packages/core/src/tier/device-tier.ts:63
+Defined in: [packages/core/src/tier/device-tier.ts:63](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L63)
 
 本次会话的档位。[resolveAtStartup](tier.md#resolveatstartup) 跑完之前是 `'default'`。**会话内不变。**
 
@@ -48,7 +48,7 @@ Defined in: packages/core/src/tier/device-tier.ts:63
 
 > **resolveAtStartup**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/tier/device-tier.ts:74
+Defined in: [packages/core/src/tier/device-tier.ts:74](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L74)
 
 判档。由启动序列的 `tier` 步调用一次；**并发 / 重复调用返回同一个 promise**，会话内只判一次。
 
@@ -63,7 +63,7 @@ Defined in: packages/core/src/tier/device-tier.ts:74
 
 > **setPreferred**(`tier`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/tier/device-tier.ts:81
+Defined in: [packages/core/src/tier/device-tier.ts:81](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L81)
 
 记下玩家在画质设置里选的档位（`undefined` = 清除，回到自动判定）。
 
@@ -84,7 +84,7 @@ Defined in: packages/core/src/tier/device-tier.ts:81
 
 ### DeviceTierHandle
 
-Defined in: packages/core/src/tier/device-tier.ts:120
+Defined in: [packages/core/src/tier/device-tier.ts:120](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L120)
 
 `createDeviceTier` 的返回值。比 [DeviceTier](tier.md#devicetier) 多一个 `dispose` ——
 给 `KitModule.stop` 用，**不是公开 API**：容器里注册的 token 类型是 `DeviceTier`，
@@ -100,7 +100,7 @@ Defined in: packages/core/src/tier/device-tier.ts:120
 
 > `readonly` **serverOutcome**: [`ServerOutcome`](tier.md#serveroutcome-2)
 
-Defined in: packages/core/src/tier/device-tier.ts:67
+Defined in: [packages/core/src/tier/device-tier.ts:67](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L67)
 
 服务器那一趟的结局，只喂埋点。判档没跑过是 `'skipped'`。
 
@@ -112,7 +112,7 @@ Defined in: packages/core/src/tier/device-tier.ts:67
 
 > `readonly` **source**: `string`
 
-Defined in: packages/core/src/tier/device-tier.ts:65
+Defined in: [packages/core/src/tier/device-tier.ts:65](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L65)
 
 档位来源。埋点读它。
 
@@ -124,7 +124,7 @@ Defined in: packages/core/src/tier/device-tier.ts:65
 
 > `readonly` **tier**: `string`
 
-Defined in: packages/core/src/tier/device-tier.ts:63
+Defined in: [packages/core/src/tier/device-tier.ts:63](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L63)
 
 本次会话的档位。[resolveAtStartup](tier.md#resolveatstartup) 跑完之前是 `'default'`。**会话内不变。**
 
@@ -138,7 +138,7 @@ Defined in: packages/core/src/tier/device-tier.ts:63
 
 > **dispose**(): `void`
 
-Defined in: packages/core/src/tier/device-tier.ts:122
+Defined in: [packages/core/src/tier/device-tier.ts:122](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L122)
 
 让在途的 `await` 回来后安静收摊（不改状态、不写缓存）。
 
@@ -150,7 +150,7 @@ Defined in: packages/core/src/tier/device-tier.ts:122
 
 > **resolveAtStartup**(): `Promise`\<`void`\>
 
-Defined in: packages/core/src/tier/device-tier.ts:74
+Defined in: [packages/core/src/tier/device-tier.ts:74](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L74)
 
 判档。由启动序列的 `tier` 步调用一次；**并发 / 重复调用返回同一个 promise**，会话内只判一次。
 
@@ -169,7 +169,7 @@ Defined in: packages/core/src/tier/device-tier.ts:74
 
 > **setPreferred**(`tier`): `Promise`\<`void`\>
 
-Defined in: packages/core/src/tier/device-tier.ts:81
+Defined in: [packages/core/src/tier/device-tier.ts:81](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L81)
 
 记下玩家在画质设置里选的档位（`undefined` = 清除，回到自动判定）。
 
@@ -194,7 +194,7 @@ Defined in: packages/core/src/tier/device-tier.ts:81
 
 ### DeviceTierOptions
 
-Defined in: packages/core/src/tier/device-tier.ts:84
+Defined in: [packages/core/src/tier/device-tier.ts:84](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L84)
 
 #### Properties
 
@@ -202,7 +202,7 @@ Defined in: packages/core/src/tier/device-tier.ts:84
 
 > `readonly` `optional` **budgetMs**: `number`
 
-Defined in: packages/core/src/tier/device-tier.ts:90
+Defined in: [packages/core/src/tier/device-tier.ts:90](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L90)
 
 等服务器的预算（ms），默认 1500。超时就走，**不重试**。
 
@@ -210,19 +210,19 @@ Defined in: packages/core/src/tier/device-tier.ts:90
 
 > `readonly` `optional` **fetchTier**: [`FetchTier`](tier.md#fetchtier-1)
 
-Defined in: packages/core/src/tier/device-tier.ts:88
+Defined in: [packages/core/src/tier/device-tier.ts:88](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L88)
 
 ##### logger?
 
 > `readonly` `optional` **logger**: [`ILogger`](logging.md#ilogger)
 
-Defined in: packages/core/src/tier/device-tier.ts:93
+Defined in: [packages/core/src/tier/device-tier.ts:93](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L93)
 
 ##### profile?
 
 > `readonly` `optional` **profile**: [`DeviceProfile`](device.md#deviceprofile)
 
-Defined in: packages/core/src/tier/device-tier.ts:86
+Defined in: [packages/core/src/tier/device-tier.ts:86](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L86)
 
 设备画像。默认取 DI 的 `DEVICE_PROFILE`（由 engine 的 `deviceProfileModule` 注册）。
 
@@ -230,7 +230,7 @@ Defined in: packages/core/src/tier/device-tier.ts:86
 
 > `readonly` `optional` **save**: [`SaveManager`](save.md#savemanager)
 
-Defined in: packages/core/src/tier/device-tier.ts:92
+Defined in: [packages/core/src/tier/device-tier.ts:92](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L92)
 
 档位缓存落在哪。默认 `getSaveManager()`。
 
@@ -238,13 +238,13 @@ Defined in: packages/core/src/tier/device-tier.ts:92
 
 > `readonly` `optional` **scoreTier**: [`ScoreTier`](tier.md#scoretier-1)
 
-Defined in: packages/core/src/tier/device-tier.ts:87
+Defined in: [packages/core/src/tier/device-tier.ts:87](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L87)
 
 ***
 
 ### TierVerdict
 
-Defined in: packages/core/src/tier/device-tier.ts:25
+Defined in: [packages/core/src/tier/device-tier.ts:25](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L25)
 
 服务器（或本地）给出的档位结论。
 
@@ -254,7 +254,7 @@ Defined in: packages/core/src/tier/device-tier.ts:25
 
 > `readonly` **source**: `string`
 
-Defined in: packages/core/src/tier/device-tier.ts:29
+Defined in: [packages/core/src/tier/device-tier.ts:29](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L29)
 
 来源标记，开放 string。埋点读它。
 
@@ -262,7 +262,7 @@ Defined in: packages/core/src/tier/device-tier.ts:29
 
 > `readonly` **tier**: `string`
 
-Defined in: packages/core/src/tier/device-tier.ts:27
+Defined in: [packages/core/src/tier/device-tier.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L27)
 
 档位标签。**不透明 string**，kit 不知道有哪几档。
 
@@ -272,7 +272,7 @@ Defined in: packages/core/src/tier/device-tier.ts:27
 
 > **FetchTier**: (`profile`) => `Promise`\<[`TierVerdict`](tier.md#tierverdict) \| `"none"`\>
 
-Defined in: packages/core/src/tier/device-tier.ts:42
+Defined in: [packages/core/src/tier/device-tier.ts:42](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L42)
 
 服务器权威档位。**由项目实现** —— 端点、协议、字段名 kit 一概不认识
 （判据：`dispatcher` 的响应能进 kit 是因为它跨框架，档位的不跨，它里面还带资源清单）。
@@ -296,7 +296,7 @@ Defined in: packages/core/src/tier/device-tier.ts:42
 
 > **ScoreTier**: (`profile`) => `string`
 
-Defined in: packages/core/src/tier/device-tier.ts:33
+Defined in: [packages/core/src/tier/device-tier.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L33)
 
 本地兜底打分。**由项目实现**，kit 不出默认。
 
@@ -316,7 +316,7 @@ Defined in: packages/core/src/tier/device-tier.ts:33
 
 > **ServerOutcome**: `"ok"` \| `"none"` \| `"timeout"` \| `"error"` \| `"skipped"`
 
-Defined in: packages/core/src/tier/device-tier.ts:45
+Defined in: [packages/core/src/tier/device-tier.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L45)
 
 服务器这一趟的结局。只喂埋点 —— 一个是覆盖率问题，一个是可用性问题。
 
@@ -326,7 +326,7 @@ Defined in: packages/core/src/tier/device-tier.ts:45
 
 > `const` **DEVICE\_TIER**: [`Token`](di.md#tokent)\<[`DeviceTier`](tier.md#devicetier)\>
 
-Defined in: packages/core/src/tier/device-tier.ts:96
+Defined in: [packages/core/src/tier/device-tier.ts:96](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L96)
 
 ***
 
@@ -334,7 +334,7 @@ Defined in: packages/core/src/tier/device-tier.ts:96
 
 > `const` **TIER\_DEFAULT**: `"default"` = `'default'`
 
-Defined in: packages/core/src/tier/device-tier.ts:47
+Defined in: [packages/core/src/tier/device-tier.ts:47](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L47)
 
 ***
 
@@ -342,7 +342,7 @@ Defined in: packages/core/src/tier/device-tier.ts:47
 
 > `const` **TIER\_SOURCE**: `object`
 
-Defined in: packages/core/src/tier/device-tier.ts:50
+Defined in: [packages/core/src/tier/device-tier.ts:50](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L50)
 
 [DeviceTier.source](tier.md#source) 的几个 kit 自己会产出的值。项目的 `fetchTier` 可以给别的。
 
@@ -378,7 +378,7 @@ Defined in: packages/core/src/tier/device-tier.ts:50
 
 > **createDeviceTier**(`opts`): [`DeviceTierHandle`](tier.md#devicetierhandle)
 
-Defined in: packages/core/src/tier/device-tier.ts:125
+Defined in: [packages/core/src/tier/device-tier.ts:125](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L125)
 
 #### Parameters
 
@@ -396,7 +396,7 @@ Defined in: packages/core/src/tier/device-tier.ts:125
 
 > **deviceTierModule**(`opts`): [`KitModule`](bootstrap.md#kitmodule)
 
-Defined in: packages/core/src/tier/device-tier.ts:263
+Defined in: [packages/core/src/tier/device-tier.ts:263](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/tier/device-tier.ts#L263)
 
 `KitModule`。**声明 `deps: ['device-profile']` 不只是 fail-fast，是排序的正确性前提** ——
 `install()` 里就要把画像捞出来（没有画像就打不了分，没有合理的缺省可退），
