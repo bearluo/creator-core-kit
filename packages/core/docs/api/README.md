@@ -13,6 +13,7 @@
 - [bundle](bundle.md)
 - [config](config.md)
 - [crash](crash.md)
+- [device](device.md)
 - [di](di.md)
 - [eventbus](eventbus.md)
 - [hotupdate](hotupdate.md)

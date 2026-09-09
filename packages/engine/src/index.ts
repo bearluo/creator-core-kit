@@ -97,3 +97,6 @@ export { appModule, createCcBundleReloader } from './app-module';
 
 // —— 崩溃上报 · 引擎半（装 __errorHandler，转发给 flavor 决定的 Java 实现）——
 export { installCrashReporter } from './crash-reporter';
+
+// —— 设备画像 · 引擎半（按平台取值；注册的是启动快照，不是取数器）——
+export { deviceProfileModule, readDeviceProfile } from './device-profile';
