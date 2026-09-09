@@ -59,6 +59,10 @@
 # 各渠道的实现同名同包（gradle flavor 选一份），一条规则通吃。
 -keep class com.cck.report.CckReport { *; }
 
+# 设备画像的 JNI 入口，同上（调用点在 packages/engine/src/device-profile.ts）。
+# 它跟渠道无关，住 main 源集，三个 flavor 共用一份。
+-keep class com.cck.device.CckDevice { *; }
+
 # 让混淆后的 Java 堆栈还带得上文件名和行号。Cocos 模板原本一条都没有，于是正式包里
 # 所有 Java 帧都长成 `Unknown Source` —— 崩溃上报接了也定位不到。
 # 配套 -renamesourcefileattribute：源文件名统一改成 SourceFile，不泄漏原始文件名。

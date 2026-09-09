@@ -2,6 +2,7 @@ import { DEVICE_PROFILE, type DeviceProfile } from '../device';
 import { createToken, getRootContainer, type Token } from '../di';
 import { getLogger, type ILogger } from '../logging';
 import { getSaveManager, type SaveManager } from '../save';
+import { setUIVariant } from '../ui';
 import type { KitModule } from '../bootstrap';
 
 /**
@@ -160,6 +161,20 @@ export function createDeviceTier(opts: DeviceTierOptions = {}): DeviceTierHandle
   };
 
   async function run(): Promise<void> {
+    await decide();
+    if (disposed) return;
+    // 判出来的档位灌进 UI 变体。**必须在这一刻做完** —— 紧接着的 `shared` 启动步就要按档
+    // 装常驻地基皮包，晚一步那些包就按 `'default'` 装好了，而且是静默的。
+    //
+    // 先例是 `resolutionModule` 灌 `orientation`（`packages/engine/src/resolution.ts`）：
+    // **谁拥有一个变体维度，谁负责把它推进去**，不能指望每个接入方记得接这根线。
+    //
+    // 这里 `await`（那边是 `void`）：启动到这一刻一个界面都还没开，所以零重建，
+    // await 纯粹为了保证「档位就位」早于「按档装包」。
+    await setUIVariant({ tier });
+  }
+
+  async function decide(): Promise<void> {
     // ① 玩家自选最高优先级 —— 选了就不必再问服务器，启动还快一步。
     const preferred = readTier(await save().load(SLOT_PREFERRED));
     if (disposed) return; // await 回来先确认自己还在（启动可能已被强更 / 停服中止）

@@ -1,7 +1,7 @@
 ---
 模块: device-profile
 所在包: packages/engine（按平台取值，分量在这半）+ packages/core（类型 · token · 全部判断逻辑）
-状态: kit 半已实现（core 27 测试，覆盖 100%；engine 薄壳无测，按 ADR-0002）。**原生桥的 Java 实现与真机验证未做**，见「还没做的」
+状态: **已实现并真机跑通**（2026-09-09 · Android 14 / API 34 / x86_64 模拟器，`readFailures=[]`）。core 27 测试覆盖 100%；engine 薄壳无测（ADR-0002）；`CckDevice.java` 在 demo 的 native/ 里
 跟踪: hlgit #21（wayfinder 图）· 参数调研见 #22 · 建模见 #37 · 模块划分见 #27 · 总纲 `docs/design/device-tiering-overview.md` §2
 摘要: 启动那一刻的一份设备快照。DI 里装的是**数据不是取数器**；原生桥一次调用返回一整个 JSON，于是所有判断都落在 core 的纯函数里、node 可穷举。
 何时读: 要按机器好坏做分档 / 想给崩溃上报或埋点加设备信息 / 要给某个平台补取值路径时。
@@ -185,17 +185,76 @@ Cocos 默认模板那三条权限一条都不用加。唯一的雷是 `Build.get
 凡是能下沉的都已下沉，剩下的只有「按平台挑一条取值路径 + 塞进结构」，没有分支可错。
 API 存在性由 `tsc -b` 用 `@cocos/creator-types` 的真类型保证（不是 mock）。
 
+## 真机实测（2026-09-09）
+
+两台，**都是 `readFailures=[]`**（十几项一个没漏）。
+
+**① 真 Galaxy / 真 One UI**（Samsung Remote Test Lab 远程真机，SM-S948U · **Android 16 / API 36** ·
+arm64-v8a · SoC SM8850 · Adreno 840）：
+
+```
+设备画像 | 堆上限=256MB 总内存=11123MB 可用=6739MB lowRam=false 核数=8 主频=3628800kHz dpi=450 屏幕=1080x2340
+设备画像 | samsung/SM-S948U soc=SM8850 abis=arm64-v8a os=16 gpu=Adreno (TM) 840
+          astc=true etc2=true maxTex=16384 上次退出=-
+设备画像 | readFailures=[]
+```
+
+⭐ **`主频=3628800kHz`（3.63 GHz）—— `/sys` 在真厂商 ROM 的 app 进程里读得到，值还是真的。**
+这是 #22 待实测①最硬的一条证据：不是模拟器、不是 shell 域，是 One UI 上 app 域的实读。
+顺带一个细节：同目录下 `cpuinfo_cur_freq` 是 `-r-------`（root only），而 `cpuinfo_max_freq`
+是 `-r--r--r--` —— **系统收紧的是「当前频率」，不是「最大频率」**，我们要的恰好是后者。
+
+另一层意外收获：这台是 **API 36**，比工程的 `compileSdk 35` 还新，**十几项 API 一个都没因为
+版本新而失效**。
+
+**② x86_64 模拟器**（Android 14 / API 34），作为对照：
+
+```
+设备画像 | 堆上限=192MB 总内存=2979MB 可用=1492MB lowRam=false 核数=4 主频=2kHz dpi=420 屏幕=1080x2400
+设备画像 | google/sdk_gphone64_x86_64 soc=ranchu abis=x86_64,arm64-v8a os=14
+          gpu=Android Emulator OpenGL ES Translator (Intel(R) Graphics)
+          astc=true etc2=true maxTex=16384 上次退出=userRequested
+设备画像 | readFailures=[]
+```
+
+逐项结论：
+
+| 待验 | 结果 |
+|---|---|
+| JNI 桥整条链（一次调用返回整个 JSON） | ✅ 内存三件套 / lowRam / 核数 / dpi / brand / model / abis 全到位 |
+| **#22 待实测①：`/sys` 在 app 进程里读不读得到** | ✅ **读得到**（主频那一项）。shell 域能读**不等于** app 域能读，这条只有真机答得了 |
+| `Build.SOC_MODEL`（API 31+ 版本门） | ✅ `soc=ranchu` |
+| 引擎侧能力位 | ✅ `astc` / `etc2` / `maxTextureSize` 全有值 |
+| 屏幕两条路 | ✅ 桥给 `dpi=420`、引擎 `screen.windowSize` 给物理像素 `1080x2400` |
+| **`REASON_*` 映射**（值取自 `javap` 读 `android.jar`） | ✅ 第二次启动读到 `上次退出=userRequested` —— `am force-stop` → `REASON_USER_REQUESTED`(10) |
+| 首次启动没有「上次」 | ✅ 缺席，且**不在** `readFailures` —— 没被误判成读失败 |
+
+⚠️ **模拟器上 `cpuinfo_max_freq` 读出来是 `2`**（虚拟 CPU 的垃圾值），真机上是 `3628800`。
+kit 不判断数值、如实收下 —— 所以**「读得到」不等于「值可信」**，打分函数要自己防
+（**并且模拟器上永远发现不了这一点**：那台上它「读到了」，只是读到个假的）。
+
+### 怎么复现这次真机跑
+
+Samsung Remote Test Lab（免费）→ 下 `rdb.exe` 跑起来（它是个常驻服务，起来后听 **8888**
+给网页端连、另开一个随机端口给 adb）→ 在**同一台机器的浏览器**里把预约到的设备接上 →
+`adb connect localhost:<随机端口>`，之后就是一台普通 adb 设备。
+
+⚠️ 两个坑：**① `appABIs` 默认只有 `x86_64`**（`build-configs/android-boot.json`，为本机模拟器
+留的），装真机前要临时改成 `arm64-v8a` 重编；**② 云端设备连不到内网**，demo 的启动必然挂在
+`dispatch`（`网络错误 @ .../api/Handshake`）—— 所以画像日志刻意打在 `boot()` 之后、
+`launch()` 之前，启动成不成功都照出。
+
 ## 还没做的
 
-1. **`CckDevice.java` 没写。** 在此之前，Android 上桥调用会抛（类不存在）→ 被当作「没这能力」，
-   只剩引擎白送的 GPU / 屏幕 / 系统版本那几项。这是**设计内的降级**，不是故障。
-2. **真机验证一次没做。** 连带 #22 留下的五项待实测：
-   ① `native.fileUtils` 读 `/sys` 通不通（**影响面最大** —— 不通则 CPU 核数/主频也得走 Java 桥）；
-   ② `Device::getDPI()` 在 Android 上返回什么；③ `J`(long) 返回可不可用（**本模块已绕开**，
-   桥只返回 String）；④ 厂商 ROM 对 `/sys/.../cpu/**` 的可读性（**要目标市场真实低端机抽样，
-   模拟器测不出来**）；⑤ 字节小游戏字段清单。
-3. **web / 小游戏的取值没接**（`navigator.deviceMemory` / `hardwareConcurrency` / `getSystemInfoSync`）。
-   接口容得下，实现待补。
+1. **④ 非三星厂商（Redmi / realme / vivo / OPPO）对 `/sys/devices/system/cpu/**` 的收紧情况仍未验。**
+   One UI 这条已经用真机答了，但**印度低端市场主力不是三星** —— 那几家要走各自的云真机平台。
+   而且这次那台是**旗舰**（11 GB RAM / 8 核 / 3.6 GHz），低端机的行为仍是空白。
+   这也正是 `readFailures` 存在的意义 —— 覆盖不到的靠上线后埋点捞。
+2. **web / 小游戏的取值没接**（`navigator.deviceMemory` / `hardwareConcurrency` /
+   `getSystemInfoSync`）。接口容得下，实现待补。
+3. **#22 的 ② `Device::getDPI()` 返回什么** —— 本模块直接走桥拿 `densityDpi` 了，这一项对本实现
+   已无影响；真要用引擎那条路时再验。**③ `J`(long) 返回可不可用**已被「桥只返回 String」的
+   设计绕开，不需要答。
 
 ## 已知行为与坑
 

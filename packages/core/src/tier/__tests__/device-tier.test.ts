@@ -5,6 +5,7 @@ import { createSaveManager, getSaveManager, type SaveManager } from '../../save'
 import { boot, type Kit } from '../../bootstrap';
 import { getRootContainer, type Container } from '../../di';
 import { DEVICE_PROFILE, type DeviceProfile } from '../../device';
+import { getUIVariant, setUIVariant } from '../../ui';
 import {
   createDeviceTier,
   deviceTierModule,
@@ -99,6 +100,33 @@ describe('DeviceTier · 优先级链', () => {
     const t = make({ scoreTier: () => '' });
     await t.resolveAtStartup();
     expect(t.tier).toBe(TIER_DEFAULT);
+  });
+});
+
+describe('DeviceTier · 把档位灌进 UIVariant', () => {
+  afterEach(async () => {
+    await setUIVariant({ tier: TIER_DEFAULT }); // 默认 UIManager 是进程级的，别留脏
+  });
+
+  it('判完就推进 UI 变体 —— 紧接着的 shared 步要按档装常驻皮包，晚一步就静默装错', async () => {
+    const t = make({ scoreTier: () => 'low' });
+    expect(getUIVariant().tier).toBe(TIER_DEFAULT);
+
+    await t.resolveAtStartup();
+
+    expect(t.tier).toBe('low');
+    expect(getUIVariant().tier).toBe('low'); // 不指望接入方记得接这根线
+  });
+
+  it('判档途中被 dispose → 不推（宿主已经没了）', async () => {
+    const d = deferred<TierVerdict | 'none'>();
+    const t = make({ scoreTier: () => 'low', fetchTier: () => d.promise });
+    const p = t.resolveAtStartup();
+    t.dispose();
+    d.resolve({ tier: 'mid', source: 'server' });
+    await p;
+
+    expect(getUIVariant().tier).toBe(TIER_DEFAULT);
   });
 });
 

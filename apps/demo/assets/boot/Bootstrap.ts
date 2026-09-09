@@ -8,9 +8,12 @@ import {
   getBundleManager,
   getI18n,
   getRootContainer,
+  deviceTierModule,
   setUIVariant,
   APP_INFO,
   BUNDLE_UPDATER,
+  DEVICE_PROFILE,
+  DEVICE_TIER,
   DISPATCH,
   HOTUPDATE_SERVICE,
   KIT,
@@ -31,6 +34,7 @@ import {
   ccNetworkModule,
   ccStorageModule,
   ccUIModule,
+  deviceProfileModule,
   installCrashReporter,
   loadLocaleTable,
   packagedBaseEntry,
@@ -273,11 +277,30 @@ export class Bootstrap extends Component {
         ccStorageModule(),
         ccAudioModule(),
         ccUIModule(),
+        // 设备画像：启动时读一次的快照。engine 侧按平台取值，Android 上再多走一趟
+        // `com.cck.device.CckDevice.readProfile()`（那份 Java 在 native/ 里，跟渠道无关）。
+        // 装不装它跟分不分档无关 —— 只想给崩溃上报补设备信息的项目也可以只装这一个。
+        deviceProfileModule(),
+        // 分档。**demo 的打分策略写在这里，kit 一行经验值都不送** —— 门槛值是项目的事。
+        // 没配 `fetchTier`：demo 没有判档服务端，走「本地算 + 缓存」那条路。
+        deviceTierModule({
+          scoreTier: (p) => {
+            // ⚠️ 这几个数字是 **demo 自己的经验值**，不是框架推荐值。
+            // 也刻意演示了三个不同来源的信号各怎么用：
+            if (p.lastExitReason === 'lowMemory') return 'low'; // 上次是被 OOM 杀的，最硬的证据
+            if (p.lowRamDevice === true) return 'low'; // 系统自己认定的低内存机
+            const heap = p.processMemoryLimitBytes; // 进程堆上限（Android 独有的稳定常量）
+            if (heap !== undefined) return heap < 192 * 1024 * 1024 ? 'low' : 'high';
+            // 一个数都没读到（web / iOS / 没装 CckDevice）→ 不猜，落默认档。
+            return 'default';
+          },
+        }),
         // 只造不跑，launch 在下面显式发起
         appModule(APP_CONFIG, { steps: launchSteps((u) => (cdnUrl = u)) }),
       ],
     });
     console.log(`${TAG} kit 就绪[${kit.modules.join(', ')}] → app.launch()`);
+    logDeviceProfile(); // 画像在 install 时就读好了，不必等 launch —— 云端真机上启动会失败
 
     // 马甲皮 —— 必须在 `launch()` **之前**定好：第一个界面（登录闸门）就要按它解析包。
     // 之后不再改（换皮是换包，不是运行时切换），转屏那一维由 resolutionModule 自己灌。
@@ -302,5 +325,53 @@ export class Bootstrap extends Component {
       overlay.onFailure(f);
     });
     await app.launch();
+    logDeviceTier();
   }
+}
+
+/**
+ * 把设备画像打进日志。**真机验证靠它** —— 这条链上大半环节（JNI 桥、`/sys` 读不读得到、
+ * 厂商 ROM 收没收紧）本机单测一条都覆盖不到，只能到真机上看。
+ *
+ * ⚠️ **调用点必须在 `boot()` 之后、`launch()` 之前**：画像是 `deviceProfileModule.install()`
+ * 时就读好的，跟启动序列毫无关系。挂在 `launch()` 之后看着也能出，但那要赌「启动失败之后
+ * 还能往下走到这一行」—— 而**云端真机连不到内网的 dispatcher，启动必然失败**，云测跑一次
+ * 就废一次。放这儿，启动成不成功都照打。
+ *
+ * 摊平成一行：Cocos native 把 JS console 转发到 logcat 时，对象参数一律打成 `[object Object]`。
+ */
+function logDeviceProfile(): void {
+  const p = getRootContainer().tryResolve(DEVICE_PROFILE);
+  if (!p) {
+    console.log(`${TAG} 设备画像未装（没注册 deviceProfileModule）`);
+    return;
+  }
+  const mb = (n?: number): string => (n === undefined ? '-' : `${Math.round(n / 1024 / 1024)}MB`);
+  console.log(
+    `${TAG} 设备画像 | 堆上限=${mb(p.processMemoryLimitBytes)} 总内存=${mb(p.deviceTotalMemoryBytes)} ` +
+      `可用=${mb(p.availableMemoryBytes)} lowRam=${p.lowRamDevice ?? '-'} ` +
+      `核数=${p.cpuCores ?? '-'} 主频=${p.cpuMaxFreqKHz ?? '-'}kHz dpi=${p.densityDpi ?? '-'} ` +
+      `屏幕=${p.screenWidthPx ?? '-'}x${p.screenHeightPx ?? '-'}`,
+  );
+  console.log(
+    `${TAG} 设备画像 | ${p.brand ?? '-'}/${p.model ?? '-'} soc=${p.socModel ?? '-'} abis=${p.abis ?? '-'} ` +
+      `os=${p.osVersion ?? '-'} gpu=${p.gpuRenderer ?? '-'} astc=${p.supportsAstc ?? '-'} ` +
+      `etc2=${p.supportsEtc2 ?? '-'} maxTex=${p.maxTextureSize ?? '-'} 上次退出=${p.lastExitReason ?? '-'}`,
+  );
+  // ⭐ 这一行最要紧：**无值且在清单里 = 本该读到却没读到**，那正是「某批机型上打分静默降级了」
+  // 的唯一信号。空清单才是好消息。
+  console.log(`${TAG} 设备画像 | readFailures=[${p.readFailures.join(', ')}]`);
+}
+
+/**
+ * 档位。**这个才必须等 `launch()`** —— 判档是启动序列的 `tier` 步做的，
+ * 启动没跑到那一步（比如热更失败）时它恒为 `default/default/skipped`，那也是如实的。
+ */
+function logDeviceTier(): void {
+  const t = getRootContainer().tryResolve(DEVICE_TIER);
+  if (!t) {
+    console.log(`${TAG} 分档未装（没注册 deviceTierModule）`);
+    return;
+  }
+  console.log(`${TAG} 档位 → ${t.tier}（来源 ${t.source}，服务器 ${t.serverOutcome}）`);
 }
