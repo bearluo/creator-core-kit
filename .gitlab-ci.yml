@@ -72,13 +72,32 @@ verify:
 #
 # 只在 MR 与主干上跑：一次要编 Cocos 引擎的 C++（704 个目标文件），不是每次 push 都值得。
 # 它挡的是「改了公共代码把某个 flavor 编坏了，本地选着 dev 一无所知」，在合入前挡住就够。
+# 纯文档提交连这个也跳过 —— 判据见下面那份白名单。
+# 「改了什么才值得重编一次 Android」的白名单。**写成「除 `docs/` 之外的一切」，
+# 不是「列出所有会影响构建的路径」** —— 后者漏一条的后果是「该跑的没跑」，而且是静默的：
+# 流水线全绿、MR 可以合，某个 flavor 编坏了却没人知道。这个方向反过来，漏了只会多跑一次。
+#
+# `*` / `.*` 是根目录那一层（`package.json` / `pnpm-lock.yaml` / `.gitlab-ci.yml` …）——
+# GitLab 的 glob 里 `*` 不跨 `/`，所以它不会把 `docs/x.md` 一起吃进来。
+#
+# ⚠️ 只挡得住**顶层** `docs/`。随包 / 随工程的文档（`packages/*/docs/`、`apps/*/docs/`）
+# 仍会触发 —— 那是刻意的：doc-as-code 要求它们跟代码同一个提交，本来就该跟着跑。
+.android-build-affecting: &android-build-affecting
+  - "*"
+  - ".*"
+  - "apps/**/*"
+  - "packages/**/*"
+  - "scripts/**/*"
+
 android-flavors:
   tags: [cocos-mac]
   needs: []
   interruptible: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: *android-build-affecting
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes: *android-build-affecting
   variables:
     # **不加 `-x`**（默认是 `-ffdx`）：留住 gitignore 的 apps/demo/{library,build}/ 与 node_modules/。
     # 全清一次 = Creator 重导全部资源 + NDK 从零重编整个引擎，十几分钟起步；留着则是增量。
