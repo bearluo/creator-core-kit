@@ -4,6 +4,7 @@ import {
   CCK_LAYERS,
   computeCameraCenter,
   computeOrthoHeight,
+  computeSafeAreaInsets,
   createClearOwnership,
   pickDesignResolution,
 } from '../render-policy';
@@ -203,5 +204,159 @@ describe('常量阶梯', () => {
       expect(bit).toBeGreaterThanOrEqual(0);
       expect(bit).toBeLessThanOrEqual(19);
     }
+  });
+});
+
+describe('computeSafeAreaInsets（刘海 / 挖孔 / 圆角：安全矩形 → 四边内缩）', () => {
+  const full = { x: 0, y: 0, width: 1080, height: 1920 };
+
+  it('21. 非异形屏：安全矩形就是整个可视区 → 四边全 0', () => {
+    expect(computeSafeAreaInsets(1080, 1920, full)).toEqual({
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+    });
+  });
+
+  it('22. 竖屏顶部挖孔：只缩上边（y 是下边距，不是上边距——UI 坐标系 y 轴向上）', () => {
+    expect(
+      computeSafeAreaInsets(1080, 1920, {
+        x: 0,
+        y: 0,
+        width: 1080,
+        height: 1820,
+      }),
+    ).toEqual({
+      top: 100,
+      bottom: 0,
+      left: 0,
+      right: 0,
+    });
+  });
+
+  it('23. 底部圆角 / home 条：y 抬起来 → 缩下边', () => {
+    expect(
+      computeSafeAreaInsets(1080, 1920, {
+        x: 0,
+        y: 60,
+        width: 1080,
+        height: 1860,
+      }),
+    ).toEqual({
+      top: 0,
+      bottom: 60,
+      left: 0,
+      right: 0,
+    });
+  });
+
+  it('24. 横屏刘海在侧：左右各缩（symmetric 下引擎已把两侧取大者对齐）', () => {
+    expect(
+      computeSafeAreaInsets(1920, 1080, {
+        x: 90,
+        y: 0,
+        width: 1740,
+        height: 1080,
+      }),
+    ).toEqual({
+      top: 0,
+      bottom: 0,
+      left: 90,
+      right: 90,
+    });
+  });
+
+  it('25. 安全矩形比可视区还大（平台返回脏数据）→ 内缩不许为负', () => {
+    const i = computeSafeAreaInsets(1080, 1920, {
+      x: -10,
+      y: -10,
+      width: 1200,
+      height: 2000,
+    });
+    expect(i).toEqual({ top: 0, bottom: 0, left: 0, right: 0 });
+  });
+
+  it('26. 尺寸非法（headless / 窗口最小化，取到 0 或 NaN）→ 全 0，不抛错也不外泄 NaN', () => {
+    expect(computeSafeAreaInsets(0, 0, { x: 0, y: 0, width: 0, height: 0 })).toEqual({
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+    });
+    expect(
+      computeSafeAreaInsets(NaN, NaN, {
+        x: NaN,
+        y: NaN,
+        width: NaN,
+        height: NaN,
+      }),
+    ).toEqual({
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+    });
+  });
+});
+
+describe('转屏：同一块硬件，安全区换到另一根轴（pickDesignResolution × computeSafeAreaInsets）', () => {
+  // 一台 1080×2400 的挖孔机，挖孔在**物理顶边** 136px。两个方向都锁短边 1080：
+  // 竖屏 FIXED_WIDTH → scaleX = 1080/1080 = 1，横屏 FIXED_HEIGHT → scaleY = 1080/1080 = 1，
+  // 所以两边的「设计单位」都恰好等于物理像素，数能直接对上（也正是 2026-09-09 模拟器实测那台）。
+  // safe rect 按引擎 symmetric=true 的口径给：挖孔那根轴上两头取大者对齐。
+  const CUT = 136;
+
+  it('27. 竖屏：挖孔在短边(上) → 缩上下，左右不动', () => {
+    const r = pickDesignResolution(1080, 2400);
+    expect(r).toMatchObject({ orientation: 'portrait', lockAxis: 'width' });
+    // 可视区 = 1080 × 2400（锁宽后长边随屏幕比例延展，不是 1920）
+    expect(
+      computeSafeAreaInsets(1080, 2400, {
+        x: 0,
+        y: CUT,
+        width: 1080,
+        height: 2400 - 2 * CUT,
+      }),
+    ).toEqual({
+      top: CUT,
+      bottom: CUT,
+      left: 0,
+      right: 0,
+    });
+  });
+
+  it('28. 横屏：同一个挖孔转到短边(侧) → 缩左右，上下不动', () => {
+    const r = pickDesignResolution(2400, 1080);
+    expect(r).toMatchObject({ orientation: 'landscape', lockAxis: 'height' });
+    expect(
+      computeSafeAreaInsets(2400, 1080, {
+        x: CUT,
+        y: 0,
+        width: 2400 - 2 * CUT,
+        height: 1080,
+      }),
+    ).toEqual({
+      top: 0,
+      bottom: 0,
+      left: CUT,
+      right: CUT,
+    });
+  });
+
+  it('29. 拿转屏**前**的可视尺寸去算转屏后的安全区 → 荒唐值（钉住「先换设计分辨率、再读安全区」的顺序）', () => {
+    // resolutionModule 是先 setDesignResolutionSize 再回调 onOrientationChange 的；
+    // 万一有人把读安全区挪到换分辨率之前，拿到的就是这个：
+    const stale = computeSafeAreaInsets(1080, 2400, {
+      x: CUT,
+      y: 0,
+      width: 2400 - 2 * CUT,
+      height: 1080,
+    });
+    expect(stale).not.toEqual({ top: 0, bottom: 0, left: CUT, right: CUT });
+    // 具体错成什么样：上边被算出整整 1320 —— 界面会被推到屏幕中间往下一大截
+    expect(stale.top).toBe(2400 - 1080);
+    // 而右边算出负数、被 nonNeg 压成 0 —— 该缩的那条边反而一点没缩
+    expect(stale.right).toBe(0);
   });
 });

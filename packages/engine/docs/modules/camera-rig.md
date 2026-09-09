@@ -2,10 +2,10 @@
 模块: camera-rig
 所在包: packages/engine
 状态: 已实现（kit 侧）
-摘要: kit 常驻相机组——背景相机 + UI 相机固化成 persist 节点，priority/layer 双阶梯留出前景后景与 3D 世界空档；层级 root 用 RenderRoot2D + Widget；配套 resolutionModule 做「锁短边」横竖屏适配。
-何时读: 接入 kit 的场景/相机骨架、要在背景与 UI 之间插相机、做多分辨率/旋转适配、或排查「预览正常真机花屏」类问题时。
+摘要: kit 常驻相机组——背景相机 + UI 相机固化成 persist 节点，priority/layer 双阶梯留出前景后景与 3D 世界空档；层级 root 用 RenderRoot2D + Widget；配套 resolutionModule 做「锁短边」横竖屏适配、安全区直接用引擎内置 cc.SafeArea。
+何时读: 接入 kit 的场景/相机骨架、要在背景与 UI 之间插相机、做多分辨率/旋转适配、异形屏安全区适配、或排查「预览正常真机花屏」类问题时。
 日期: 2026-07-30
-依赖: bootstrap（KitModule 生命周期）；cc: Camera / RenderRoot2D / Widget / UITransform / Layers / view / screen / ResolutionPolicy
+依赖: bootstrap（KitModule 生命周期）；cc: Camera / RenderRoot2D / Widget / UITransform / Layers / view / screen / sys / ResolutionPolicy / SafeArea
 ---
 
 # camera-rig 设计文档
@@ -15,7 +15,8 @@
 - `cameraRigModule()` 在 boot 时建**全 app 唯一、跨场景常驻**的相机组：`bg`（`SOLID_COLOR`，清色）+ `ui`（`DEPTH_ONLY`，叠上去），并给每层配好挂载 root。
 - 业务场景**不再各配相机**；3D 子游戏只需把自己的 world 相机 priority 落进预留区 `1..99`，即自动盖在 2D 背景之上、UI 之下。
 - `resolutionModule()` 按当前横竖屏**锁短边**切换设计分辨率与 `ResolutionPolicy`——引擎旋转时不会自己换，必须补这一步。
-- 纯决策逻辑在 `src/render-policy.ts`（**零 cc**、17 条单测）；cc 薄壳在 `src/camera-rig.ts` / `src/resolution.ts`。
+- **异形屏安全区 kit 不写适配代码**：引擎内置的 `cc.SafeArea` 组件已经把「按安全区排 UI」做完了，挂在界面根上即可（见[安全区](#安全区异形屏--挖孔--圆角)）。kit 只补它给不了的**数**——`getSafeAreaInsets()`。
+- 纯决策逻辑在 `src/render-policy.ts`（**零 cc**、23 条单测）；cc 薄壳在 `src/camera-rig.ts` / `src/resolution.ts`。
 - 架构总述与 demo 落地见 [`apps/demo/docs/scene-and-camera-architecture.md`](../../../../apps/demo/docs/scene-and-camera-architecture.md)；「为什么不用 `Canvas`」的源码级依据见 [调研：cc Canvas vs RenderRoot2D](../../../../docs/research/2026-07-30-cc-canvas-vs-renderroot2d.md)。
 
 ## Purpose（目标与定位）
@@ -144,6 +145,30 @@ await bootCoreKit({
 });
 ```
 
+### 安全区读数（`src/resolution.ts` + `src/render-policy.ts`）
+
+```ts
+/** 安全区四边内缩量（设计单位）。四个数恒 >= 0，非异形屏全 0。 */
+export interface SafeAreaInsets {
+  readonly top: number;
+  readonly bottom: number;
+  readonly left: number;
+  readonly right: number;
+}
+
+/** 纯逻辑：安全矩形 → 四边内缩量（零 cc，可单测）。 */
+export function computeSafeAreaInsets(
+  visibleWidth: number,
+  visibleHeight: number,
+  rect: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+): SafeAreaInsets;
+
+/** cc 薄壳：读当前 `view.getVisibleSize()` + `sys.getSafeAreaRect()` 换算。 */
+export function getSafeAreaInsets(): SafeAreaInsets;
+```
+
+⚠️ **排版不要用它**——见下节。
+
 ## Behavior & data flow（行为与数据流）
 
 ### 建组（`start`）
@@ -198,6 +223,108 @@ await bootCoreKit({
 
 ⚠️ **两个方向的设计分辨率不同 → UI 必须用 Widget 锚定做响应式布局**，不能硬编码坐标。
 
+### 安全区（异形屏 / 挖孔 / 圆角）
+
+**kit 在这件事上一行适配代码都不写**，因为引擎已经写完了：`cc.SafeArea`（`cocos/ui/safe-area.ts`）
+读 `sys.getSafeAreaRect()`，把四边算成 `Widget` 的 margin，并自己订 `window-resize` / `orientation-change`
+跟着转屏走。它已经覆盖了「用 Widget 锚、不硬编码像素」「转屏跟着变」「取不到就退回整屏」三件事。
+再造一个只会多一份要跟引擎同步的代码。
+
+**怎么挂**：界面根上 `Widget`（四边 0 拉满）+ `SafeArea`，交互内容放它里面；全屏背景 / 遮罩留在它外面。
+
+```
+Panel（Widget 四边 0 + SafeArea）   ← 交互内容缩进安全区
+└─ Content（返回键 / 顶栏 / 底栏 …）
+```
+
+⚠️ **`SafeArea` 的父节点必须正好是整个可视区**。它把屏幕空间的内缩量当 `Widget` margin 写下去，
+而 margin 是相对**父节点**算的——父不是满屏，缩进量就错，且错得很轻微、只在特定机型上显形。
+在 kit 里这条天然成立：UIManager 的层容器（`UILayer_*`）**故意不带 `UITransform`**，
+于是子节点的 Widget 走 `widgetManager` 的 `isRoot` 分支对齐 `visibleRect`（满屏）。
+
+⚠️ **别挂到层级 root 或层容器上**。层容器一旦有了 `UITransform`，`useGlobal` 翻成 false，
+所有界面的 Widget 改为对齐容器的 `contentSize`——这既会把全屏遮罩（`loading` / `system`）
+和背景（`back`）一起收进安全区，也让「谁该满屏谁该缩进」变成 kit 替业务做的决定。
+安全区是**每个界面**的选择，不是层的属性。
+
+**平台实况**（都验过源码，见下方「已知行为与坑」）：
+
+| 平台 | 取到什么 | 备注 |
+|---|---|---|
+| Android | **只有 `DisplayCutout` 的 safe inset**（`CocosHelper.getSafeArea()`，API 28+） | 导航栏 / 手势条**不在内**——但 `CocosActivity` 用的是 `IMMERSIVE_STICKY` + `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`，系统栏本就隐藏、不占布局，所以只算挖孔是对的 |
+| iOS | `UIView.safeAreaInsets` | 含 home indicator |
+| 微信 / 字节小游戏 | 平台 `getSystemInfoSync().safeArea` | |
+| H5 | CSS `env(safe-area-inset-*)` → `--safe-top` 等变量 | ⚠️ 见坑③ |
+| 桌面 / 编辑器预览 | 恒等于整个可视区 → 内缩全 0 | 所以**安全区只能真机验** |
+
+**`symmetric` 默认 true**（引擎默认，`cc.SafeArea` 也用它）：刘海只在一侧时把两侧取大者对齐，
+免得整个 UI 偏心。kit 的 `getSafeAreaInsets()` 沿用这个默认，不给参数——需要非对称的项目直接
+调 `sys.getSafeAreaRect(false)`。
+
+**怎么保证没人漏挂** —— 两道源码期闸（`pnpm test` 里跑，见 `apps/demo/test/`）：
+
+- `prefab-safe-area.test.ts`：扫全工程 prefab，**一根轴上只锚一边**（贴边）的 `Widget`
+  必须自己或祖先挂 `cc.SafeArea`；四边都锚的拉伸容器放行（那是满屏底 / 遮罩）。
+  这道闸落地当天就逮到 **6 张 HUD、19 处**：最狠的是 `mini-fish` 的返回键距顶只有 5 设计单位，
+  136 的挖孔能把它整个盖住。
+- `prefab-integrity.test.ts`：prefab 序列化结构自洽（`__id__` 不悬空、组件与节点双向对得上、
+  **组件有 `CompPrefabInfo` / 节点有 `PrefabInfo`**、`fileId` 不撞车）。有了它，用脚本给
+  prefab 加组件才是安全的 —— 缺 `PrefabInfo` 那条正是「运行时能 instantiate、编辑器一打开就崩」。
+
+另有 `apps/demo/test/foundation/game/hud.test.ts` 这道**既有**的接缝闸：View 按名字取的节点
+prefab 里必须真有。给 `mini-fish` 加 `Safe/` 容器时，它当场把 5 个改坏的路径全报了出来。
+
+**`getSafeAreaInsets()` 是给谁用的**：不是排版，是**读数**——按刘海高度决定换不换紧凑布局、
+把内缩量随崩溃一起上报、真机上打一行日志确认到底缩了多少。demo 在 `Bootstrap` 里打了这行，
+并且**搭 `resolutionModule` 的 `onOrientationChange` 那趟车**报（那个回调在 `apply()` 末尾调，
+设计分辨率已经换完），不另订一份 `orientation-change`。
+
+**实测（2026-09-09 · Android 14 / API 34 模拟器 · 1080×2400 · 竖屏锁死）**——模拟器能模拟异形屏，
+`adb shell cmd overlay enable com.android.internal.display.cutout.emulation.<hole|tall|corner|double|waterfall>`，
+所以这条链**不必等真机**也能验：
+
+| 模拟的屏 | 系统报的 cutout | `getSafeAreaInsets()` | 说明 |
+|---|---|---|---|
+| `hole`（顶部挖孔） | `insets=Rect(0, 136 - 0, 0)` | 上 136 **下 136** 左 0 右 0 | ✅ 整条链通。**下边那 136 是 `symmetric` 补出来的**——硬件只挡了顶上 136，两头一起缩是为了不让 UI 偏心，代价是 2400 设计单位里让掉 272 |
+| `waterfall`（左右曲面） | `insets=Rect(53, 0 - 53, 0)` | **全 0** | ✅ 也是对的，见下 |
+
+**瀑布屏为什么报 0**：`CocosActivity` 用的是 `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`——
+窗口只在**短边**伸进挖孔区，**长边一律让开**。实测窗口 `mAppBounds=Rect(53, 0 - 1027, 2337)`，
+系统已经把两侧 53px 让出来了，App 根本没铺到曲面上，**不需要再缩**。所以竖屏下左右两个内缩
+基本恒为 0，横屏才轮到它们非零（挖孔那时落在短边上）。
+
+⚠️ **demo 的 Android manifest 把方向锁死成 `portrait`**（`native/engine/android/app/AndroidManifest.xml`），
+所以「转屏后安全区跟着变」这条 native 上验不了 —— 改到 **web 产物**上验（见下）。
+
+**实测（2026-09-09 · web 产物 + 浏览器 · 视口 540×1200，dpr 1 ⇒ 设计单位 = CSS px ÷ 0.5）**——
+web 的 `safeAreaEdge` 读的是 `--safe-top` 等 CSS 变量，所以**注一行 CSS 就能造出任意刘海**，
+比模拟器还省事，而且能验 native 验不了的转屏：
+
+```js
+document.documentElement.style.setProperty('--safe-top', '136px');  // 造一个 136px 刘海
+```
+
+| 量的东西 | 无刘海 | 注入 136px 后 | |
+|---|---|---|---|
+| `sys.getSafeAreaRect()` 换算出的上内缩 | 0 | **272** 设计单位 | 136 × dpr ÷ scale(0.5) |
+| `mini-plane/Hud`（SafeArea 挂根上）的 `Back` 世界 Y | 2310 | 2038 | **正好下移 272** |
+| `mini-fish/Hud`（SafeArea 挂 `Safe` 容器上）的 `Safe/Back` | 2350 | 2078 | **正好下移 272** |
+
+**转屏**（把视口从 540×1200 拉成 1200×540，走的是浏览器真 resize 事件，**没有手动调任何函数**）：
+
+| | 竖屏 | 横屏 |
+|---|---|---|
+| `view.getVisibleSize()` | 1080×2400 | **2400×1080**（`resolutionModule` 换了设计分辨率） |
+| `Safe` 容器尺寸 | 1080×2400 | **2128×536**（= 2400−272 × 1080−272−272） |
+
+即**安全区自己跟着转屏重算了**，且用的是换完之后的可视尺寸 —— 这条链上每一环都是引擎的，
+kit 一行都没接。
+
+⚠️ **桌面浏览器上 `symmetric` 认的方向不跟着窗口比例走**：引擎按
+`screenAdapter.orientation` 决定镜像哪根轴（竖屏镜像上下、横屏镜像左右），而桌面浏览器把窗口
+拉成横的并不改这个值。上表横屏那栏里「上下各 272、右 0」就是这么来的 —— 真机上不会这样。
+验位置关系时注意这一条，别把它当成引擎的 bug。
+
 ### 清色职责移交
 
 内部只记一个 `_clearOwner`，两个方法对称；`dispose()` 时先 `release()`，不把被改过 `clearFlags` 的外部相机留在借用态。
@@ -226,12 +353,15 @@ await bootCoreKit({
 | 12 | 旋转时怎么变 | 只换 policy / **换 policy + 换设计分辨率** | **两者都换（锁短边）** | 只换 policy 仍会让横屏可视短边缩水；锁短边保证短边永不裁切 |
 | 13 | 强制旋转屏幕 | kit 封装 / **不做** | **不做** | `view.setOrientation` 原生无效（引擎注释明说），属平台工程配置 |
 | 14 | 相机 XY 参照系 | 世界原点 / **可视矩形中心** | **可视矩形中心** | UI 坐标系原点在可视区左下（`vb.x=0`），Widget 把 root 拉到 `[0,w]×[0,h]`；相机留原点会错开半屏（本轮实测踩到） |
+| 15 | 安全区适配 | 自研模块 / **用引擎 `cc.SafeArea`** | **用引擎的** | 它已经做完了 Widget 锚定 + 转屏跟随 + 非异形屏退化；自研只是多一份要跟引擎同步的代码 |
+| 16 | 谁决定缩进 | kit 在层容器上统一缩 / **每个界面自己挂** | **每个界面自己挂** | 遮罩 / 背景必须满屏，交互内容才该缩；层容器加 `UITransform` 还会翻掉 `useGlobal`、殃及所有界面的 Widget |
+| 17 | 暴不暴露内缩量 | 只给组件 / **另给 `getSafeAreaInsets()`** | **另给** | 组件只管排版；「刘海多高」这个数还要用来换布局、随崩溃上报、真机打日志 |
 
 ## Platform considerations（全平台 / 小游戏兼容）
 
 - **`screen.windowSize` / `view.getScaleY()` / `view.getVisibleSize()`**：Web / 原生 / 小游戏均可用。`view.getVisibleSize()` 与引擎内部 `visibleRect` 同源（都取 `_visibleRect`）——后者不在公开 cc 声明里，故用前者。
 - **`screen.on('orientation-change')`**：`PalScreenEvent` 三个合法值之一（`"window-resize" | "orientation-change" | "fullscreen-change"`）。各平台由 pal 层适配。
-- **`SafeArea`**（异形屏）：内部依赖 `sys.getSafeAreaRect()`，仅 iOS/Android 有实际效果。**不挂层级 root**（会把全屏背景/遮罩也收进安全区），应挂交互内容容器。业务侧选择，本模块不代劳。
+- **`SafeArea`**（异形屏）：用引擎内置组件，kit 不代劳；各平台取到什么、挂哪儿、有哪些坑，见[安全区](#安全区异形屏--挖孔--圆角)。
 - **清色相机与移动端闪屏**：引擎在 `Canvas.renderMode` 注释里明说「场景里的相机必须有一个 ClearFlag 选 `SOLID_COLOR`，否则在移动端可能会出现闪屏」。这是 `claimClear` 存在的根本原因，且**只在真机显形**。
 - **三种「热」**：*线上热更* —— 相机组在主包 engine 里，换 bundle 不影响；*运行时分包* —— 模块 bundle 只往层级 root 挂内容，不碰相机；*开发期热重载* —— 靠决策 #6 的销毁重建兜住。
 
@@ -240,12 +370,14 @@ await bootCoreKit({
 **分工遵 ADR-0002 决策 3**：`Node/Camera/Widget/布局计算` 等**需要真实引擎行为的 API 禁止进 cc mock**。故：
 
 - **纯决策逻辑 → node 单测**（`src/render-policy.ts` 零 cc import，测试也不 import cc）：
-  `packages/engine/src/__tests__/render-policy.test.ts`，**20 条，全绿**：
+  `packages/engine/src/__tests__/render-policy.test.ts`，**26 条，全绿**：
   - `pickDesignResolution` 7 条：竖屏/横屏/正方形/极端宽屏/自定义边长/传反归一化/非法尺寸不抛错。
   - `computeOrthoHeight` 3 条：无 targetTexture 公式、有 targetTexture 分支、`scaleY` 为 0/-1/NaN 时回退且有限。
   - `createClearOwnership` 5 条：claim/release 双向、重复 claim 幂等、A→B 换人时 A 归还且背景仍关、未 claim 就 release 与重复 release 均 no-op。
   - 常量阶梯 2 条：priority 递增且 `bg`→`uiBack` 间留有空档、自定义层 bit 落在 0..19 且互不重叠。
   - `computeCameraCenter` 3 条（**回归用例**，决策 #14）：竖屏落 `(540,960)`、横屏落 `(960,540)`、绝不等于世界原点。
+  - `computeSafeAreaInsets` 6 条：非异形屏全 0、顶部挖孔只缩上边、底部圆角只缩下边、横屏两侧、脏数据不出负数、非法尺寸不外泄 NaN。
+    其中**「顶部挖孔」「底部圆角」两条是钉 y 轴方向的**——`rect.y` 是下边距不是上边距，写反了在「顶部挖孔 + 底部无缩」的大多数机器上看不出来。
 - **cc 薄壳 → apps/demo 集成/预览验证**（不靠 mock）。`tsc -b` 对**官方 `@cocos/creator-types/engine` 全量真类型**通过，是签名层的第一道把关。
 
 **预览实测结果**（2026-07-30，apps/demo Game View，0 error / 0 warning）：
@@ -257,6 +389,7 @@ await bootCoreKit({
 | 3 | 层级 root 的 `Widget` 在裸 `Node` 父级下拉满 `visibleRect` | ✅ 大厅内容水平居中、随窗口重排 |
 | 4 | 旋转时 `resolutionModule` 换分辨率 → 相机跟上 | ✅ **浏览器预览实测**（2026-07-31）：横→竖设计分辨率 `1920×1080 → 1080×1920`，UI 跟着换布局 |
 | 5 | `claimClear` 后背景消失且无花屏 | ⚠️ **未实测**（demo 无「故意不要背景」的场景可借用） |
+| 6 | 安全区整条链（`DisplayCutout` → jsb → pal → `sys.getSafeAreaRect` → 设计单位） | ✅ **Android 模拟器实测**（2026-09-09）：挖孔 136px → `上136 下136`；瀑布屏 → 全 0（系统已让开，正确）。详见[安全区](#安全区异形屏--挖孔--圆角) |
 
 第 4 项怎么测的：**Game View 测不了**——它的「设计分辨率」模式把画布钉在项目设计分辨率上，改编辑器窗口不会让 `screen.windowSize` 变横向；面板的旋转开关是 panel 局部 UI，`Editor.Profile` 改 `preview.preview.rotate` 不触发它，也没有对应的 `Editor.Message`。改走**浏览器预览**（`Editor.Message.request('preview','query-preview-url')` 拿 URL）+ Playwright 改视口。注意预览页自己管画布尺寸、**不转发 window resize 给引擎**，所以引擎不会发 `canvas-resize`；实测时在页面里 `cc.view.emit('canvas-resize')` 手动触发那一下——被验的是 kit 的反应链（`pickDesignResolution` → `setDesignResolutionSize` → 相机 `syncCameras` → `setUIVariant` 按需重建），事件本身是引擎职责。
 

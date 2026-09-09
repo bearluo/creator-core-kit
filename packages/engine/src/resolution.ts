@@ -1,7 +1,13 @@
-import { ResolutionPolicy, screen, view } from 'cc';
+import { ResolutionPolicy, screen, sys, view } from 'cc';
 import { getLogger, setUIVariant } from '@cck/core';
 import type { KitModule } from '@cck/core';
-import { pickDesignResolution, type DesignResolution, type Orientation } from './render-policy';
+import {
+  computeSafeAreaInsets,
+  pickDesignResolution,
+  type DesignResolution,
+  type Orientation,
+  type SafeAreaInsets,
+} from './render-policy';
 
 /**
  * 多分辨率 / 横竖屏适配 —— **锁短边**：短边恒 `shortSide` 设计单位永不裁切，长边随屏幕比例延展。
@@ -79,4 +85,22 @@ export function resolutionModule(opts?: ResolutionOptions): KitModule {
       applied = undefined;
     },
   };
+}
+
+/**
+ * 当前安全区的四边内缩量（设计单位）。**按安全区排 UI 不要调它** —— 那是引擎内置
+ * `cc.SafeArea` 组件的活（挂在界面根上，靠 `Widget` 自己跟着转屏走，见 camera-rig.md「安全区」）。
+ * 这个函数补的是组件给不了的**数**：按刘海高度换紧凑布局、把内缩量随崩溃一起上报、
+ * 真机上打一行日志确认到底缩了多少。
+ *
+ * 取不到安全区的平台（桌面 / 编辑器预览 / 未开 `viewport-fit=cover` 的 H5）返回全 0，
+ * 不抛错 —— 引擎的 `getSafeAreaRect` 在非异形屏上本就返回整个可视区。
+ *
+ * 用 `symmetric = true`（引擎默认，`cc.SafeArea` 也用它）：两侧取较大者对齐，
+ * 免得刘海只在一边时 UI 整体偏心。
+ */
+export function getSafeAreaInsets(): SafeAreaInsets {
+  const visible = view.getVisibleSize();
+  const rect = sys.getSafeAreaRect();
+  return computeSafeAreaInsets(visible.width, visible.height, rect);
 }

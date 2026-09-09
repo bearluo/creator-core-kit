@@ -75,6 +75,7 @@ export {
   CCK_LAYERS,
   computeCameraCenter,
   computeOrthoHeight,
+  computeSafeAreaInsets,
   createClearOwnership,
   pickDesignResolution,
 } from './render-policy';
@@ -86,10 +87,11 @@ export type {
   DesignResolution,
   Orientation,
   OrthoHeightInput,
+  SafeAreaInsets,
 } from './render-policy';
 export { CAMERA_RIG, cameraRigModule, createCameraRig, getCameraRig } from './camera-rig';
 export type { CameraRig, CameraRigOptions } from './camera-rig';
-export { resolutionModule } from './resolution';
+export { getSafeAreaInsets, resolutionModule } from './resolution';
 export type { ResolutionOptions } from './resolution';
 
 // —— App 层 · 启动编排的引擎半（平台重启 + bundle 脚本失效接缝）——

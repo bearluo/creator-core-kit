@@ -35,6 +35,7 @@ import {
   ccStorageModule,
   ccUIModule,
   deviceProfileModule,
+  getSafeAreaInsets,
   installCrashReporter,
   loadLocaleTable,
   packagedBaseEntry,
@@ -249,9 +250,11 @@ export class Bootstrap extends Component {
         resolutionModule({
           shortSide: 1080,
           longSide: 1920,
+          // 安全区跟着方向变，所以**搭 resolutionModule 这一趟车报**，不另订一份 orientation-change。
+          // 这个回调在 apply() 末尾调，设计分辨率已经换完 —— 此刻读到的内缩量才是新方向的那份。
           onOrientationChange: (o) =>
             console.log(
-              `${TAG} 方向 → ${o}（设计分辨率已按锁短边重设；竖屏 1080x1920/FIXED_WIDTH、横屏 1920x1080/FIXED_HEIGHT）`,
+              `${TAG} 方向 → ${o}（设计分辨率已按锁短边重设；竖屏 1080x1920/FIXED_WIDTH、横屏 1920x1080/FIXED_HEIGHT）｜${safeAreaLine()}`,
             ),
         }),
         cameraRigModule(), // 常驻 bg + ui 相机；此后场景一律不自带相机
@@ -301,6 +304,7 @@ export class Bootstrap extends Component {
     });
     console.log(`${TAG} kit 就绪[${kit.modules.join(', ')}] → app.launch()`);
     logDeviceProfile(); // 画像在 install 时就读好了，不必等 launch —— 云端真机上启动会失败
+    console.log(`${TAG} ${safeAreaLine()}`);
 
     // 马甲皮 —— 必须在 `launch()` **之前**定好：第一个界面（登录闸门）就要按它解析包。
     // 之后不再改（换皮是换包，不是运行时切换），转屏那一维由 resolutionModule 自己灌。
@@ -327,6 +331,20 @@ export class Bootstrap extends Component {
     await app.launch();
     logDeviceTier();
   }
+}
+
+/**
+ * 安全区探针 —— 确认「这台机器到底缩了多少」的唯一手段。桌面 / 编辑器预览恒返回整屏，
+ * 所以只能在设备上问；**模拟器算数**（`cmd overlay enable ...cutout.emulation.hole` 能造挖孔，
+ * 实测走的就是同一条 `DisplayCutout` 链路）。全 0 有两种含义（非异形屏 / 平台不给），
+ * 分不开也不必分 —— 两种都意味着「不用缩」。
+ *
+ * ⚠️ 这只是**报数**。按安全区排版是界面自己的事（在界面根上挂引擎内置 `cc.SafeArea`），
+ * 业务代码永远不该拿这几个数去手写「往下挪 60 像素」。
+ */
+function safeAreaLine(): string {
+  const i = getSafeAreaInsets();
+  return `安全区内缩 上${i.top} 下${i.bottom} 左${i.left} 右${i.right}（设计单位，全 0 = 不用缩）`;
 }
 
 /**

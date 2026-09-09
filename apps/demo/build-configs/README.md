@@ -28,6 +28,29 @@ native 侧多两件配套事，`scripts/build.mjs` 已经做进流程，改配�
 
 怎么用见 skill `/demo-build`（两条路：Creator 面板导入，或关掉编辑器走命令行）。
 
+## 改了 `appABIs` 记得同步 `gradle.properties`
+
+`appABIs` 只在 Creator **生成**原生工程时写进 `build/android/proj/gradle.properties` 的
+`PROP_APP_ABI`。工程目录已经存在时，后续构建**不再回写**——配置里写着 `x86_64`、实际出的却是
+上一次留下的 `arm64-v8a`，而且**构建全绿、装也装得上**，只在启动那一刻死：
+
+```
+nativeloader: ... library_path=.../lib/arm64:.../base.apk!/lib/arm64-v8a
+com.cck.demo: Unexpected CPU variant for x86: x86_64
+（进程随即消失，logcat 里没有 FATAL）
+```
+
+换 ABI 时**两处一起改**：`build-configs/<名字>.json` 的 `appABIs`，加上
+`build/android/proj/gradle.properties` 的 `PROP_APP_ABI`（后者在 `build/` 下、不进 git，改它没有副作用）。
+彻底一点就删掉 `build/android/proj` 让 Creator 重新生成。
+
+本机模拟器是 **x86_64**、真机（含云真机）是 **arm64-v8a**，所以这个坑在「本机测完拿去真机跑」
+和「真机跑完回来测本机」两个方向上都会踩到。
+
+⚠️ 另一条相邻的坑：**只跑 `./gradlew assembleDevDebug` 不重跑 Creator 构建是不行的**。
+少了 Creator 那一步，APK 里的 `assets/` 是旧的甚至不完整，运行时报
+`Failed to require file 'main.js', not found!`。要重出包就整条 `build.mjs ... --apk` 走一遍。
+
 ## 只写构建意图，不写本机路径
 
 `sdkPath` / `ndkPath` / `javaHome` / `keystorePath` **一律不写进这些文件**——它们来自 Creator 的

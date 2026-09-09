@@ -310,11 +310,14 @@ export class FishGame extends Component {
     const vm = this.vm!;
     this.binds = new BindingScope();
 
-    this.binds.add(bindText(hudLabel(hud, 'Balance'), () => `金币 ${vm.balance.value}`));
-    this.binds.add(bindText(hudLabel(hud, 'Level'), () => `炮 ${vm.level.value} 级`));
-    this.levelButton(hudNode(hud, 'Minus'), -1);
-    this.levelButton(hudNode(hud, 'Plus'), +1);
-    wireHud(hud);
+    // 五个读数/按钮住 `Safe/` 下 —— 那个容器挂着 `cc.SafeArea`，把它们缩进安全区，
+    // 免得贴边的余额和返回键落到挖孔底下。**`RotateHint` 故意留在外面**：转屏遮罩必须满屏，
+    // 跟着缩会在上下露出两条能看见游戏的缝。判据见 packages/engine/docs/modules/camera-rig.md。
+    this.binds.add(bindText(hudLabel(hud, 'Safe/Balance'), () => `金币 ${vm.balance.value}`));
+    this.binds.add(bindText(hudLabel(hud, 'Safe/Level'), () => `炮 ${vm.level.value} 级`));
+    this.levelButton(hudNode(hud, 'Safe/Minus'), -1);
+    this.levelButton(hudNode(hud, 'Safe/Plus'), +1);
+    wireHud(hud, 'Safe/Back');
 
     // 竖屏提示：盖住整屏（`layout` 按方向开关它）。
     this.rotateHint = hudNode(hud, 'RotateHint');

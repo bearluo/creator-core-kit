@@ -173,3 +173,47 @@ export function createClearOwnership(deps: ClearOwnershipDeps): ClearOwnership {
     owner: () => owner,
   };
 }
+
+/** 安全区四边内缩量（**设计单位**，与 `visibleRect` 同口径）。四个数恒 `>= 0`，非异形屏全 0。 */
+export interface SafeAreaInsets {
+  readonly top: number;
+  readonly bottom: number;
+  readonly left: number;
+  readonly right: number;
+}
+
+/**
+ * `sys.getSafeAreaRect()` 的**安全矩形**换算成四边内缩量。
+ *
+ * 布局本身**不用**这个函数——engine 内置的 `cc.SafeArea` 组件已经把「按安全区排 UI」做完了
+ * （见 packages/engine/docs/modules/camera-rig.md「安全区」一节）。这里只补它给不了的东西：
+ * **数**。要按刘海高度决定换不换紧凑布局、或者上报「这台机器缩了多少」，都得先有四个数。
+ *
+ * ⚠️ **`rect.y` 是下边距不是上边距** —— 引擎把安全矩形给在 UI 坐标系里（原点左下、y 轴向上），
+ * 所以顶部挖孔体现为 `height` 变矮而 `y` 不动。照着直觉写 `top = rect.y` 会把上下缩反，
+ * 而这在**大多数机器上看不出来**（顶部挖孔、底部无内缩时两者都让 UI 往中间挤）。
+ *
+ * @param visibleWidth  `view.getVisibleSize().width`（设计单位）
+ * @param visibleHeight `view.getVisibleSize().height`
+ * @param rect          `sys.getSafeAreaRect()`
+ */
+export function computeSafeAreaInsets(
+  visibleWidth: number,
+  visibleHeight: number,
+  rect: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
+): SafeAreaInsets {
+  // 平台返回的脏数据（负内缩 / headless 下的 0 与 NaN）一律压成 0：安全区只会让 UI 变小，
+  // 负数会把 UI 撑出屏幕，NaN 会顺着 Widget 灌进布局管线变成整屏不可见。`NaN > 0` 为 false，一并接住。
+  const nonNeg = (n: number): number => (n > 0 ? n : 0);
+  return {
+    top: nonNeg(visibleHeight - rect.y - rect.height),
+    bottom: nonNeg(rect.y),
+    left: nonNeg(rect.x),
+    right: nonNeg(visibleWidth - rect.x - rect.width),
+  };
+}
