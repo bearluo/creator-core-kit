@@ -18,6 +18,7 @@
 | **接服务端 / 定协议 / 定更新策略** | **`docs/adr/0011-server-framework-split-and-protocol-contract.md`**（决策）→ `docs/research/2026-08-03-game-server-survey.md`（依据） |
 | **给玩法接 ECS / 做经济型子游戏** | **`docs/design/2026-08-28-mini-fish-design.md`**（捕鱼设计：四道接缝 + ECS 混合边界）→ `packages/ecs-bitecs/docs/modules/{ecs,spatial}.md`（底座与 system） |
 | **做子游戏的内容编辑器 / 接鱼阵投喂** | **`docs/design/2026-08-31-mini-fish-content-editor.md`**（鱼阵编辑器：源码往返 · 与游戏共用哪些逻辑 · 预览复用 FishVM · waveFeeder）；「内部工具为什么用 HTML 不用 Cocos」见 [`ADR-0020`](adr/0020-internal-tools-in-html.md) |
+| **给不同档次的机器发不同资源 / 画质** | **`docs/design/device-tiering-overview.md`**（设备画像 · 档位 · 性能采集 · 按档解析 —— 三个模块 + 一个字段 + 一个不做；打分权重与门槛值一律归项目） |
 | 判断「这段代码该做 npm 包还是住 assets」 | `docs/adr/0019-npm-package-base-vs-assets-boundary.md`（npm 包 = base 重启生效；assets = bundle 免重启） |
 | 追溯某个重大技术决策 | `docs/adr/`（按需建立） |
 | 新建模块文档 | 复制 `docs/design/modules/_TEMPLATE.md` |
