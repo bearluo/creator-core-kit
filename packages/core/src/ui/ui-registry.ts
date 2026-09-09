@@ -45,9 +45,22 @@ export type Orientation = 'portrait' | 'landscape';
 export interface UIVariant {
   readonly orientation: Orientation;
   readonly skin: string;
+  /**
+   * 画质档位。跟 `skin` **完全对称**——不透明 string，kit 不知道有哪几档，
+   * 谁该分档由 `UIDef` 的 resolver 自己说（`bundle: v => \`shop-${v.tier}\``）。
+   *
+   * 由 `device-tier` 在启动期定一次，**会话内不变**；档位持有者刻意不给 `setTier()`。
+   * 项目真要运行中切，这道通用门是敞着的——kit 不提供不背书也不拦，重建时机 / 资源就绪 /
+   * 内存峰值三条风险自担（见 `docs/design/device-tiering-overview.md` §3.1）。
+   */
+  readonly tier: string;
 }
 
-export const DEFAULT_UI_VARIANT: UIVariant = { orientation: 'portrait', skin: 'default' };
+export const DEFAULT_UI_VARIANT: UIVariant = {
+  orientation: 'portrait',
+  skin: 'default',
+  tier: 'default',
+};
 
 /**
  * 一个界面的登记。`bundle` / `prefab` 给函数即为变体解析：

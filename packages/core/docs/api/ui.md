@@ -98,7 +98,7 @@ Defined in: [packages/core/src/ui/ui-view.ts:31](https://hlgit.5518game.com/luoh
 
 ### ResolvedUI
 
-Defined in: [packages/core/src/ui/ui-registry.ts:68](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L68)
+Defined in: [packages/core/src/ui/ui-registry.ts:81](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L81)
 
 `UIDef` 按变体解析后的实际资源坐标。
 
@@ -108,19 +108,19 @@ Defined in: [packages/core/src/ui/ui-registry.ts:68](https://hlgit.5518game.com/
 
 > `readonly` `optional` **bundle**: `string`
 
-Defined in: [packages/core/src/ui/ui-registry.ts:69](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L69)
+Defined in: [packages/core/src/ui/ui-registry.ts:82](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L82)
 
 ##### prefab
 
 > `readonly` **prefab**: `string`
 
-Defined in: [packages/core/src/ui/ui-registry.ts:70](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L70)
+Defined in: [packages/core/src/ui/ui-registry.ts:83](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L83)
 
 ***
 
 ### UIDef
 
-Defined in: [packages/core/src/ui/ui-registry.ts:58](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L58)
+Defined in: [packages/core/src/ui/ui-registry.ts:71](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L71)
 
 一个界面的登记。`bundle` / `prefab` 给函数即为变体解析：
 - `prefab: v => v.orientation === 'landscape' ? 'Shop_land' : 'Shop'` —— 换 view（横竖屏两套布局）
@@ -133,7 +133,7 @@ Defined in: [packages/core/src/ui/ui-registry.ts:58](https://hlgit.5518game.com/
 
 > `readonly` `optional` **bundle**: `string` \| (`v`) => `string`
 
-Defined in: [packages/core/src/ui/ui-registry.ts:62](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L62)
+Defined in: [packages/core/src/ui/ui-registry.ts:75](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L75)
 
 prefab 所在 Asset Bundle 名（省略 = 主包）。
 
@@ -141,7 +141,7 @@ prefab 所在 Asset Bundle 名（省略 = 主包）。
 
 > `readonly` `optional` **layer**: `"back"` \| `"hud"` \| `"ui"` \| `"popup"` \| `"dialog"` \| `"guide"` \| `"loading"` \| `"system"` \| `"notify"` \| `"top"`
 
-Defined in: [packages/core/src/ui/ui-registry.ts:60](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L60)
+Defined in: [packages/core/src/ui/ui-registry.ts:73](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L73)
 
 归属层，默认 `'ui'`。
 
@@ -149,7 +149,7 @@ Defined in: [packages/core/src/ui/ui-registry.ts:60](https://hlgit.5518game.com/
 
 > `readonly` **prefab**: `string` \| (`v`) => `string`
 
-Defined in: [packages/core/src/ui/ui-registry.ts:64](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L64)
+Defined in: [packages/core/src/ui/ui-registry.ts:77](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L77)
 
 prefab 路径。
 
@@ -382,6 +382,19 @@ Defined in: [packages/core/src/ui/ui-registry.ts:46](https://hlgit.5518game.com/
 
 Defined in: [packages/core/src/ui/ui-registry.ts:47](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L47)
 
+##### tier
+
+> `readonly` **tier**: `string`
+
+Defined in: [packages/core/src/ui/ui-registry.ts:56](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L56)
+
+画质档位。跟 `skin` **完全对称**——不透明 string，kit 不知道有哪几档，
+谁该分档由 `UIDef` 的 resolver 自己说（`bundle: v => \`shop-${v.tier}\``）。
+
+由 `device-tier` 在启动期定一次，**会话内不变**；档位持有者刻意不给 `setTier()`。
+项目真要运行中切，这道通用门是敞着的——kit 不提供不背书也不拦，重建时机 / 资源就绪 /
+内存峰值三条风险自担（见 `docs/design/device-tiering-overview.md` §3.1）。
+
 ***
 
 ### UIViewSpec
@@ -472,7 +485,7 @@ Defined in: [packages/core/src/ui/ui-registry.ts:40](https://hlgit.5518game.com/
 
 > `const` **DEFAULT\_UI\_VARIANT**: [`UIVariant`](ui.md#uivariant)
 
-Defined in: [packages/core/src/ui/ui-registry.ts:50](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L50)
+Defined in: [packages/core/src/ui/ui-registry.ts:59](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L59)
 
 ***
 
@@ -493,7 +506,7 @@ UI 层：**自下而上，数组顺序即 z 序**。engine 启动时按本数组
 
 > `const` **UI\_MANAGER**: [`Token`](di.md#tokent)\<[`UIManager`](ui.md#uimanager)\>
 
-Defined in: [packages/core/src/ui/ui-manager.ts:206](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-manager.ts#L206)
+Defined in: [packages/core/src/ui/ui-manager.ts:208](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-manager.ts#L208)
 
 DI token：项目可 register 自己的 UIManager 覆盖默认。
 
@@ -513,7 +526,7 @@ DI token：engine Bootstrap register cc 渲染适配；未注册时 UIManager �
 
 > **clearUIRegistry**(): `void`
 
-Defined in: [packages/core/src/ui/ui-registry.ts:90](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L90)
+Defined in: [packages/core/src/ui/ui-registry.ts:103](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L103)
 
 清空登记（单测隔离用；正常运行期不需要）。
 
@@ -562,7 +575,7 @@ Defined in: [packages/core/src/ui/ui-manager.ts:64](https://hlgit.5518game.com/l
 
 > **getUIDef**(`uiId`): `undefined` \| [`UIDef`](ui.md#uidef)
 
-Defined in: [packages/core/src/ui/ui-registry.ts:80](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L80)
+Defined in: [packages/core/src/ui/ui-registry.ts:93](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L93)
 
 #### Parameters
 
@@ -580,7 +593,7 @@ Defined in: [packages/core/src/ui/ui-registry.ts:80](https://hlgit.5518game.com/
 
 > **getUIManager**(): [`UIManager`](ui.md#uimanager)
 
-Defined in: [packages/core/src/ui/ui-manager.ts:211](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-manager.ts#L211)
+Defined in: [packages/core/src/ui/ui-manager.ts:213](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-manager.ts#L213)
 
 便捷取用：优先 tryResolve(UI_MANAGER)；未注册则进程级默认（空渲染层背书）。
 
@@ -594,7 +607,7 @@ Defined in: [packages/core/src/ui/ui-manager.ts:211](https://hlgit.5518game.com/
 
 > **getUIVariant**(): [`UIVariant`](ui.md#uivariant)
 
-Defined in: [packages/core/src/ui/ui-manager.ts:216](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-manager.ts#L216)
+Defined in: [packages/core/src/ui/ui-manager.ts:218](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-manager.ts#L218)
 
 当前界面变体（全局 UIManager 的）。
 
@@ -608,7 +621,7 @@ Defined in: [packages/core/src/ui/ui-manager.ts:216](https://hlgit.5518game.com/
 
 > **layerOfDef**(`def`): `"back"` \| `"hud"` \| `"ui"` \| `"popup"` \| `"dialog"` \| `"guide"` \| `"loading"` \| `"system"` \| `"notify"` \| `"top"`
 
-Defined in: [packages/core/src/ui/ui-registry.ts:106](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L106)
+Defined in: [packages/core/src/ui/ui-registry.ts:119](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L119)
 
 取 def 的归属层（未写 = `'ui'`）。
 
@@ -628,7 +641,7 @@ Defined in: [packages/core/src/ui/ui-registry.ts:106](https://hlgit.5518game.com
 
 > **listUIDefs**(): `string`[]
 
-Defined in: [packages/core/src/ui/ui-registry.ts:85](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L85)
+Defined in: [packages/core/src/ui/ui-registry.ts:98](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L98)
 
 已登记的 uiId（升序）。
 
@@ -642,7 +655,7 @@ Defined in: [packages/core/src/ui/ui-registry.ts:85](https://hlgit.5518game.com/
 
 > **registerUI**(`uiId`, `def`): `void`
 
-Defined in: [packages/core/src/ui/ui-registry.ts:76](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L76)
+Defined in: [packages/core/src/ui/ui-registry.ts:89](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L89)
 
 登记一个界面。同 uiId 重复登记后者覆盖（开发期热重载会重跑登记代码）。
 
@@ -666,7 +679,7 @@ Defined in: [packages/core/src/ui/ui-registry.ts:76](https://hlgit.5518game.com/
 
 > **resolveUIDef**(`def`, `v`): [`ResolvedUI`](ui.md#resolvedui)
 
-Defined in: [packages/core/src/ui/ui-registry.ts:98](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L98)
+Defined in: [packages/core/src/ui/ui-registry.ts:111](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-registry.ts#L111)
 
 纯函数：把 def 按变体解析成实际资源坐标。
 **按需重建判定的唯一依据**——解析结果没变就不重建（转屏对普通界面零成本）。
@@ -691,7 +704,7 @@ Defined in: [packages/core/src/ui/ui-registry.ts:98](https://hlgit.5518game.com/
 
 > **setUIVariant**(`patch`): `Promise`\<`void`\>
 
-Defined in: [packages/core/src/ui/ui-manager.ts:221](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-manager.ts#L221)
+Defined in: [packages/core/src/ui/ui-manager.ts:223](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/ui/ui-manager.ts#L223)
 
 改全局变体 → 按需重建受影响的界面。engine `resolutionModule` 在转屏回调里调它。
 

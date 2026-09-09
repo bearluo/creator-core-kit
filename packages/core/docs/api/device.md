@@ -10,7 +10,7 @@
 
 ### DeviceProfile
 
-Defined in: packages/core/src/device/device-profile.ts:20
+Defined in: [packages/core/src/device/device-profile.ts:20](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L20)
 
 DeviceProfile —— 设备画像。**启动那一刻的一份不可变快照**，不是永恒真理。
 
@@ -34,7 +34,7 @@ DeviceProfile —— 设备画像。**启动那一刻的一份不可变快照**�
 
 > `readonly` `optional` **abis**: `string`
 
-Defined in: packages/core/src/device/device-profile.ts:53
+Defined in: [packages/core/src/device/device-profile.ts:53](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L53)
 
 支持的 ABI，逗号分隔（桥不支持返回数组，Java 侧拼好）。
 
@@ -42,7 +42,7 @@ Defined in: packages/core/src/device/device-profile.ts:53
 
 > `readonly` `optional` **availableMemoryBytes**: `number`
 
-Defined in: packages/core/src/device/device-profile.ts:27
+Defined in: [packages/core/src/device/device-profile.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L27)
 
 当前可用余量（**易变**）。Android `mi.availMem` / iOS `os_proc_available_memory()`。
 
@@ -50,13 +50,13 @@ Defined in: packages/core/src/device/device-profile.ts:27
 
 > `readonly` `optional` **brand**: `string`
 
-Defined in: packages/core/src/device/device-profile.ts:48
+Defined in: [packages/core/src/device/device-profile.ts:48](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L48)
 
 ##### cpuCores?
 
 > `readonly` `optional` **cpuCores**: `number`
 
-Defined in: packages/core/src/device/device-profile.ts:33
+Defined in: [packages/core/src/device/device-profile.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L33)
 
 核数（JVM / 进程视角）。⚠️ **不是常量**，见类型头第 3 条。
 
@@ -64,7 +64,7 @@ Defined in: packages/core/src/device/device-profile.ts:33
 
 > `readonly` `optional` **cpuMaxFreqKHz**: `number`
 
-Defined in: packages/core/src/device/device-profile.ts:35
+Defined in: [packages/core/src/device/device-profile.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L35)
 
 最大主频（kHz），读 `/sys/.../cpufreq/cpuinfo_max_freq`。部分设备内核没这个节点。
 
@@ -72,7 +72,7 @@ Defined in: packages/core/src/device/device-profile.ts:35
 
 > `readonly` `optional` **densityDpi**: `number`
 
-Defined in: packages/core/src/device/device-profile.ts:45
+Defined in: [packages/core/src/device/device-profile.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L45)
 
 像素密度。⚠️ **必须走原生桥拿 `DisplayMetrics.densityDpi`** ——
 `screen.devicePixelRatio` 在 Android 原生上**恒为 1**（引擎 `CommonScreen.cpp` 硬编码
@@ -82,7 +82,7 @@ Defined in: packages/core/src/device/device-profile.ts:45
 
 > `readonly` `optional` **deviceTotalMemoryBytes**: `number`
 
-Defined in: packages/core/src/device/device-profile.ts:25
+Defined in: [packages/core/src/device/device-profile.ts:25](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L25)
 
 设备总内存。Android `mi.totalMem` / web `navigator.deviceMemory` / 微信 `memorySize`。
 
@@ -90,7 +90,7 @@ Defined in: packages/core/src/device/device-profile.ts:25
 
 > `readonly` `optional` **gpuRenderer**: `string`
 
-Defined in: packages/core/src/device/device-profile.ts:62
+Defined in: [packages/core/src/device/device-profile.ts:62](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L62)
 
 GPU 型号字符串，**原样透出，解析规则归项目**。
 ⚠️ 它的格式跟**渲染后端**绑定而不是平台：GLES3 给 `glGetString(GL_RENDERER)`，
@@ -100,13 +100,13 @@ Vulkan 给 `VkPhysicalDeviceProperties.deviceName`。同一台机换个 build co
 
 > `readonly` `optional` **gpuVendor**: `string`
 
-Defined in: packages/core/src/device/device-profile.ts:63
+Defined in: [packages/core/src/device/device-profile.ts:63](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L63)
 
 ##### lastExitReason?
 
 > `readonly` `optional` **lastExitReason**: `string`
 
-Defined in: packages/core/src/device/device-profile.ts:73
+Defined in: [packages/core/src/device/device-profile.ts:73](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L73)
 
 上次进程为什么没的。见 [exitReasonName](device.md#exitreasonname) 的取值表；无法识别的码为 `unknown-<码>`。
 **Android 11（API 30）以下没有这个能力** —— 那时它缺席且**不在** `readFailures` 里。
@@ -115,7 +115,7 @@ Defined in: packages/core/src/device/device-profile.ts:73
 
 > `readonly` `optional` **lowRamDevice**: `boolean`
 
-Defined in: packages/core/src/device/device-profile.ts:29
+Defined in: [packages/core/src/device/device-profile.ts:29](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L29)
 
 系统自己认定的低内存机。Android `ActivityManager.isLowRamDevice()`（API 19）。
 
@@ -123,25 +123,25 @@ Defined in: packages/core/src/device/device-profile.ts:29
 
 > `readonly` `optional` **maxTextureSize**: `number`
 
-Defined in: packages/core/src/device/device-profile.ts:64
+Defined in: [packages/core/src/device/device-profile.ts:64](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L64)
 
 ##### model?
 
 > `readonly` `optional` **model**: `string`
 
-Defined in: packages/core/src/device/device-profile.ts:49
+Defined in: [packages/core/src/device/device-profile.ts:49](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L49)
 
 ##### osVersion?
 
 > `readonly` `optional` **osVersion**: `string`
 
-Defined in: packages/core/src/device/device-profile.ts:54
+Defined in: [packages/core/src/device/device-profile.ts:54](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L54)
 
 ##### processMemoryLimitBytes?
 
 > `readonly` `optional` **processMemoryLimitBytes**: `number`
 
-Defined in: packages/core/src/device/device-profile.ts:23
+Defined in: [packages/core/src/device/device-profile.ts:23](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L23)
 
 单进程堆上限（稳定常量）。Android `Runtime.maxMemory()`。**只有 Android 有。**
 
@@ -149,7 +149,7 @@ Defined in: packages/core/src/device/device-profile.ts:23
 
 > `readonly` **readFailures**: readonly `string`[]
 
-Defined in: packages/core/src/device/device-profile.ts:84
+Defined in: [packages/core/src/device/device-profile.ts:84](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L84)
 
 本该读得到、这次却没读到的字段名。**只喂埋点，打分不该读它。**
 
@@ -163,19 +163,19 @@ Defined in: packages/core/src/device/device-profile.ts:84
 
 > `readonly` `optional` **screenHeightPx**: `number`
 
-Defined in: packages/core/src/device/device-profile.ts:39
+Defined in: [packages/core/src/device/device-profile.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L39)
 
 ##### screenWidthPx?
 
 > `readonly` `optional` **screenWidthPx**: `number`
 
-Defined in: packages/core/src/device/device-profile.ts:38
+Defined in: [packages/core/src/device/device-profile.ts:38](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L38)
 
 ##### socModel?
 
 > `readonly` `optional` **socModel**: `string`
 
-Defined in: packages/core/src/device/device-profile.ts:51
+Defined in: [packages/core/src/device/device-profile.ts:51](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L51)
 
 SoC 型号。`Build.SOC_MODEL` 是 **API 31+**，低版本上这一项天然缺席（不是失败）。
 
@@ -183,7 +183,7 @@ SoC 型号。`Build.SOC_MODEL` 是 **API 31+**，低版本上这一项天然缺�
 
 > `readonly` `optional` **supportsAstc**: `boolean`
 
-Defined in: packages/core/src/device/device-profile.ts:66
+Defined in: [packages/core/src/device/device-profile.ts:66](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L66)
 
 能力位：问「支不支持」而不是「是多少」。**分档不用猜 GPU 型号，直接问它。**
 
@@ -191,13 +191,13 @@ Defined in: packages/core/src/device/device-profile.ts:66
 
 > `readonly` `optional` **supportsEtc2**: `boolean`
 
-Defined in: packages/core/src/device/device-profile.ts:67
+Defined in: [packages/core/src/device/device-profile.ts:67](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L67)
 
 ***
 
 ### ParsedBridgeProfile
 
-Defined in: packages/core/src/device/device-profile.ts:158
+Defined in: [packages/core/src/device/device-profile.ts:158](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L158)
 
 #### Properties
 
@@ -205,13 +205,13 @@ Defined in: packages/core/src/device/device-profile.ts:158
 
 > `readonly` **fields**: `Partial`\<[`DeviceProfile`](device.md#deviceprofile)\>
 
-Defined in: packages/core/src/device/device-profile.ts:159
+Defined in: [packages/core/src/device/device-profile.ts:159](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L159)
 
 ##### readFailures
 
 > `readonly` **readFailures**: `string`[]
 
-Defined in: packages/core/src/device/device-profile.ts:160
+Defined in: [packages/core/src/device/device-profile.ts:160](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L160)
 
 ## Variables
 
@@ -219,7 +219,7 @@ Defined in: packages/core/src/device/device-profile.ts:160
 
 > `const` **BRIDGE\_FAILURE**: `"bridge"` = `'bridge'`
 
-Defined in: packages/core/src/device/device-profile.ts:156
+Defined in: [packages/core/src/device/device-profile.ts:156](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L156)
 
 桥整体不可用时记在 `readFailures` 里的名字。
 
@@ -229,7 +229,7 @@ Defined in: packages/core/src/device/device-profile.ts:156
 
 > `const` **DEVICE\_PROFILE**: [`Token`](di.md#tokent)\<[`DeviceProfile`](device.md#deviceprofile)\>
 
-Defined in: packages/core/src/device/device-profile.ts:88
+Defined in: [packages/core/src/device/device-profile.ts:88](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L88)
 
 DI token：装一份**启动快照**。由 engine 的 `deviceProfileModule()` 在 `install()` 时注册。
 
@@ -239,7 +239,7 @@ DI token：装一份**启动快照**。由 engine 的 `deviceProfileModule()` �
 
 > **exitReasonName**(`code`): `string`
 
-Defined in: packages/core/src/device/device-profile.ts:125
+Defined in: [packages/core/src/device/device-profile.ts:125](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L125)
 
 把 `ApplicationExitInfo.getReason()` 的原始 int 翻成稳定字符串。
 
@@ -262,7 +262,7 @@ Defined in: packages/core/src/device/device-profile.ts:125
 
 > **mergeDeviceProfile**(...`parts`): [`DeviceProfile`](device.md#deviceprofile)
 
-Defined in: packages/core/src/device/device-profile.ts:237
+Defined in: [packages/core/src/device/device-profile.ts:237](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L237)
 
 把几路来源拼成一份画像。**后面的覆盖前面的**（引擎直接问到的比桥更权威 —— 桥那头是反射，
 引擎这头是本进程的真值），`readFailures` 则是并集去重。
@@ -285,7 +285,7 @@ Defined in: packages/core/src/device/device-profile.ts:237
 
 > **parseBridgeProfile**(`json`): [`ParsedBridgeProfile`](device.md#parsedbridgeprofile)
 
-Defined in: packages/core/src/device/device-profile.ts:175
+Defined in: [packages/core/src/device/device-profile.ts:175](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/device/device-profile.ts#L175)
 
 解析原生桥返回的 JSON。**桥只调一次、返回一整个 JSON**，所以这一步是纯逻辑、node 全可测。
 

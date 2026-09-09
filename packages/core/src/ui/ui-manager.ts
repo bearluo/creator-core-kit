@@ -167,7 +167,9 @@ export function createUIManager(opts?: UIManagerOptions): UIManager {
 
     async setVariant(patch: Partial<UIVariant>): Promise<void> {
       const next: UIVariant = { ...variant, ...patch };
-      if (next.orientation === variant.orientation && next.skin === variant.skin) return;
+      // 逐字段比，**别列举**：列举法每给 UIVariant 加一个维度就得记得改这里，忘了的后果是
+      // `setUIVariant({ 新维度 })` 静默 no-op —— 编译器一个字都不会说。加 `tier` 时正好踩到。
+      if ((Object.keys(next) as (keyof UIVariant)[]).every((k) => next[k] === variant[k])) return;
 
       // 先让加载中的界面落地，免得拿半成品去比对解析结果
       const pendings = Array.from(open.values()).flatMap((e) => (e.inflight ? [e.inflight] : []));

@@ -41,8 +41,12 @@ export const DEFAULT_UI_LAYER: UILayer = 'ui';
 
 // —— ② 注册表 + 变体 ——
 export type Orientation = 'portrait' | 'landscape';
-export interface UIVariant { readonly orientation: Orientation; readonly skin: string; }
-export const DEFAULT_UI_VARIANT: UIVariant;            // { portrait, 'default' }
+export interface UIVariant {
+  readonly orientation: Orientation;
+  readonly skin: string;
+  readonly tier: string;    // 画质档位，跟 skin 完全对称；由 device-tier 启动期定一次
+}
+export const DEFAULT_UI_VARIANT: UIVariant;            // { portrait, 'default', 'default' }
 
 export interface UIDef {
   readonly layer?: UILayer;                            // 默认 'ui'
@@ -199,6 +203,12 @@ registerUI('shop', { layer: 'ui', prefab: 'Shop',
 
 ### 反直觉行为 / 坑
 
+- ⚠️ **`setVariant` 的早退判据必须逐字段比，不能列举。** 它原本写的是
+  `next.orientation === variant.orientation && next.skin === variant.skin`——
+  给 `UIVariant` 加第三个维度 `tier` 时，不改这行的后果是 `setUIVariant({ tier })`
+  **彻底静默 no-op**（连 `variant()` 读出来的值都不更新），编译器一个字都不会说。
+  现在是 `(Object.keys(next) as (keyof UIVariant)[]).every((k) => next[k] === variant[k])`，
+  加第四个维度不会再踩。UIVariant 的字段全是原始值，`===` 够用。
 - **`cc.Node.destroy()` 延迟到帧末**才置 `isValid=false` 并从 `_children` 摘除 —— 断言回收必须放到下一帧（`scheduleOnce(…, 0)`），同步断言会假失败。
 - **手工造/改的 prefab 必须补 `cc.PrefabInfo`/`cc.CompPrefabInfo`**：根 `_prefab:null`、组件 `__prefab:null` 的产物运行时 `instantiate` 照常工作，但**编辑器打开该 prefab** 抛 `TypeError: Cannot read properties of null (reading 'instance')`。手工往 prefab 里加脚本组件时，组件的 `__type__` 是脚本 uuid 的 **compressUuid**（前 5 位原样 + 其余每 3 个 hex → 2 个 base64 字符），且必须同时追加一条 `cc.CompPrefabInfo`。
 - **加载中 close 靠 `Entry.closed` 标记**：`close` 先删表 + 置 `closed`；`create` 落地时在 `spawn` 里检查该标记（闭包持 entry 引用），为真则销毁刚建好的 handle 且不回填账本。这是防「prefab 加载完成后节点泄漏」的唯一机制，改动此处需同步看两侧。

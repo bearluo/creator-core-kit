@@ -119,7 +119,7 @@ describe('App · 启动编排', () => {
     await app.launch();
     expect(app.phase).toBe('running');
     // dispatch 阶段照常上报（步骤本身在没配 dispatcher 时空跑，见 dispatch.test.ts 用例 2）
-    expect(phases).toEqual(['platform', 'dispatch', 'hotupdate', 'shared', 'lobby', 'running']);
+    expect(phases).toEqual(['platform', 'dispatch', 'hotupdate', 'tier', 'shared', 'lobby', 'running']);
     expect(e.calls).toEqual([
       'asset.load:cck-app-compat', // 本例未预置戳 → 降级（见用例 8）
       'hot.check',
@@ -424,5 +424,36 @@ describe('App · web 版本表地址', () => {
     await expect(runHotupdate(e, { versionUrl: 'cck-versions.json' })).rejects.toThrow();
     expect(e.versionsSet).toEqual([]);
     expect(e.calls).not.toContain('bundle.setVersions');
+  });
+});
+
+describe('tier 启动步', () => {
+  const runTier = (deps?: AppDeps): Promise<void | 'halt'> => {
+    const step = defaultLaunchSteps(deps).find((s) => s.name === 'tier') as LaunchStep;
+    return Promise.resolve(
+      step.run({ config: {} as AppConfig, bag: new Map<string, unknown>(), report: () => {} }),
+    );
+  };
+
+  it('位置：hotupdate 之后、shared 之前 —— 后半段是硬约束（shared 要装按档取的常驻地基皮包）', () => {
+    const names = defaultLaunchSteps().map((s) => s.name);
+    expect(names.indexOf('tier')).toBeGreaterThan(names.indexOf('hotupdate'));
+    expect(names.indexOf('tier')).toBeLessThan(names.indexOf('shared'));
+  });
+
+  it('没注册分档模块 → 整步空跑，不抛（「可选」是硬要求）', async () => {
+    await expect(runTier()).resolves.toBeUndefined();
+  });
+
+  it('注册了 → 调一次 resolveAtStartup', async () => {
+    let n = 0;
+    await runTier({ tier: { resolveAtStartup: async () => void n++ } });
+    expect(n).toBe(1);
+  });
+
+  it('判档抛错会中断启动 —— 它排在 shared 之前，档位没定就装皮包等于装错', async () => {
+    await expect(
+      runTier({ tier: { resolveAtStartup: () => Promise.reject(new Error('tier boom')) } }),
+    ).rejects.toThrow('tier boom');
   });
 });

@@ -11,6 +11,7 @@ import {
 } from '../hotupdate';
 import { getLogger, type ILogger } from '../logging';
 import { getHttp, postJson, type IHttp } from '../network';
+import { DEVICE_TIER, type DeviceTier } from '../tier';
 
 /**
  * App —— 启动编排层：把「读戳 → 热更 → 装共享包 → 进大厅」串成一条可插拔、可上报、可重试的序列。
@@ -26,6 +27,12 @@ export type LaunchPhase =
   | 'platform'
   | 'dispatch'
   | 'hotupdate'
+  /**
+   * 判档。**排在 `hotupdate` 之后、`shared` 之前** —— 后半段是硬约束（`shared` 那一步要装
+   * 按档取的常驻地基皮包），前半段是取舍：热更可能 `halt` 掉整条序列去重启，排在它后面
+   * 就不会白判一次。再往前也不行，判档要服务器地址，那是 `dispatch` 给的。
+   */
+  | 'tier'
   | 'shared'
   | 'lobby'
   | 'running'
@@ -166,6 +173,11 @@ export interface AppDeps {
    * 闸对单边缺失恒放行。
    */
   engineHash?: () => string | undefined;
+  /**
+   * 档位持有者。生产不传 —— `tier` 步自己去容器里问 `DEVICE_TIER`，问不到就跳过整步
+   * （没上分档的项目零成本）。这里只为可测。
+   */
+  tier?: Pick<DeviceTier, 'resolveAtStartup'>;
 }
 
 /** `ctx.bag` 里 AppInfo 的键——platform 步写入，compat 闸与项目自定义步骤读取。 */
@@ -377,6 +389,20 @@ export function defaultLaunchSteps(deps?: AppDeps): readonly LaunchStep[] {
           abortLaunch({ kind: 'needFullUpdate', reason: g.reason ?? '版本表与当前客户端不兼容' });
         }
         bundles().setVersions(j.bundles ?? {});
+      },
+    },
+
+    {
+      name: 'tier',
+      phase: 'tier',
+      async run(): Promise<void> {
+        // **`AppConfig` 不加字段**：档位模块自己带着 `scoreTier` / `fetchTier` 在 boot 期注册，
+        // 配置再抄一份到 AppConfig 就是两个真源。这里只问「注册了没有」——
+        // 没注册就是没上分档，整条链一行都不执行（#25 的「可选是硬要求」），
+        // 跟 `dispatch` 那步「不配则 return」同一形状。
+        const tier = deps?.tier ?? getRootContainer().tryResolve(DEVICE_TIER);
+        if (!tier) return;
+        await tier.resolveAtStartup();
       },
     },
 

@@ -353,6 +353,38 @@ describe('UIManager · 变体切换（按需重建）', () => {
     expect(v.creates[1]).toMatchObject({ prefab: 'Shop', bundle: 'shop-newyear' });
   });
 
+  it('25b. tier 是第三个维度，跟 skin 完全对称', async () => {
+    const v = makeView();
+    registerUI('shop', {
+      prefab: 'Shop',
+      bundle: (x: { tier: string }) => `shop-${x.tier}`,
+    });
+    const ui = createUIManager({ view: v.view });
+    await ui.open('shop');
+    expect(v.creates[0]).toMatchObject({ bundle: 'shop-default' });
+
+    await ui.setVariant({ tier: 'low' });
+    expect(v.destroys).toEqual([100]);
+    expect(v.creates[1]).toMatchObject({ prefab: 'Shop', bundle: 'shop-low' });
+  });
+
+  it('25c. ⚠️ 早退判据必须逐字段比 —— 列举法会让 setVariant({tier}) 静默 no-op', async () => {
+    const v = makeView();
+    registerUI('shop', { prefab: 'Shop', bundle: (x: { tier: string }) => `shop-${x.tier}` });
+    const ui = createUIManager({ view: v.view });
+    await ui.open('shop');
+
+    // 只动 tier：orientation 与 skin 都没变，列举式判据会在这里直接 return
+    await ui.setVariant({ tier: 'high' });
+    expect(ui.variant().tier).toBe('high');
+    expect(v.creates[1]).toMatchObject({ bundle: 'shop-high' });
+
+    // 同一个 tier 再设一次才该是 no-op（按需重建的本意）
+    const before = v.creates.length;
+    await ui.setVariant({ tier: 'high' });
+    expect(v.creates).toHaveLength(before);
+  });
+
   it('26. 多界面共存 → 只重建该重建的', async () => {
     const v = makeView();
     registerUI('plain', { prefab: 'Plain' });

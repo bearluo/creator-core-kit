@@ -24,5 +24,6 @@
 - [reactive](reactive.md)
 - [save](save.md)
 - [sceneflow](sceneflow.md)
+- [tier](tier.md)
 - [timer](timer.md)
 - [ui](ui.md)

@@ -75,7 +75,7 @@ async function failureOf(p: Promise<unknown>): Promise<LaunchFailure> {
 describe('dispatch 启动步', () => {
   it('1. 排在 platform 之后、hotupdate 之前 —— 它要 platform 读出的能力戳，又要给热更定 cdn', () => {
     const names = defaultLaunchSteps().map((s) => s.name);
-    expect(names).toEqual(['platform', 'dispatch', 'hotupdate', 'shared', 'lobby']);
+    expect(names).toEqual(['platform', 'dispatch', 'hotupdate', 'tier', 'shared', 'lobby']);
   });
 
   it('2. 没配 dispatcher → 整步跳过，一个请求都不发', async () => {

@@ -7,7 +7,7 @@ import { MODULE_CATALOG, registerCatalogUIs, skinBundle } from '../../assets/fou
  * 本地那套皮跑得好好的。
  */
 describe('skinBundle', () => {
-  const v = (skin: string): UIVariant => ({ orientation: 'portrait', skin });
+  const v = (skin: string): UIVariant => ({ orientation: 'portrait', skin, tier: 'default' });
 
   it('皮包名 = skin-<马甲>-<跟随者>', () => {
     expect(skinBundle('foundation')(v('default'))).toBe('skin-default-foundation');
@@ -33,7 +33,7 @@ describe('skinBundle', () => {
 });
 
 describe('registerCatalogUIs · 换皮登记', () => {
-  const v = (skin: string): UIVariant => ({ orientation: 'portrait', skin });
+  const v = (skin: string): UIVariant => ({ orientation: 'portrait', skin, tier: 'default' });
 
   beforeEach(() => {
     clearUIRegistry();

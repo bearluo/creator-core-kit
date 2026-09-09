@@ -43,6 +43,9 @@ const PHASE: Readonly<Record<LaunchPhase, { readonly text: string; readonly rati
   platform: { text: '初始化…', ratio: 0.1 },
   dispatch: { text: '连接服务器…', ratio: 0.2 },
   hotupdate: { text: '检查更新…', ratio: 0.3 },
+  // 有缓存时几乎瞬时，最坏是等服务器判档的那 1.5 秒预算。**给它自己的文案而不是借
+  // `dispatch` 的**：借了那 1.5 秒会被显示成「连接服务器」，出问题时直接指错方向。
+  tier: { text: '检测设备…', ratio: 0.55 },
   shared: { text: '加载公共资源…', ratio: 0.6 },
   lobby: { text: '进入大厅…', ratio: 0.85 },
   running: { text: '', ratio: 1 },
@@ -55,6 +58,9 @@ const ORDER: readonly LaunchPhase[] = [
   'platform',
   'dispatch',
   'hotupdate',
+  // ⚠️ 这张表**不受类型保护** —— 它是 `LaunchPhase[]`，少一个成员完全合法，
+  // 漏了的后果是进度条在那一段不动。上面那张 PHASE 是 Record，才会被穷举检查出来。
+  'tier',
   'shared',
   'lobby',
   'running',
