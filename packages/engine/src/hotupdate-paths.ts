@@ -206,6 +206,29 @@ export function packagedBaseEntry(): string | undefined {
 }
 
 /**
+ * 这一次**实际加载**的 base 入口名 —— `main.js` 解析完指针之后挂上来的
+ * （`build-templates/native/index.ejs` 里那句 `window.__cckBaseRunning = applicationJs`，
+ * 位置在指针解析那个 IIFE **之后**）。
+ *
+ * 它与 {@link packagedBaseEntry} 回答的是**两个不同的问题**，base 热更之后两者会分叉：
+ *
+ * | | 答什么 | 什么时候变 |
+ * |---|---|---|
+ * | `packagedBaseEntry()` | 这是哪个 **APK** | 只有发新包 |
+ * | `runningBaseEntry()`  | 现在跑的是哪一版 **base** | 每次 base 热更 |
+ *
+ * 崩溃上报要的是后者：堆栈里的行号对的是**此刻在跑的那份代码**。⚠️ 但**别拿它去判「APK 换没换」**
+ * —— 那正是 {@link baseStamp} 文档里说的死循环（缓存被判成上一版 APK 攒的而整个删掉）。
+ *
+ * 老模板没挂这个全局 → `undefined`。**刻意不退化成包内那份**：分不清的时候宁可缺一块，
+ * 也不给一个看着像真的、热更后却是错的值。
+ */
+export function runningBaseEntry(): string | undefined {
+  const v = (globalThis as { __cckBaseRunning?: unknown }).__cckBaseRunning;
+  return typeof v === 'string' && v !== '' ? v : undefined;
+}
+
+/**
  * 本次启动是不是被 **base 启动看门狗**隔离了 —— `main.js` 判定后挂上来的
  * （`build-templates/native/index.ejs` 里那句 `window.__cckAotQuarantined = ...`）。
  *

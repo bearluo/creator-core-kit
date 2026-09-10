@@ -51,6 +51,7 @@ export {
   retiredBundleDirs,
   engineHash,
   packagedBaseEntry,
+  runningBaseEntry,
   baseStamp,
   baseQuarantined,
   baseQuarantineVerdict,

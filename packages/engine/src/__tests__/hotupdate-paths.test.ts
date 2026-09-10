@@ -12,6 +12,7 @@ import {
   packagedBaseEntry,
   rebaseManifest,
   retiredBundleDirs,
+  runningBaseEntry,
   searchPathsWithout,
   seedBundleManifest,
   engineHash,
@@ -292,6 +293,41 @@ describe('packagedBaseEntry（main.js 挂上来的包内入口名）', () => {
     expect(packagedBaseEntry()).toBeUndefined();
     g.__cckBaseEntry = 42;
     expect(packagedBaseEntry()).toBeUndefined();
+  });
+});
+
+describe('runningBaseEntry（这一次实际加载的 base 入口）', () => {
+  const g = globalThis as { __cckBaseEntry?: unknown; __cckBaseRunning?: unknown };
+  afterEach(() => {
+    delete g.__cckBaseEntry;
+    delete g.__cckBaseRunning;
+  });
+
+  it('热更命中时与包内那份分叉 —— 这正是它存在的理由', () => {
+    g.__cckBaseEntry = './application.56453.js'; // 出包那天烘进去的
+    g.__cckBaseRunning = './application.a32d1.js'; // 指针解析出来的
+    expect(runningBaseEntry()).toBe('./application.a32d1.js');
+    expect(packagedBaseEntry()).toBe('./application.56453.js');
+    expect(baseStamp(runningBaseEntry())).toBe('a32d1');
+    expect(baseStamp(packagedBaseEntry())).toBe('56453');
+  });
+
+  it('没热更时两者相同（跑的就是包内那份）', () => {
+    g.__cckBaseEntry = './application.56453.js';
+    g.__cckBaseRunning = './application.56453.js';
+    expect(baseStamp(runningBaseEntry())).toBe(baseStamp(packagedBaseEntry()));
+  });
+
+  it('老模板没挂这个全局 → undefined，而不是拿包内那份冒充', () => {
+    g.__cckBaseEntry = './application.56453.js';
+    expect(runningBaseEntry()).toBeUndefined();
+  });
+
+  it('空串 / 不是字符串 → undefined', () => {
+    g.__cckBaseRunning = '';
+    expect(runningBaseEntry()).toBeUndefined();
+    g.__cckBaseRunning = 42;
+    expect(runningBaseEntry()).toBeUndefined();
   });
 });
 

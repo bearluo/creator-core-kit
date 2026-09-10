@@ -144,6 +144,13 @@ window.__cckBaseEntry = applicationJs;
         console.error('[cck] 读 base 入口指针失败，回退包内版本: ' + e);
     }
 })();
+// 这一次**实际加载**的入口。⚠️ 必须挂在上面那个 IIFE **之后** —— 它有四条提前 return
+// （隔离 / 没指针 / 同名 / 文件不在），只有成功那条改了 applicationJs；挂在前面就永远等于包内那份。
+//
+// 跟 __cckBaseEntry 是两个问题：那个答「这是哪个 APK」（发新包才变，用来判要不要作废热更缓存），
+// 这个答「现在跑的是哪一版 base」（每次 base 热更都变，崩溃上报要的是它——堆栈里的行号
+// 对的是此刻在跑的那份代码）。base 热更之后两者分叉，合成一个字段就分不开了。
+window.__cckBaseRunning = applicationJs;
 
 System.import(applicationJs)
 .then(({ Application }) => {

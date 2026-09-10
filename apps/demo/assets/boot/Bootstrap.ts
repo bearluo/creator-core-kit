@@ -39,6 +39,7 @@ import {
   installCrashReporter,
   loadLocaleTable,
   packagedBaseEntry,
+  runningBaseEntry,
   baseStamp,
   resetCcHotUpdateOnAppChange,
   resolutionModule,
@@ -202,14 +203,18 @@ export class Bootstrap extends Component {
     //
     // 上下文是**现取**的：这个箭头函数在每次上报时才跑，所以不需要谁在登录成功 / 切场景 /
     // 热更完之后记得来通知它 —— 那种 `setUser()` 式的 API 忘了调就是静默少一块信息。
-    // ⚠️ `apk` 是**包内** base 入口名（`__cckBaseEntry`），即「这是哪个 APK」；它**不是**
-    // 「当前跑的是哪一版 base」—— base 热更后跑的是 `src/cck-base.json` 指向的那份，而那个
-    // 名字没有暴露到全局。热更后堆栈对哪一版，这一半还没解决（hlgit #42 的 fog）。
+    // ⚠️ `apk` 与 `base` 是**两个问题、两个字段**，别合并：
+    //   `apk`  = 包内 base 入口名（`__cckBaseEntry`）→「这是哪个 APK」，只有发新包才变；
+    //   `base` = 这一次实际加载的入口（`__cckBaseRunning`）→「现在跑的是哪一版 base」，
+    //            每次 base 热更都变。**堆栈里的行号对的是它**，sourcemap 要按它去查
+    //            （`grep releases/` → `source.json` → `cck-manifest symbolicate`）。
+    // base 热更之后两者分叉；没热更过时它俩相同。
     installCrashReporter(() => ({
       vest: VEST,
       channel: APP_CONFIG.channel,
       ver: APP_CONFIG.version,
       apk: baseStamp(packagedBaseEntry()) ?? '-',
+      base: baseStamp(runningBaseEntry()) ?? '-',
       scene: director.getScene()?.name ?? '-',
     }));
 
@@ -239,6 +244,14 @@ export class Bootstrap extends Component {
     // 为新 base 编译的模块代码跑，而 coreApiHash 闸救不了（缓存 = 远端 → check 判 up-to-date，
     // 压根不去拉更新戳）。表现就是「装完启动报错，清数据才好」。
     for (const d of resetCcHotUpdateOnAppChange()) console.log(`${TAG} 热更缓存作废 ${d}`);
+
+    // 「跑的是哪个包、哪一版代码」——一行日志，跟上报上下文里那两个字段同源。
+    // 没热更过时两者相同；base 热更并重启之后 `base` 变而 `apk` 不变，那正是这两个字段
+    // 必须分开的理由。有它才能在 logcat 里当场看出「这台机器现在跑的是哪一版 base」，
+    // 不必先造一条崩溃去后台翻。
+    console.log(
+      `${TAG} 代码版本 | apk=${baseStamp(packagedBaseEntry()) ?? '-'} base=${baseStamp(runningBaseEntry()) ?? '-'}`,
+    );
 
     // 内容基址 —— dispatcher 握手才下发（内容托管在哪由服务端说了算），而热更后端在下面
     // 这一行就装好了，只能惰性接。**base 与分包共用**：两边 check 时都自取 remote manifest
