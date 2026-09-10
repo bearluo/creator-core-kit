@@ -87,6 +87,10 @@ importers:
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
+    devDependencies:
+      '@jridgewell/trace-mapping':
+        specifier: ^0.3.31
+        version: 0.3.31
 
 packages:
 

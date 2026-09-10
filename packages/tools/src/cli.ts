@@ -14,10 +14,16 @@
  *   拓扑门控:      cck-manifest check-graph --assets <工程 assets 目录> [--mermaid]
  *                  跨包 import 只许指向优先级更高的包（严格递增 ⇒ 不可能成环）；--mermaid 打印拓扑图
  *   web 版本表:    cck-manifest web-versions --root <web构建产物根> --version <v> [--core <dist>] [--min-app-version <v>] --out <path>
+ *   搬 sourcemap:  cck-manifest stash-maps --root <构建产物根> --out <归档目录>
+ *                  开了 sourceMaps 后 .map 就躺在产物里，会随热更包 / APK / web 目录一起发出去。
+ *                  必须夹在 Creator 构建与其余一切之间；搬完原地复扫，还剩就抛。
+ *   还原堆栈:      cck-manifest symbolicate --maps <归档目录> < 堆栈原文
+ *                  堆栈走 stdin，逐帧吐「源文件:行:列」；认不出的原样透出
  *   部署:          cck-manifest deploy --root <native产物根> --cdn <CDN根>   （只叠加，引擎层不拷）
  *   归档:          cck-manifest archive --cdn <CDN根> --version <v>        （落 releases/<v>/，出包流程自动调）
  *   回滚:          cck-manifest rollback --cdn <CDN根> --release <旧版本> --version <新版本号，必须更大>
  */
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { computeCoreApiHash, readEngineHash, readStamp, verifyCompat, writeStamp } from './api-stamp';
@@ -40,6 +46,7 @@ import {
   writeSplitManifests,
   type WriteResult,
 } from './hot-update-manifest';
+import { stashSourceMaps, symbolicate } from './source-maps';
 import { buildWebVersions, writeWebVersions } from './web-versions';
 
 function die(msg: string): never {
@@ -77,6 +84,7 @@ function main(): void {
       assets: { type: 'string' },
       'pin-dir': { type: 'string' },
       mermaid: { type: 'boolean' },
+      maps: { type: 'string' },
     },
   });
 
@@ -93,6 +101,27 @@ function main(): void {
       engineHash: values.root === undefined ? undefined : readEngineHash(values.root),
     });
     console.log(`✅ 打戳 ${out}：version=${stamp.version} coreApiHash=${stamp.coreApiHash}${stamp.engineHash ? ` engineHash=${stamp.engineHash}` : ''}${stamp.minAppVersion ? ` minAppVersion=${stamp.minAppVersion}` : ''}`);
+    return;
+  }
+
+  if (sub === 'stash-maps') {
+    const root = values.root ?? die('stash-maps 需要 --root（构建产物根，含 src/ assets/）');
+    const out = values.out ?? die('stash-maps 需要 --out（.map 归档目录，**不能**在对外服务的目录里）');
+    try {
+      const moved = stashSourceMaps(root, out);
+      console.log(`✅ 搬走 ${moved.length} 个 .map → ${out}（产物里已一个不剩）`);
+    } catch (e) {
+      die(String(e instanceof Error ? e.message : e));
+    }
+    return;
+  }
+
+  if (sub === 'symbolicate') {
+    const maps = values.maps ?? die('symbolicate 需要 --maps（.map 归档目录）');
+    // 堆栈原文走 stdin（fd 0）：`cck-manifest symbolicate --maps <dir> < crash.txt`。
+    // ⚠️ Crashlytics 要复制 **log 面板里 `fc.log` 附的那份**，不是它渲染的堆栈——那份没有列。
+    const stack = readFileSync(0, 'utf8');
+    for (const line of symbolicate(stack, maps)) console.log(line);
     return;
   }
 

@@ -46,5 +46,7 @@ export {
 } from './api-stamp';
 export type { CompatStamp, CompatResult } from './api-stamp';
 
+export { findSourceMaps, stashSourceMaps, symbolicate } from './source-maps';
+
 export { readBundleVers, buildWebVersions, writeWebVersions } from './web-versions';
 export type { WebVersions, WebVersionsOptions } from './web-versions';

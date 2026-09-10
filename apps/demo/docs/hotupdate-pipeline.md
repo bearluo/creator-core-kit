@@ -311,6 +311,7 @@ manifest 归档进 `releases/<version>/`，同时写一份 `source.json` 记**�
 ```bash
 grep -rl "index.f8c7f.js" <cdnDir>/releases/    # ① 哪一版
 cat <cdnDir>/releases/<那一版>/source.json      # ② 那一版是哪个 commit
+node ../../packages/tools/dist/cli.cjs symbolicate --maps <mapsDir> < crash.txt   # ③ 行号 → 源码行
 ```
 
 `source.json` 由出包流程写，长这样；`dirty` 为真表示那次是带脏工作区出的包，**commit 号本身不足以
@@ -322,7 +323,30 @@ cat <cdnDir>/releases/<那一版>/source.json      # ② 那一版是哪个 comm
 ```
 
 只 native 写。web 那条链没有 `releases/` 目录、也还没有崩溃上报，不提前发明。
-**从行号回到源码行还差一步**（sourcemap 归档与还原，尚未实现，见 hlgit #54）。
+
+#### 第 ③ 步：行号 → 源码行
+
+两份构建配置都开着 `sourceMaps`，但 `.map` **一个都不下发**：`build.mjs` 在 Creator 构建之后的第一步
+就把它们全搬进 `local.json` 的 `mapsDir`（**在对外目录之外**），产物里一个不剩，搬完复扫、还剩就抛。
+归档布局是**产物相对路径原样镜像** —— 后台堆栈里那条路径**拼上 `.map` 就是文件位置**，没有索引表，
+也不必先知道是哪一版（所以 ③ 其实不依赖 ①②，三步各自独立）。
+
+> ⚠️ Creator **只给 `.js` 加内容指纹，`.map` 留的是加之前的名字**（`index.8f281.js` 配 `index.js.map`）。
+> `stash-maps` 归档时按同目录的兄弟 js 把指纹补回去，否则各版本的 map 会在同一个名字上互相覆盖。
+
+```
+    at planeSolidAt (assets/mini-plane/index.07346.js:565:128)
+       ↳ E:/work/creator-core-kit/apps/demo/assets/modules/mini-plane/PlaneVM.ts:305:18  planeSolidAt
+         | if (this.planeSolidAt(wx, wy, cos, sin)) return true;
+```
+
+那行代码是从 map 自带的 `sourcesContent` 里直接读出来的 —— **不必把那个 commit 签出来**
+（也正因如此，`.map` 一份都不能出门：源码原文就嵌在里面）。
+
+- ⚠️ **堆栈原文从哪复制**：Bugly 用 `stack` 字段那份；**Crashlytics 要去 log 面板里 `fc.log` 附的那份**，
+  它渲染的那张堆栈是重建的 `StackTraceElement`，四个字段里**没有列**。
+- 只有行号的帧照样能还原，但取的是**该行第一个映射**并带 `⚠` —— 压缩后一行塞十几个函数，多半不是
+  你要的那个。认不出的帧（没 map / 路径对不上）**原样透出**，不吞。
 
 ### 回滚
 

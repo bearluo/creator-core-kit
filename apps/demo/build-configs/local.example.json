@@ -3,6 +3,7 @@
   "cdnUrl": "http://172.25.50.135:8081/api/public/dl/shCo8WNE/",
   "cdnDir": "E:/fileserve/creator-core-kit/cdn",
   "webDir": "E:/fileserve/creator-core-kit/web",
+  "mapsDir": "E:/fileserve/creator-core-kit/maps",
   "packages": {
     "android": {
       "sdkPath": "E:\\android-sdk",

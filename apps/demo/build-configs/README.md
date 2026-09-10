@@ -51,6 +51,21 @@ com.cck.demo: Unexpected CPU variant for x86: x86_64
 少了 Creator 那一步，APK 里的 `assets/` 是旧的甚至不完整，运行时报
 `Failed to require file 'main.js', not found!`。要重出包就整条 `build.mjs ... --apk` 走一遍。
 
+## 两个平台都开 `sourceMaps`，`.map` 出包时立刻搬走
+
+开它是为了让**线上**那条崩溃能还原回源码行（只给 debug 包开等于白开——后台收到的是 release 的堆栈）。
+代价是 `.map` 会躺在产物里，而产物同时走**三条**路出去：热更包、**APK**（gradle 把 `data/` 整个塞进
+assets）、**web 目录**（`cpSync` 全量拷）。所以 `build.mjs` 在「Creator 构建完成」之后**第一件事**就是
+`cck-manifest stash-maps`，把 `.map` 全搬到 `local.json` 的 **`mapsDir`**，搬完原地复扫、还剩就抛。
+
+> ⚠️ **`mapsDir` 必须在对外服务的目录之外**，别放 `cdnDir` / `webDir` 底下——那两个是公开的
+> （实测 CDN 那条分享链翻得到 `releases/`）。开了 `sourceMaps` 却没配 `mapsDir` 会**直接报错**，
+> 不静默把源码留在产物里。归档布局是产物相对路径原样镜像，还原用
+> `cck-manifest symbolicate --maps <mapsDir> < 堆栈原文`（决策见 hlgit #54）。
+
+留在下发 js 末尾的那行 `//# sourceMappingURL=…` **故意不动**：抹它要重写每个 js，而产物名是 Creator
+按内容算出来的，改了字节文件名就跟自己的内容对不上。玩家照那个名字去 CDN 拿只会得到 404。
+
 ## 只写构建意图，不写本机路径
 
 `sdkPath` / `ndkPath` / `javaHome` / `keystorePath` **一律不写进这些文件**——它们来自 Creator 的

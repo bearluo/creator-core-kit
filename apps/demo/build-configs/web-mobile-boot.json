@@ -5,7 +5,7 @@
   "startScene": "db://assets/boot/Boot.scene",
   "debug": true,
   "md5Cache": true,
-  "sourceMaps": false,
+  "sourceMaps": true,
   "buildMode": "normal",
   "mainBundleCompressionType": "merge_dep",
   "engineModulesConfigKey": "defaultConfig",

@@ -83,7 +83,8 @@ if (!existsSync(localPath))
   throw new Error(`缺 ${localPath} —— 复制 local.example.json 并填本机 SDK/NDK/JDK 与 Creator 路径`);
 
 const local = read(localPath);
-const { creatorPath, cdnUrl, cdnDir, webDir, ...localOpts } = local;
+// ⚠️ 本机路径类的 key 必须在这里解构掉——`localOpts` 是整个塞进 Creator 构建配置的。
+const { creatorPath, cdnUrl, cdnDir, webDir, mapsDir, ...localOpts } = local;
 let cfg = merge(read(basePath), localOpts);
 
 // —— 命令行覆盖（马甲等正交维度不另存配置文件）——
@@ -201,6 +202,23 @@ if (settingsMtime() === before) {
   process.exit(1);
 }
 console.log(`✓ Creator 构建完成 → ${OUT_REL}`);
+
+// —— sourcemap 搬走：必须夹在 Creator 构建与**其余一切**之间 ——
+//
+// 开了 `sourceMaps` 之后 `.map` 就躺在产物里，而产物同时走**三条**路出去：热更包（manifest 无差别
+// 收集）、**APK**（gradle 把 data/ 整个塞进 assets）、**web 目录**（下面那句 cpSync 全量拷）。
+// ⚠️ 最后一条不经 deployToCdn —— 闸放在部署那步挡不住它，只能挡在这里。
+// CLI 搬完会原地复扫，还剩 .map 就抛（决策见 hlgit #54）。
+if (cfg.sourceMaps) {
+  if (!mapsDir)
+    throw new Error(
+      '开了 sourceMaps 却没配 local.json 的 mapsDir —— .map 会随 APK / web 目录把源码发出去。' +
+        '填一个**不对外**的目录（别放在 cdnDir / webDir 底下，那两个是公开的）',
+    );
+  const r = spawnSync(process.execPath, [CLI, 'stash-maps', '--root', DATA, '--out', mapsDir], { encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`sourcemap 搬运失败：${r.stderr || r.stdout}`);
+  process.stdout.write(r.stdout);
+}
 
 // —— base 入口指针：base 层能热更的那把钥匙 ——
 //
