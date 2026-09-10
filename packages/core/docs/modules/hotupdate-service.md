@@ -135,7 +135,7 @@ export function createHotUpdateService(opts?: { backend?: IHotUpdateBackend; gat
   > 2026-08-20 之前的文档与 ADR 把这几档记作 `L0` / `L1-E` / `L1-N` / `L1-A` / `L2`：
   > `L0` + `L1-E` + `L1-N` = 只能发 APK，`L1-A` = base，`L2` = 模块 bundle。
 
-  **base 入口指针**（base 能热更的全部机关）：`main.js` 里 `System.import(applicationJs)` 的那个名字不再是构建期插值，而是运行时读 `src/cck-base.json` 的 `application` 字段得来 —— 热更目录里有新的就命中新的，读不到 / 坏了 / 指向的文件不存在就退回包内那份（黑屏是最坏结果，退回还能起来）。同一段模板还把包内烘的名字挂成 `window.__cckBaseEntry`，那是 `packagedBaseEntry()` / `baseStamp()` 判「APK 换没换」的唯一不可伪造来源。
+  **base 入口指针**（base 能热更的全部机关）：`main.js` 里 `System.import(applicationJs)` 的那个名字不再是构建期插值，而是运行时读 `src/cck-base.json` 的 `application` 字段得来 —— 热更目录里有新的就命中新的，读不到 / 坏了 / 指向的文件不存在就退回包内那份（黑屏是最坏结果，退回还能起来）。同一段模板还挂**两个**全局，回答的是**两个不同的问题**：`window.__cckBaseEntry` 是**包内**烘的名字（`packagedBaseEntry()` / `baseStamp()` 判「APK 换没换」的唯一不可伪造来源，只有发新包才变）；`window.__cckBaseRunning` 是**这一次实际加载**的入口（`runningBaseEntry()`，每次 base 热更都变），崩溃上报要的是它 —— 堆栈里的行号对的是此刻在跑的那份代码。⚠️ 后者挂在指针解析那个 IIFE **之后**（它有四条提前 return，只有成功那条改了值）；也**别拿它去判 APK 换没换**，那正是决策 6 那条死循环。
 
   `web-adapter.js` 是 `platforms/native/builtin/index.js` 的打包产物：jsb 命名空间与 native 引用管理、DOM/BOM 垫片、`XMLHttpRequest`/`WebSocket`、**`localStorage`**、`setTimeout`/rAF、Promise polyfill、`jsb.fileUtils` 单例。落到实处的影响：
   - 定时器 / Promise polyfill / DOM 垫片 / 音频 / 输入 / `jsb.WebSocket`（本仓 net 层就架在它上面）出问题，**热更修不了**。

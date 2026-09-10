@@ -306,7 +306,13 @@ manifest 归档进 `releases/<version>/`，同时写一份 `source.json` 记**�
 ### 从崩溃堆栈回到代码
 
 后台那条崩溃里的文件名带产物指纹（`assets/main/index.f8c7f.js`）—— **指纹逐包，比整体版本号准**，
-因为各分包是各自独立热更的。两步定位：
+因为各分包是各自独立热更的。
+
+> 上报上下文里另有两个字段回答**两个不同的问题**：`apk`（`__cckBaseEntry`）=「这是哪个 APK」，
+> 只有发新包才变；**`base`（`__cckBaseRunning`）=「现在跑的是哪一版 base」**，每次 base 热更都变。
+> 堆栈的行号对的是后者。base 热更之后两者分叉，只看 `apk` 会把新代码的堆栈按旧代码去查。
+
+两步定位：
 
 ```bash
 grep -rl "index.f8c7f.js" <cdnDir>/releases/    # ① 哪一版
@@ -603,6 +609,7 @@ settings 的 md5 变 → application.js 变 → html 引用变），所以玩家
 | 新增 bundle 自愈 | APK 里根本没有 `skin-vest-*`，首次全量下 3 个文件；force-stop 冷启动只发 4 个 `*.version.manifest` 探测、**一个资源都没重下** → 种子 `0.0.0` 让缓存 manifest 接管了 |
 | 版本闸真的在拦 | 同一个 APK 二分：远端戳 hash = app 侧 → 下载并重启；改成 `deadbeefcafe` → `rejected(needFullUpdate)`，不下载不重启 |
 | 看门狗只挡 base | 让 `foundation.manifest` 与被隔离的 base **同为 1.3.2**：`grep -c "起不来被隔离过"` = **1**（只有 base），foundation 照常 check 并重下 |
+| 上报能答「跑的是哪一版 base」 | 同一个 APK 连更三版：`apk` **全程不变**（`6ba8b`），而 `base` 走 `6ba8b → 096ca → f2f84 → 6ba8b`。埋一个**包内不存在**的 `HOTFIX_TAG=v2`（`unzip -p …apk assets/application.6ba8b.js \| grep -c` = **0**）证明跑的是下下来的代码；再 `am force-stop` 冷启动、**全新 PID** 仍是新值 → 不是内存里的搜索路径撑着。末尾那次退回干净代码，`base` **回到 `6ba8b`** 与 `apk` 相等 —— 内容一样就同名，正是内容寻址该有的样子 |
 | 下线目录回收不误删 | 手植 `cck-bundle-asset/arena/` + `arena_temp/` → 回收 2 个，而 `shop/` 与 `shop_temp/` 还在、`SHOP_TAG` 未退版；再冷启动回收 0 个（幂等） |
 
 ## 现状
