@@ -4,5 +4,6 @@ export {
   exitReasonName,
   mergeDeviceProfile,
   parseBridgeProfile,
+  parseWebProfile,
 } from './device-profile';
-export type { DeviceProfile, ParsedBridgeProfile } from './device-profile';
+export type { DeviceProfile, ProfileParts, WebProfileInput } from './device-profile';

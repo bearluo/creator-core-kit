@@ -294,7 +294,12 @@ export class Bootstrap extends Component {
             if (p.lowRamDevice === true) return 'low'; // 系统自己认定的低内存机
             const heap = p.processMemoryLimitBytes; // 进程堆上限（Android 独有的稳定常量）
             if (heap !== undefined) return heap < 192 * 1024 * 1024 ? 'low' : 'high';
-            // 一个数都没读到（web / iOS / 没装 CckDevice）→ 不猜，落默认档。
+            // web 上没有堆上限，改看设备总内存（`navigator.deviceMemory`）。
+            // ⚠️ 门槛跟上面那条**不是一把尺**：那是进程能用多少，这是整机有多少 —— 所以两条
+            // 分支各有各的数字，不能共用常量。而且这一项**只在 HTTPS 下有**，http 页面恒缺席。
+            const ram = p.deviceTotalMemoryBytes;
+            if (ram !== undefined) return ram < 4 * 1024 ** 3 ? 'low' : 'high';
+            // 一个数都没读到（http 下的 H5 / iOS / 没装 CckDevice）→ 不猜，落默认档。
             return 'default';
           },
         }),

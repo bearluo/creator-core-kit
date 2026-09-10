@@ -3,12 +3,17 @@ import {
   DEVICE_PROFILE,
   mergeDeviceProfile,
   parseBridgeProfile,
+  parseWebProfile,
   type DeviceProfile,
   type KitModule,
+  type ProfileParts,
 } from '@cck/core';
 
 /**
  * 设备画像的引擎半 —— **按平台取值，不含判断**。
+ *
+ * 三路来源并排喂给 `mergeDeviceProfile`，谁在哪个平台上有值由那一路自己决定，
+ * **这里没有平台分支**：Android 走原生桥、浏览器走 `navigator`、四平台共走引擎白送的那几项。
  *
  * 判断全在 `@cck/core` 的 `parseBridgeProfile` / `mergeDeviceProfile` 里（类型守卫、
  * `readFailures` 记账、`REASON_*` 映射），node 全测得到。这里薄到**没有分支可测** ——
@@ -47,6 +52,24 @@ function readBridgeJson(): string | undefined {
   } catch {
     return undefined; // 工程没装那份 Java —— 缺席不是故障
   }
+}
+
+/**
+ * 浏览器那三项。**只认 `sys.isBrowser`** —— 小游戏各家的取值路径不同
+ * （微信 `getSystemInfoSync().memorySize` 之类），先不适配，那边落「这个平台没这能力」。
+ *
+ * 判断全在 core 的 `parseWebProfile`（换算 / 守卫 / 记账），这里只负责**把值端过去**：
+ * 三个全局量都不在 cc 里，读它们没有分支可测，所以一行判断都不放。
+ * `navigator.deviceMemory` 是非标准扩展，DOM 类型里没有，取值走一次窄化。
+ */
+function readFromWeb(): ProfileParts {
+  if (!sys.isBrowser) return { fields: {}, readFailures: [] };
+  const nav = navigator as Navigator & { deviceMemory?: unknown };
+  return parseWebProfile({
+    deviceMemoryGB: nav.deviceMemory,
+    hardwareConcurrency: nav.hardwareConcurrency,
+    devicePixelRatio: window.devicePixelRatio,
+  });
 }
 
 /** 引擎白送的那几项：GPU 型号 / 能力位 / 屏幕 / 系统版本。四平台都走这条。 */
@@ -94,8 +117,9 @@ function hasSampled(device: gfx.Device, format: gfx.Format): boolean {
  * ⚠️ 每次调用都会走一趟 JNI。别在每帧、也别在崩溃上报的 `getContext` 里调。
  */
 export function readDeviceProfile(): DeviceProfile {
-  return mergeDeviceProfile(parseBridgeProfile(readBridgeJson()), readFromEngine());
-  // 引擎那份排在后面 = 它盖桥：反射那头是间接来的，引擎这头是本进程的真值。
+  // 顺序即权威度，后面的盖前面的：反射/浏览器那两头是间接来的，引擎这头是本进程的真值。
+  // 原生桥与浏览器读数**互斥**（一台机器只可能是其中之一），并排放着是为了不写平台分支。
+  return mergeDeviceProfile(parseBridgeProfile(readBridgeJson()), readFromWeb(), readFromEngine());
 }
 
 /**

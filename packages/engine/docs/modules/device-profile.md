@@ -163,7 +163,27 @@ JSON 字段名与 `DeviceProfile` 同名，外加：
 |---|---|
 | **Android native** | 全部。引擎白送 GPU / 屏幕 / 压缩格式支持 / 系统版本；内存、CPU、densityDpi、机型、退出原因走 `CckDevice` |
 | **iOS native** | 只有引擎白送那几项 —— `CckDevice` 是 Java 类，`sys.os !== ANDROID` 直接跳过。iOS provider **不做**（总纲 Out of scope） |
-| **web / 小游戏** | 只有引擎白送那几项。`navigator.deviceMemory` 等尚未接（见「还没做的」） |
+| **web（浏览器）** | 引擎白送那几项，**加上** `cpuCores`（`navigator.hardwareConcurrency`）、`densityDpi`（`devicePixelRatio × 160`）、`deviceTotalMemoryBytes`（`navigator.deviceMemory`，**仅 HTTPS**，见下） |
+| **小游戏** | 只有引擎白送那几项。各家取值路径不同（微信 `getSystemInfoSync().memorySize` 之类），**暂不适配** |
+
+### web 那三项的三条注意
+
+1. ⚠️ **`navigator.deviceMemory` 只在安全上下文（HTTPS）里有。** 实测（2026-09-10 · Chromium ·
+   `http://` 页面）`isSecureContext === false` 时它就是 `undefined`，而同一页
+   `hardwareConcurrency`（读到 14）与 `devicePixelRatio` 照给。**H5 挂在 http 上就永远没有
+   内存这一项。** 缺席**不记 `readFailures`** —— 浏览器是按规矩不给，不是读坏了。
+2. ⚠️ **它被量化过且封顶 8。** 规范只允许 0.25/0.5/1/2/4/8 几档，16 GB 的机器也报 8。
+   kit **原样换算、不去猜真实值**（猜错比缺失更糟），封顶语义留给打分函数知情。
+3. ⚠️ **`densityDpi` 用 `dpr × 160` 而不是 CSS 的 × 96。** 这个字段的语义由 Android 的
+   `DisplayMetrics.densityDpi` 定义，而 Android 自己就是 `density = densityDpi / 160`，
+   Chrome 在 Android 上的 `devicePixelRatio` 正是那个 `density`。用 96 换算会让同一台手机在
+   原生与 H5 上差出 1.67 倍 —— 打分函数拿到的就成了**一把随平台变刻度的尺**，
+   正是「内存拆三个字段」要避免的那件事。代价是桌面浏览器上算出来的不是显示器真实 DPI。
+
+**`performance.memory.jsHeapSizeLimit` 刻意不用。** 它在 http 下也读得到（实测 ~2 GB），
+但那是 V8 的 JS 堆上限，跟 `processMemoryLimitBytes`（Android 的 Java 堆上限，实测 192–256 MB）
+差一个数量级。填进同一个字段，一条按 Android 写的门槛在 web 上会把所有机器判成高端。
+所以 **`processMemoryLimitBytes` 仍然只有 Android 有**。
 
 **整套零权限**：#22 逐项核过官方文档，19 项**没有一行**带 `Requires Manifest.permission.*` 标注，
 Cocos 默认模板那三条权限一条都不用加。唯一的雷是 `Build.getSerial()`（第三方应用根本申请不到）
@@ -171,7 +191,7 @@ Cocos 默认模板那三条权限一条都不用加。唯一的雷是 `Build.get
 
 ## Testable seams + test plan
 
-**全部判断逻辑在 core，node 全测得到**（27 条，覆盖 **100%**）：
+**全部判断逻辑在 core，node 全测得到**（33 条，覆盖 **100%**）：
 
 | 组 | 覆盖 |
 |---|---|
@@ -180,6 +200,7 @@ Cocos 默认模板那三条权限一条都不用加。唯一的雷是 `Build.get
 | 字段守卫 | 正常载荷 · **缺席不记失败** · **负数被拒**（JNI 的 -1）· 类型不对跳过并记名 · 空串算没读到 · 布尔只认真布尔 · 退出码非整数记名 |
 | `readFailures` 合并 | Java 自报的合入 · 非字符串被滤 · 不重复记名 · 不是数组时忽略 |
 | `mergeDeviceProfile` | 后者盖前者 · `undefined` 不覆盖 · 并集去重 · 空调用也是合法画像 |
+| `parseWebProfile` | 三项换算（GB→字节 / dpr→dpi）· **`deviceMemory` 缺席不记失败、标配两项缺席要记** · 垃圾值（0/负/NaN/字符串）全拒 · 小数 dpr 四舍五入 · 封顶值原样透出 |
 
 **engine 那半刻意无单测**：`native.reflection` 是 JNI，按 ADR-0002 决策 3 禁止进 cc mock；
 凡是能下沉的都已下沉，剩下的只有「按平台挑一条取值路径 + 塞进结构」，没有分支可错。
@@ -250,8 +271,8 @@ Samsung Remote Test Lab（免费）→ 下 `rdb.exe` 跑起来（它是个常驻
    One UI 这条已经用真机答了，但**印度低端市场主力不是三星** —— 那几家要走各自的云真机平台。
    而且这次那台是**旗舰**（11 GB RAM / 8 核 / 3.6 GHz），低端机的行为仍是空白。
    这也正是 `readFailures` 存在的意义 —— 覆盖不到的靠上线后埋点捞。
-2. **web / 小游戏的取值没接**（`navigator.deviceMemory` / `hardwareConcurrency` /
-   `getSystemInfoSync`）。接口容得下，实现待补。
+2. **小游戏的取值没接**（微信 / 字节的 `getSystemInfoSync`）。接口容得下，实现待补；
+   web 已接（见 Platform 一节）。
 3. **#22 的 ② `Device::getDPI()` 返回什么** —— 本模块直接走桥拿 `densityDpi` 了，这一项对本实现
    已无影响；真要用引擎那条路时再验。**③ `J`(long) 返回可不可用**已被「桥只返回 String」的
    设计绕开，不需要答。

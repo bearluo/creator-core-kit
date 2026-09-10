@@ -5,6 +5,7 @@ import {
   exitReasonName,
   mergeDeviceProfile,
   parseBridgeProfile,
+  parseWebProfile,
 } from '../device-profile';
 
 describe('exitReasonName', () => {
@@ -194,5 +195,54 @@ describe('mergeDeviceProfile', () => {
 
   it('什么都不给也是一份合法画像（web 上就长这样）', () => {
     expect(mergeDeviceProfile()).toEqual({ readFailures: [] });
+  });
+});
+
+describe('parseWebProfile · 浏览器那三项', () => {
+  it('全都读到：GB 换成字节、dpr 换成 densityDpi（× 160，对齐 Android 口径）', () => {
+    expect(
+      parseWebProfile({ deviceMemoryGB: 4, hardwareConcurrency: 8, devicePixelRatio: 3 }),
+    ).toEqual({
+      fields: {
+        deviceTotalMemoryBytes: 4 * 1024 ** 3,
+        cpuCores: 8,
+        densityDpi: 480,
+      },
+      readFailures: [],
+    });
+  });
+
+  it('⚠️ deviceMemory 缺席**不记失败** —— http 下浏览器就是不给（安全上下文才有），这不是故障', () => {
+    const r = parseWebProfile({ hardwareConcurrency: 14, devicePixelRatio: 1 });
+    expect(r.fields.deviceTotalMemoryBytes).toBeUndefined();
+    expect(r.readFailures).toEqual([]);
+  });
+
+  it('hardwareConcurrency / devicePixelRatio 缺席**要记失败** —— 它们是 web 的标配能力', () => {
+    expect(parseWebProfile({}).readFailures.sort()).toEqual(['cpuCores', 'densityDpi']);
+  });
+
+  it('给了垃圾值（0 / 负数 / NaN / 字符串）一律拒收并记名', () => {
+    const r = parseWebProfile({
+      deviceMemoryGB: -1,
+      hardwareConcurrency: 0,
+      devicePixelRatio: NaN,
+    });
+    expect(r.fields).toEqual({});
+    expect(r.readFailures.sort()).toEqual(['cpuCores', 'densityDpi', 'deviceTotalMemoryBytes']);
+    expect(parseWebProfile({ hardwareConcurrency: '8', devicePixelRatio: 1 }).readFailures).toContain(
+      'cpuCores',
+    );
+  });
+
+  it('dpr 是小数也照算（2.75 的机器很多），四舍五入到整数 dpi', () => {
+    expect(parseWebProfile({ devicePixelRatio: 2.75, hardwareConcurrency: 8 }).fields.densityDpi).toBe(440);
+  });
+
+  it('deviceMemory 的量化与封顶不在这里补救 —— 原样换算，8 就是 8', () => {
+    // 规范要求量化成 2 的幂且**封顶 8**：一台 16GB 的机器也只报 8。
+    // 这里不去猜真实值（猜错比缺失更糟），封顶的语义写进文档由打分函数自己知情。
+    expect(parseWebProfile({ deviceMemoryGB: 8 }).fields.deviceTotalMemoryBytes).toBe(8 * 1024 ** 3);
+    expect(parseWebProfile({ deviceMemoryGB: 0.25 }).fields.deviceTotalMemoryBytes).toBe(0.25 * 1024 ** 3);
   });
 });

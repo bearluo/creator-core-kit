@@ -155,7 +155,8 @@ const BOOLEAN_FIELDS = ['lowRamDevice', 'supportsAstc', 'supportsEtc2'] as const
 /** 桥整体不可用时记在 `readFailures` 里的名字。 */
 export const BRIDGE_FAILURE = 'bridge';
 
-export interface ParsedBridgeProfile {
+/** 一路来源解析出来的半成品：认下的字段 + 本该读到却没读到的字段名。 */
+export interface ProfileParts {
   readonly fields: Partial<DeviceProfile>;
   readonly readFailures: string[];
 }
@@ -172,7 +173,7 @@ export interface ParsedBridgeProfile {
  * 数字字段要求**有限且非负**：这些量（内存 / 核数 / 频率 / 分辨率 / dpi）没有负数含义，
  * 而 JNI 那头出错时最常见的就是 `-1`，放进来会让打分把故障当成一台极小内存的机器。
  */
-export function parseBridgeProfile(json: string | undefined | null): ParsedBridgeProfile {
+export function parseBridgeProfile(json: string | undefined | null): ProfileParts {
   if (json === undefined || json === null || json === '') {
     return { fields: {}, readFailures: [] };
   }
@@ -226,6 +227,68 @@ export function parseBridgeProfile(json: string | undefined | null): ParsedBridg
   }
 
   return { fields: fields as Partial<DeviceProfile>, readFailures: failures };
+}
+
+/**
+ * 浏览器那边能问到的原始读数。**全声明成 `unknown`** —— 其中两项是非标准 / 条件可用的
+ * API，浏览器给什么都有可能，类型守卫在下面统一做。
+ */
+export interface WebProfileInput {
+  /** `navigator.deviceMemory`，单位 **GB**。⚠️ 见 {@link parseWebProfile} 的三条注意。 */
+  readonly deviceMemoryGB?: unknown;
+  /** `navigator.hardwareConcurrency`。 */
+  readonly hardwareConcurrency?: unknown;
+  /** `window.devicePixelRatio`。 */
+  readonly devicePixelRatio?: unknown;
+}
+
+/**
+ * 解析浏览器读数。web 上**只有这三项**，其余字段是这个平台真的没有（不记 `readFailures`）。
+ *
+ * ## 三条必须知道的
+ *
+ * 1. ⚠️ **`navigator.deviceMemory` 只在安全上下文（HTTPS）里有** —— 实测（2026-09-10,
+ *    Chromium）`http://` 页面上 `isSecureContext === false`，它就是 `undefined`，而同一页
+ *    `hardwareConcurrency` / `devicePixelRatio` 照给。**H5 挂在 http 上就永远没有内存这一项**，
+ *    要它就得上 HTTPS。缺席**不记失败**：浏览器是按规矩不给，不是读坏了。
+ * 2. ⚠️ **它被量化过且封顶 8** —— 规范只允许 0.25/0.5/1/2/4/8 这几档，一台 16GB 的机器也报 8。
+ *    这里**原样换算、不去猜真实值**（猜错比缺失更糟），封顶的语义留给打分函数知情。
+ * 3. ⚠️ **`densityDpi` 用 `dpr × 160` 而不是 × 96** —— 这个字段的语义是 Android 的
+ *    `DisplayMetrics.densityDpi`，而 Android 的定义就是 `density = densityDpi / 160`，
+ *    Chrome 在 Android 上的 `devicePixelRatio` 正是那个 `density`。用 CSS 的 96 dpi 换算会让
+ *    同一台手机在原生与 H5 上差出 1.67 倍 —— 打分函数拿到的就成了**一把随平台变刻度的尺**，
+ *    正是这个模块拆三个内存字段要避免的那件事。代价是桌面浏览器上算出来的不是显示器真实 DPI，
+ *    但分档要的本来就是「相对 mdpi 有多密」。
+ *
+ * **`performance.memory.jsHeapSizeLimit` 刻意不用**：它虽然在 http 下也读得到（实测 ~2GB），
+ * 但那是 V8 的 JS 堆上限，跟 `processMemoryLimitBytes`（Android 的 Java 堆上限，实测 192–256MB）
+ * 差一个数量级。填进同一个字段，一条按 Android 写的门槛在 web 上就全判成高端机。
+ */
+export function parseWebProfile(input: WebProfileInput): ProfileParts {
+  const fields: Record<string, unknown> = {};
+  const readFailures: string[] = [];
+
+  /** web 上的正数读数：0 / 负数 / NaN / 非数字一律不算。 */
+  const positive = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined;
+
+  // 标配能力：缺了 = 本该有却没有 → 记名。
+  const cores = positive(input.hardwareConcurrency);
+  if (cores !== undefined) fields.cpuCores = cores;
+  else readFailures.push('cpuCores');
+
+  const dpr = positive(input.devicePixelRatio);
+  if (dpr !== undefined) fields.densityDpi = Math.round(dpr * 160);
+  else readFailures.push('densityDpi');
+
+  // 条件可用：**没给**不算失败（见上第 1 条），给了垃圾才算。
+  if (input.deviceMemoryGB !== undefined) {
+    const gb = positive(input.deviceMemoryGB);
+    if (gb !== undefined) fields.deviceTotalMemoryBytes = gb * 1024 ** 3;
+    else readFailures.push('deviceTotalMemoryBytes');
+  }
+
+  return { fields: fields as Partial<DeviceProfile>, readFailures };
 }
 
 /**
