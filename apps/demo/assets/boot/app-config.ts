@@ -1,5 +1,5 @@
 import { sys } from 'cc';
-import { PREVIEW } from 'cc/env';
+import { EDITOR, PREVIEW } from 'cc/env';
 import type { AppConfig } from '@cck/core';
 import { loadScene } from '@cck/engine';
 import { buildValue } from './build-config';
@@ -105,8 +105,13 @@ export const APP_CONFIG: AppConfig = {
   // 症状是「开发模式预览打不开」，而报错指向一个只有出包才存在的文件，很难往这儿想。
   // 预览的 bundle 直接从预览服务器取，压根没有热更这回事。
   //
-  // ⚠️ 判据用 `PREVIEW` **不用 `env`**：两份 `build-configs/*.json` 里 `env` 都是 `''`，
-  // 而空串按 `buildValue` 的约定 = 没配 ⇒ **正式产物跑起来也是 `env==='dev'`**。
-  // 拿 `env` 当判据会把 web 热更一起关掉，且悄无声息。
-  versionUrl: sys.isNative || PREVIEW ? undefined : 'cck-versions.json',
+  // ⚠️ **两个常量都要，少一个漏一半**：预览引擎包里 `PREVIEW = !EDITOR`，所以
+  // **Game View 下 `PREVIEW` 是 false**（同一事实见 `Bootstrap.ts` 的重播守卫）。
+  // 只写 `PREVIEW` 就只挡住了浏览器预览，Game View 照样去拉 `cck-versions.json` → 404。
+  // 构建产物里两个都被内联成 false，正式 web 包照常拿到这张表。
+  //
+  // ⚠️ 判据不用 `env`：两份 `build-configs/*.json` 里 `env` 都是 `''`，而空串按 `buildValue`
+  // 的约定 = 没配 ⇒ **正式产物跑起来也是 `env==='dev'`**，拿它当判据会把 web 热更一起
+  // 关掉，且悄无声息。
+  versionUrl: sys.isNative || PREVIEW || EDITOR ? undefined : 'cck-versions.json',
 };
