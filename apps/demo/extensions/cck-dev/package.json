@@ -1,0 +1,33 @@
+{
+  "name": "cck-dev",
+  "title": "CCK 开发工具",
+  "package_version": 2,
+  "version": "1.0.0",
+  "author": "creator-core-kit",
+  "description": "编辑器里直接开关 SSH 隧道 —— 预览要连远端服务器时不必再开终端",
+  "main": "./main.js",
+  "contributions": {
+    "menu": [
+      {
+        "path": "i18n:menu.develop",
+        "label": "开启 SSH 隧道",
+        "message": "start-tunnel"
+      },
+      {
+        "path": "i18n:menu.develop",
+        "label": "停止 SSH 隧道",
+        "message": "stop-tunnel"
+      },
+      {
+        "path": "i18n:menu.develop",
+        "label": "SSH 隧道状态",
+        "message": "tunnel-status"
+      }
+    ],
+    "messages": {
+      "start-tunnel": { "methods": ["startTunnel"] },
+      "stop-tunnel": { "methods": ["stopTunnel"] },
+      "tunnel-status": { "methods": ["tunnelStatus"] }
+    }
+  }
+}

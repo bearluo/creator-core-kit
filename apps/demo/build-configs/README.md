@@ -102,6 +102,10 @@ pnpm tunnel             # 前台起隧道，Ctrl+C 停
 pnpm tunnel --dry-run   # 只打印将要执行的 ssh 命令，不连
 ```
 
+**编辑器里也能开**：菜单 **开发者 → 开启 SSH 隧道**（扩展 `extensions/cck-dev`，另有「停止」
+与「状态」两项）。它读同一份配置、自己握 ssh 句柄，关 Creator / 重载扩展时顺手 kill，不留孤儿。
+两边只能开一条，第二条会撞 `Address already in use`。
+
 要多配的只有一个字段 —— `local.json` 顶层的 **`tunnelHost`**（`~/.ssh/config` 里的别名，或
 `user@host`；要免密先 `ssh-copy-id`）。**端口不用另配**：脚本从同一份文件里已有的
 `dispatcherUrl` / `accountLoginUrl` 现解析，加服务端地址时只改那一行，转发自动跟上，

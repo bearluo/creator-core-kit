@@ -14,6 +14,10 @@ pnpm tunnel                    # ① 服务在别的机器上 → 先转发端�
 pnpm build                     # ② 改过 packages/* → 先出 dist，否则预览跑的是旧 engine/core
 ```
 
+①**也可以在编辑器里点**：菜单 **开发者 → 开启 / 停止 / SSH 隧道状态**（扩展
+`extensions/cck-dev`）。它自己握着 ssh 句柄，关菜单、关 Creator、重载扩展都会顺手 kill 掉，
+不留孤儿。两边只能开一条 —— 端口就那两个，第二条会撞 `Address already in use`。
+
 ③ **在 Creator 里打开 `Boot.scene`** —— 预览从**当前打开的场景**启动，不是构建配置里的
 `startScene`。想验完整启动链路（dispatch → hotupdate → shared → 地基 → 大厅）就必须开它。
 
