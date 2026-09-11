@@ -80,7 +80,12 @@ exports.configs = {
       dispatcherUrl: input(
         'Dispatcher 地址',
         '启动握手的 HTTP 地址。⚠️ 真机 / 模拟器请写局域网 IP，别写 127.0.0.1。',
-        'http://172.25.50.139:9100/api/Handshake',
+        'http://127.0.0.1:9100/api/Handshake',
+      ),
+      accountLoginUrl: input(
+        '账号服登录地址',
+        '登录用的 HTTP 地址（只有 POST /api/Login）。⚠️ 同上，真机别写 127.0.0.1。',
+        'http://127.0.0.1:9103/api/Login',
       ),
     },
   },

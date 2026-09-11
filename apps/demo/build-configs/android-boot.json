@@ -32,7 +32,8 @@
       "version": "1.3.0",
       "channel": "",
       "env": "",
-      "dispatcherUrl": ""
+      "dispatcherUrl": "",
+      "accountLoginUrl": ""
     }
   }
 }

@@ -53,6 +53,9 @@ const CATEGORY = 'cck';
  *   `abortLaunch`，**根本走不到热更那一步** —— 想靠热更修一个连不上的握手地址是死循环。
  * - **`appId` 改了丢存档**：它是本机存储 key 的前缀，换一个等于换一个玩家。
  *
+ * `accountLoginUrl` 配错**不是**砖头：认证在地基 boot 里，排在 `hotupdate` **之后**，
+ * 热更那一步照样跑得到，下一版改对即可（代价是要重启一次）。
+ *
  * 其余四个（`vest` / `version` / `channel` / `env`）热更改是安全的。
  */
 
@@ -62,7 +65,14 @@ const CATEGORY = 'cck';
  * 插件是 JS 写的（编辑器扩展不进 TS 编译链），两边对不上没有编译期报错，只会表现为
  * 「面板上填了但不生效」。加字段时两处一起改，并在 `build-config.test.ts` 里补一条断言。
  */
-export type BuildKey = 'vest' | 'appId' | 'version' | 'channel' | 'env' | 'dispatcherUrl';
+export type BuildKey =
+  | 'vest'
+  | 'appId'
+  | 'version'
+  | 'channel'
+  | 'env'
+  | 'dispatcherUrl'
+  | 'accountLoginUrl';
 
 /**
  * 取一个构建期注入的值，没有就用 `fallback`。

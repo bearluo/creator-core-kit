@@ -1,7 +1,7 @@
 # demo · 出包参数注入（`cck-build` 构建插件）
 
 > **状态**：已实现（2026-08-17，命令行 web-mobile 构建实测注入生效）
-> **摘要**：把 `VEST` / `appId` / `version` / `channel` / `env` / `dispatcherUrl` 这六个「一个包一个值」的常量从源码里解出来 —— 出包时在构建面板填或命令行传，经 `settings.json` 落到运行时，不填就用源码默认值。
+> **摘要**：把 `VEST` / `appId` / `version` / `channel` / `env` / `dispatcherUrl` / `accountLoginUrl` 这七个「一个包一个值」的常量从源码里解出来 —— 出包时在构建面板填或命令行传，经 `settings.json` 落到运行时，不填就用源码默认值。服务端地址的源码默认值一律 `127.0.0.1`，真实地址走 `build-configs/local.json`（gitignored），不进库。
 > **何时读**：要出第二个马甲的包、要给 CI 接出包流水线、要往面板上加新的出包参数时。
 > **依赖**：`assets/boot/app-config.ts`（值的消费方）、`docs/research/2026-08-17-creator-build-custom-options.md`（五条通道横评与选型）
 
@@ -43,10 +43,23 @@ options.packages['cck-build']        构建插件读到（extensions/cck-build/b
 | `version` | 输入框 | `1.3.0` | dispatcher 版本闸的输入（低于闸值回 `ACTION_UPDATE`） |
 | `channel` | 输入框 | `dev` | 渠道标识，随握手上报 |
 | `env` | 下拉（dev / staging / prod） | `dev` | 决定版本表 / manifest 地址怎么拼 |
-| `dispatcherUrl` | 输入框 | `http://172.25.50.20:9100/api/Handshake` | 启动握手地址 |
+| `dispatcherUrl` | 输入框 | `http://127.0.0.1:9100/api/Handshake` | 启动握手地址 |
+| `accountLoginUrl` | 输入框 | `http://127.0.0.1:9103/api/Login` | 账号服登录地址（只有 `POST /api/Login`） |
 
 **面板上留空 = 跟随源码默认值。** 这是有意的：默认值只有一处真相（源码），面板不必抄一遍
 —— 抄一遍就会漂移，而漂移的表现是「出的包连错了服」，没有任何报错。
+
+**两个地址的源码默认值一律是 `127.0.0.1`，具体环境的地址不进库。** 本机开发填
+`build-configs/local.json` 的 `packages.cck-build.*`（已 gitignored，`build.mjs` 深合并进
+构建配置），CI / 出包走命令行或面板。⚠️ **真机 / 模拟器上 `127.0.0.1` 指的是设备自己** ——
+连本机服务必须填局域网 IP。⚠️ **编辑器预览不走构建流程**（见 `assets/boot/build-config.ts`），
+`local.json` 那条链对它无效，跑的就是源码默认值 —— 要让预览连别的机器，**转发端口而不是改源码**：
+`pnpm tunnel`，见 [`build-configs/README.md`](../build-configs/README.md#预览怎么连远端服务器转发端口别改源码)。
+
+`accountLoginUrl` 的消费方是 `assets/foundation/server.ts`（地基 bundle），它 `import` 主包的
+`buildValue` —— **方向合法**（`main` 7 > `foundation` 6，闸是 `pnpm check:graph`）。代价是这个值
+因此住在 base 层：改它要热更 base 并**重启**，而地基其余内容热更即生效。配错**不是砖头**，
+认证排在 `hotupdate` 之后，热更那一步照样跑得到。
 
 ## 命令行出多马甲
 
@@ -101,6 +114,9 @@ CDN 上 15 个包只有 `project.manifest` 从 1.0.0 涨到 1.0.1（`--prev` 让
   内容基址改走服务端下发之后，**它是整条热更链路上唯一还烘死在包里的地址** —— 也救不了，
   它是链条起点，没人能告诉你「去哪问」。
 - **`appId` 改了丢存档。** 它是本机存储 key 的前缀，换一个等于换一个玩家（游客号、设置全丢）。
+
+`accountLoginUrl` **不在这两个之列**：认证在地基 boot 里、排在 `hotupdate` **之后**，配错了
+热更那一步照样跑得到，下一版改对即可（代价是要重启一次）。
 
 其余四个（`vest` / `version` / `channel` / `env`）热更改是安全的。
 

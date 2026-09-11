@@ -3,7 +3,18 @@ import { settings } from 'cc';
 
 /** `__clear` 是 vitest 那份 cc 替身独有的（真 `settings` 没有）—— 每条用例之间清干净注入值。 */
 const mockSettings = settings as unknown as { __clear(): void };
-import { buildValue } from '../../assets/boot/build-config';
+import { buildValue, type BuildKey } from '../../assets/boot/build-config';
+
+/** `BuildKey` 编译期就擦除了，运行时要对账得有一份值 —— 少一个会被下面那条对账用例逮到。 */
+const KEYS: readonly BuildKey[] = [
+  'vest',
+  'appId',
+  'version',
+  'channel',
+  'env',
+  'dispatcherUrl',
+  'accountLoginUrl',
+];
 
 /**
  * 构建期注入的取值规则。值得有测试是因为**三条路径的失败都是静默的**：
@@ -34,11 +45,19 @@ describe('buildValue', () => {
     expect(buildValue('vest', 'base')).toBe('base');
   });
 
-  it('六个可注入字段各走各的 key，不互相覆盖', () => {
-    // 插件 options 的键与 BuildKey 对不上时没有编译期报错（插件是 JS），这条是那份契约的
-    // 唯一守卫：改 BuildKey 就会在这里被提醒同步 `extensions/cck-build/builder.js`。
-    const keys = ['vest', 'appId', 'version', 'channel', 'env', 'dispatcherUrl'] as const;
-    for (const k of keys) settings.overrideSettings('cck', k, `v-${k}`);
-    for (const k of keys) expect(buildValue(k, 'fallback')).toBe(`v-${k}`);
+  it('每个可注入字段各走各的 key，不互相覆盖', () => {
+    for (const k of KEYS) settings.overrideSettings('cck', k, `v-${k}`);
+    for (const k of KEYS) expect(buildValue(k, 'fallback')).toBe(`v-${k}`);
+  });
+
+  it('BuildKey 与构建插件的 options 键**逐个对账**', async () => {
+    // 插件是 JS（编辑器扩展不进 TS 编译链），两边对不上**没有编译期报错**，只表现为
+    // 「面板上填了但不生效」—— 出的包连错服，而且一声不吭。所以这里真的去读插件那份声明，
+    // 而不是在测试里再抄一遍键名（抄一遍只能守住「我记得改测试」，守不住插件）。
+    // @ts-expect-error 插件是纯 JS、没有 .d.ts —— 这正是本条用例存在的理由，别为它加 allowJs
+    const plugin = (await import('../../extensions/cck-build/builder.js')) as unknown as {
+      configs: Record<string, { options: Record<string, unknown> }>;
+    };
+    expect(Object.keys(plugin.configs['*'].options).sort()).toEqual(Array.from(KEYS).sort());
   });
 });

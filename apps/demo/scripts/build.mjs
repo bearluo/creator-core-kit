@@ -84,7 +84,8 @@ if (!existsSync(localPath))
 
 const local = read(localPath);
 // ⚠️ 本机路径类的 key 必须在这里解构掉——`localOpts` 是整个塞进 Creator 构建配置的。
-const { creatorPath, cdnUrl, cdnDir, webDir, mapsDir, ...localOpts } = local;
+// `tunnelHost` 同理（只给 `scripts/tunnel.mjs` 用，跟构建无关），漏了就会进产物配置。
+const { creatorPath, cdnUrl, cdnDir, webDir, mapsDir, tunnelHost, ...localOpts } = local;
 let cfg = merge(read(basePath), localOpts);
 
 // —— 命令行覆盖（马甲等正交维度不另存配置文件）——

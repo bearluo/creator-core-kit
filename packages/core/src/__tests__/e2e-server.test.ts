@@ -10,17 +10,23 @@ import { createTimer } from '../timer';
  * 单测里那些假 socket 只证明状态机自洽；帧头字节序、seq 是否被原样回传、
  * dispatcher 的信封形状这些「两边约定」，只有真服务器能证。
  *
- * **服务器没起就整体跳过**（不看环境变量，免得还要记一条 pnpm 脚本）：
- * 局域网测试机 dev139 上 `docker compose up -d`（server-core-kit 仓）后再跑 `pnpm test` 即自动生效，
- * CI 上（够不着这个内网地址）恒跳过。
+ * **服务器没起就整体跳过**（探活说了算，不必另记一条 pnpm 脚本）：
+ * `docker compose up -d`（server-core-kit 仓）后再跑 `pnpm test` 即自动生效，CI 上恒跳过。
  */
 
 /**
- * dev139 —— 2026-08-05 服务从开发本机迁到这台局域网测试机；**2026-08-17 那台机的 IP 从 .139
- * 改到了 .20**（别名仍叫 dev139）。IP 过期期间本文件一直静默跳过 —— `/healthz` 连不上与
- * 「服务器没起」是同一个表现，这正是「跳过」这种设计的代价，改地址时记得回来跑一次确认它真在跑。
+ * 默认打**本机**那份 server-core-kit；服务在别的机器上就
+ * `CCK_DISPATCHER=http://<host>:9100 pnpm test`（地址不进库）。
+ *
+ * 读法是 `globalThis` 上现探而不是 `process.env` —— core 没有 `@types/node`（`lib` 只有
+ * ES2021 + DOM），这条铁律不为一个测试开口子。同款写法见 `engine` 的 `runningBaseEntry()`。
+ *
+ * ⚠️ **地址错了和「服务器没起」是同一个表现**（整份静默跳过）：曾经有一段时间这里的 IP
+ * 过期，e2e 一直在跳过而没人发现。改地址后回来确认它真的跑了一次，别信「全绿」。
  */
-const DISPATCHER = 'http://172.25.50.20:9100';
+const DISPATCHER =
+  (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+    ?.CCK_DISPATCHER ?? 'http://127.0.0.1:9100';
 /** dispatcher 的版本表里 1.3.0 起才放行，低于它会拿到 ACTION_UPDATE。 */
 const APP_VERSION = '1.3.0';
 /** 契约版本由项目提供 —— core 不含协议常量（ADR-0011）。 */

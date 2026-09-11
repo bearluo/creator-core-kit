@@ -75,6 +75,52 @@ Creator 会用偏好设置里的值补齐缺的字段。
 同理不写 `logDest`、`buildEngineParam`、`cocosParams` 这类编辑器内部字段——面板「导出配置」吐出来的
 那一大坨里绝大多数是构建期算出来的，存下来只会过期。
 
+**服务端地址同理，也只住 `local.json`。** 入库的那几份配置里 `packages.cck-build` 的
+`dispatcherUrl` / `accountLoginUrl` 一律留空（= 跟随源码默认值，而源码默认值一律 `127.0.0.1`）；
+本机连哪台服务器写进 `local.json`：
+
+```jsonc
+"packages": {
+  "cck-build": {
+    "dispatcherUrl": "http://<你的服务器>:9100/api/Handshake",
+    "accountLoginUrl": "http://<你的服务器>:9103/api/Login"
+  }
+}
+```
+
+`build.mjs` 把 `local.json` **深合并**进构建配置，所以这两个键会盖掉入库配置里的空串。
+⚠️ **真机 / 模拟器上 `127.0.0.1` 指的是设备自己**——连本机服务必须填局域网 IP。
+字段全表见 [`docs/build-plugin.md`](../docs/build-plugin.md#字段)。
+
+### 预览怎么连远端服务器：转发端口，别改源码
+
+**编辑器预览不走构建流程**（见 `assets/boot/build-config.ts`），`local.json` 那条链对它无效，
+跑的就是源码里的 `127.0.0.1`。服务在别的机器上时，**在本机把那几个端口转过去**：
+
+```bash
+pnpm tunnel             # 前台起隧道，Ctrl+C 停
+pnpm tunnel --dry-run   # 只打印将要执行的 ssh 命令，不连
+```
+
+要多配的只有一个字段 —— `local.json` 顶层的 **`tunnelHost`**（`~/.ssh/config` 里的别名，或
+`user@host`；要免密先 `ssh-copy-id`）。**端口不用另配**：脚本从同一份文件里已有的
+`dispatcherUrl` / `accountLoginUrl` 现解析，加服务端地址时只改那一行，转发自动跟上，
+不会出现「加了服务忘了加转发」。地址已经指向 `127.0.0.1` 时它会说「不需要隧道」直接退出。
+
+隧道在的时候 `127.0.0.1` **就是**那台服务器，编辑器预览 / 浏览器预览 / `pnpm test` 的
+`e2e-server.test.ts` 一起生效，源码一个字都不用改（实测：`/healthz` 200，全量测试从
+`1288 passed | 2 skipped` 变成 `1290 passed`）。Windows 上想免掉常驻窗口可以改用
+`netsh interface portproxy add v4tov4 …`，**那条要管理员**，换来的是一次配置永久有效。
+
+> ⚠️ `tunnelHost` 必须在 `scripts/build.mjs` 的解构里被吃掉 —— `local.json` 剩下的顶层键是
+> **整个**塞进 Creator 构建配置的，漏了它就会跟着进构建配置。
+
+**不要为此改源码默认值**——改了迟早误提交，而它同时是开源用户 clone 下来的默认值。
+**也不要走 Creator 的项目设置 / 自定义宏（`cc/userland/macro`）**：那些存在
+`settings/v2/packages/*.json`，是**入库**的，地址照样被提交上去；只有 `profiles/` 不入库，
+而它是编辑器个人偏好、运行时读不到。五条通道横评见
+[`docs/research/2026-08-17-creator-build-custom-options.md`](../../../docs/research/2026-08-17-creator-build-custom-options.md)。
+
 ## 加一份新配置
 
 文件名**就是** `build.mjs` 的参数（`node scripts/build.mjs web-mobile-boot`）；`android-` 前缀的那两份

@@ -61,7 +61,12 @@ describe('声明 vs 现实', () => {
   it('源码里的每条跨包 import 都在表里有对应的 needs', () => {
     const missing = scanCodeEdges(ASSETS)
       // `from` 没登记 = 主包（AOT，不在表里），它的依赖由优先级单调那道闸管
-      .filter((e) => registered.has(e.from) && !graph.needsOf(e.from).includes(e.to))
+      // `to` 是主包同理，**而且必须排除**：主包恒在且不可 `load`，把 'main' 写进某个包的
+      // `needs` 会让 `load` 去装一个装不了的包。这类边（如 `foundation/server.ts` 取
+      // `boot/build-config` 的 `buildValue`）的合法性由 `pnpm check:graph` 的优先级单调管。
+      .filter(
+        (e) => registered.has(e.from) && e.to !== 'main' && !graph.needsOf(e.from).includes(e.to),
+      )
       .map((e) => `${e.from} → ${e.to}（${e.file}）`);
     expect(missing).toEqual([]);
   });

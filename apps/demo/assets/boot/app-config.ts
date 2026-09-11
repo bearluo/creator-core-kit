@@ -82,11 +82,14 @@ export const APP_CONFIG: AppConfig = {
     enter: () => loadScene('Lobby', { bundle: 'lobby' }),
   },
   dispatcher: {
-    // 局域网测试机 dev139（server-core-kit 仓 `docker compose up -d`；2026-08-05 从开发本机迁来）。
-    // ⚠️ 写局域网 IP 而不是 127.0.0.1：真机 / 模拟器打开时 localhost 指的是它自己。
-    // ⚠️ 那台机的 IP 从 .139 改到了 **.20**（别名仍叫 dev139）—— 2026-08-17 实测 .139 已不可达。
-    // 这类会过期的地址正是构建插件存在的理由：换服现在不必改源码，出包时填一下即可。
-    url: buildValue('dispatcherUrl', 'http://172.25.50.20:9100/api/Handshake'),
+    // **源码里只留 `127.0.0.1`**：任何人 clone 下来在本机起一份 server-core-kit 就是对的。
+    // 具体环境的地址（局域网测试机 / 预发 / 线上）是**出包时的事**，不进库 —— 填
+    // `build-configs/local.json` 的 `packages.cck-build.dispatcherUrl`（已 gitignored，
+    // 深合并进构建配置），或在构建面板上填。这类会过期的地址正是构建插件存在的理由。
+    // ⚠️ **真机 / 模拟器上 `127.0.0.1` 指的是设备自己** —— 连本机服务必须填局域网 IP。
+    // ⚠️ **编辑器预览不走构建流程**（见 `build-config.ts`），跑的就是下面这个 fallback。
+    //    要让预览连别的机器，在本机做一次端口转发把 127.0.0.1:9100 指过去，别改这一行。
+    url: buildValue('dispatcherUrl', 'http://127.0.0.1:9100/api/Handshake'),
     // 契约版本来自 kit-proto，**由项目提供** —— kit 里不出现任何协议常量（ADR-0011）。
     protoVersion: 1,
     platform: sys.isNative ? String(sys.os).toLowerCase() : 'web',
