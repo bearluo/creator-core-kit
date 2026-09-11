@@ -29,6 +29,13 @@
 |---|---|---|
 | `ICrashReporter` 接口 + DI token | 业务侧真的出现「主动上报一个捕获到的错误」的调用点时 | 现在一个都没有。加接口是非破坏性变更 |
 | `setUser(id)` / `setCustomKey()` 这类命令式 API | 永不 | 命令式意味着上报层要存状态、还要有人记得在登录后调它 —— 忘了就是**静默**少一块信息。getter 现取没有这个失败模式 |
+
+> **上下文里的值住在别的 bundle 时也是拉不是推。** 典型是玩家 ID：登录态往往在某个可热更的
+> 业务 bundle 里，而装钩子的代码在主包、`import` 不得（那会把那个 bundle 拽进 base）。做法是
+> **给那个 bundle 的入口类加一个静态读取器，主包按类名现问**（`js.getClassByName`）——
+> 拿不到就是空，**空是正常状态不是故障**：早于登录的崩溃照样要报出去，只是少这一块。
+> 反过来「登录成功时推一次」会退回上面那一行否决掉的失败模式。接入方的实例见
+> `apps/demo/docs/bundle-layout.md`。
 | 单会话内的重复次数 | 永不（见决策 #5） | 带 `seq` 会污染聚合键，把一个 issue 拆成多个，毁掉「影响用户数」 |
 | 致命崩溃（fatal / OOM）的 JS 堆栈 | 有需求时 | `error.stack` 本就不覆盖它们；那条路只剩 C++ 的 `_nativeExceptionCallback`，而它拿到的 `stack` 是 `"(no stack information)"` |
 | sourcemap 自动还原 | 需要读线上堆栈时 | 两家平台都不还原 JS，只能自己做。见 `docs/research/2026-09-03-cocos-js-stack-reporting.md` |

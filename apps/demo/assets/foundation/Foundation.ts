@@ -1,9 +1,9 @@
 import { _decorator } from 'cc';
-import { createBundleGraph, getBundleManager, type LaunchContext } from '@cck/core';
+import { createBundleGraph, getBundleManager, getRootContainer, type LaunchContext } from '@cck/core';
 import { BUNDLE_GRAPH } from './bundles';
 import { registerCatalogUIs } from './catalog';
 import { installGameHost } from './game/host';
-import { authenticate } from './net/auth';
+import { AUTH_SESSION, authenticate } from './net/auth';
 import { connectNetwork } from './net/connect';
 import { ACCOUNT_LOGIN_URL } from './server';
 
@@ -56,5 +56,18 @@ export class DemoFoundation {
     // 排在认证之后：GameHost 的玩家身份取自认证结果；成绩表也在这一下读进内存（此后同步可读）。
     await installGameHost();
     console.log('[CCK-FOUNDATION] 地基就绪：依赖表 / 协议 / 连接 / 认证 / 模块清单 / 子游戏契约');
+  }
+
+  /**
+   * 当前玩家 ID —— **主包问「这是谁」的那条缝**（崩溃上报的上下文现取）。
+   *
+   * 静态而非实例方法：主包手里没有本类的实例（`boot()` 那个活在 `launchSteps` 的闭包里），
+   * 而它要的东西本就在 DI 根容器里，这里不持有任何状态。主包侧见
+   * `boot/foundation-api.ts` 的 `foundationPlayerId()`。
+   *
+   * 还没登录 / 重连后正在重认证 → 空串。**这是正常状态不是故障**：早于登录的崩溃照样要报出去。
+   */
+  static playerId(): string {
+    return getRootContainer().tryResolve(AUTH_SESSION)?.playerId ?? '';
   }
 }

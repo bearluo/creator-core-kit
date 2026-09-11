@@ -45,7 +45,12 @@ import {
   resolutionModule,
 } from '@cck/engine';
 import { APP_CONFIG, VEST } from './app-config';
-import { FOUNDATION_BUNDLE, FOUNDATION_CLASS, type FoundationApi } from './foundation-api';
+import {
+  FOUNDATION_BUNDLE,
+  FOUNDATION_CLASS,
+  foundationPlayerId,
+  type FoundationApi,
+} from './foundation-api';
 import { createLaunchOverlay } from './LaunchOverlay';
 
 const { ccclass, property } = _decorator;
@@ -215,6 +220,10 @@ export class Bootstrap extends Component {
       ver: APP_CONFIG.version,
       apk: baseStamp(packagedBaseEntry()) ?? '-',
       base: baseStamp(runningBaseEntry()) ?? '-',
+      // 「这是谁」——问地基要，走的还是 `js.getClassByName` 那条唯一接缝（登录态在地基层，
+      // 主包 import 不得）。地基没装 / 没登录 / 重连后正在重认证都会是空串，**那是正常状态**：
+      // 早于登录的崩溃照样要报出去，只是少这一块。
+      player: foundationPlayerId() || '-',
       scene: director.getScene()?.name ?? '-',
     }));
 
