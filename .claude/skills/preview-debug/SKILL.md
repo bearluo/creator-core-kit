@@ -120,5 +120,24 @@ pnpm tunnel --dry-run    # 只打印将要执行的命令，不连
 
 第二种最阴：隧道明明开着，偏偏某一个服务连不上，而 ssh 一个字都不会说。
 
+> ⚠️ **端口被占在 Windows 上可能报 `Permission denied`，不是 `Address already in use`。**
+> 对一个已被独占绑定的端口再 bind，Winsock 返回 `WSAEACCES`，msys 的 ssh 就翻成前者 ——
+> 同一个原因两种说法，照着「Permission denied」去查权限、查防火墙会全跑偏。
+> 判据：`netstat -ano | findstr :9100` 查得到监听者就是**被占**；查不到才去看
+> `netsh interface ipv4 show excludedportrange protocol=tcp`（Hyper-V / WSL 的系统保留范围，
+> 那才是真正的「绑不了」，解法是换端口或调整动态范围）。node 侧不受这个影响，
+> `portBusy()` 拿到的是正常的 `EADDRINUSE`，所以 `pnpm tunnel` 的先查再起判断是准的。
+
+## 改了扩展代码怎么生效
+
+扩展加载后**改文件不会自动重载**，菜单点到的还是旧那份 —— 表现为「明明加了检查却还是去撞端口」。
+重启 Creator 太重，用扩展管理器重载，或者在编辑器上下文里跑：
+
+```js
+const p = 'E:/work/creator-core-kit/apps/demo/extensions/cck-dev';
+await Editor.Package.disable(p, true);
+await Editor.Package.enable(p, true);
+```
+
 编辑器菜单走同一份判断（扩展读 `--json` 里的 `busy`），所以终端里跑着一条、又去点菜单，
 只会得到一句「已经有一条隧道在转发了」，不会把那条撞掉，也不会留下误报。

@@ -109,8 +109,16 @@ exports.methods = {
     });
     proc.on('exit', (code) => {
       // 正常停止走 stopTunnel（那里已把 proc 置空），所以这里还拿得到 proc 就是**意外退出**。
+      // ⚠️ 端口被占在 Windows 上可能报 **Permission denied** 而不是 Address already in use：
+      // 对已被独占绑定的端口再 bind，Winsock 返回 WSAEACCES，msys 的 ssh 就翻成前者。
+      // 同一个原因两种说法，搜错误信息时容易被带偏。
       if (proc && code !== 0)
-        tell('error', 'SSH 隧道断了', `退出码 ${code}，详见 Console（常见是端口被占）`);
+        tell(
+          'error',
+          'SSH 隧道断了',
+          `退出码 ${code}，详见 Console。端口被占是最常见的原因 —— ` +
+            'Windows 上它可能报 Permission denied 而不是 Address already in use。',
+        );
       proc = null;
     });
 
