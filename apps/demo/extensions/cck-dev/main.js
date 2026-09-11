@@ -79,6 +79,24 @@ exports.methods = {
       return;
     }
 
+    // 端口被占就别去撞：ssh 只会甩一句 `Address already in use` 然后 255。脚本已经查好了
+    // 是谁占的，这里直接说人话 —— 常见的是自己在终端里跑过 `pnpm tunnel` 忘了停。
+    const busy = plan.busy ?? [];
+    if (busy.length > 0) {
+      const lines = busy.map(
+        (b) => `127.0.0.1:${b.port} 被占（${b.by ? `${b.by.name}, pid ${b.by.pid}` : '查不到是谁'}）`,
+      );
+      const allSsh = busy.every((b) => /^ssh(\.exe)?$/i.test(b.by?.name ?? ''));
+      if (allSsh && busy.length === plan.forwards.length) {
+        // 已经有一条在转发了 —— 目的已达到，别报成错误（多半是终端里跑着 `pnpm tunnel`）。
+        tell('info', '已经有一条隧道在转发了', `${lines.join('\n')}\n直接用就行，不必重开。`);
+        return;
+      }
+      tell('error', '端口被占，隧道没起', `${lines.join('\n')}\n详见 Console`);
+      console.warn(`${TAG} 占用详情：${JSON.stringify(busy)}`);
+      return;
+    }
+
     proc = spawn('ssh', plan.args, { cwd: Editor.Project.path, windowsHide: true });
 
     // ssh -N 连上之后一声不响，**失败才有输出**（端口占用、认证失败、主机不可达）。
