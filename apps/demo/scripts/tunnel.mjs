@@ -45,7 +45,7 @@ const host = local.tunnelHost;
 if (typeof host !== 'string' || host === '')
   throw new Error(
     'local.json 里缺 tunnelHost —— 填 ~/.ssh/config 里的别名或 user@host（例：' +
-      '"tunnelHost": "dev139"）。要免密，先 ssh-copy-id 推公钥。',
+      '"tunnelHost": "my-dev-box"）。要免密，先 ssh-copy-id 推公钥。',
   );
 
 /**
