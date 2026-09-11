@@ -47,6 +47,50 @@ function tell(kind, message, detail) {
   }
 }
 
+/**
+ * 跑一次 `tunnel.mjs --json` 拿到「要转哪些端口 / 现在谁占着」。出错时已经提示过，返回 undefined。
+ *
+ * 参数现算：主机名与端口都住在 gitignored 的 local.json 里，这个扩展一个地址都不硬编码。
+ */
+function readPlan() {
+  const r = spawnSync('node', [scriptPath(), '--json'], {
+    cwd: Editor.Project.path,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (r.status !== 0) {
+    tell('error', '算不出隧道参数', (r.stderr || r.stdout || '').trim() || `退出码 ${r.status}`);
+    return undefined;
+  }
+  try {
+    return JSON.parse(r.stdout.trim().split('\n').pop());
+  } catch (e) {
+    tell('error', '隧道参数不是合法 JSON', String(e));
+    return undefined;
+  }
+}
+
+const isSsh = (name) => /^ssh(\.exe)?$/i.test(name ?? '');
+
+/** 占着我们这几个端口的 ssh 进程，按 pid 去重（一条隧道通常同时占着两个端口）。 */
+function sshOwners(plan) {
+  const m = new Map();
+  for (const b of plan.busy ?? []) if (b.by && isSsh(b.by.name)) m.set(b.by.pid, b.by);
+  return [...m.values()];
+}
+
+function killPid(pid) {
+  if (process.platform === 'win32') {
+    return spawnSync('taskkill', ['/PID', String(pid), '/F'], { encoding: 'utf8' }).status === 0;
+  }
+  try {
+    process.kill(Number(pid));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 exports.methods = {
   startTunnel() {
     // `exitCode !== null` = 已经死了但 exit 事件还没派发完，那种不算「开着」。
@@ -55,24 +99,8 @@ exports.methods = {
       return;
     }
 
-    // 参数现算：主机名与端口都住在 gitignored 的 local.json 里，这里一个地址都不硬编码。
-    const r = spawnSync('node', [scriptPath(), '--json'], {
-      cwd: Editor.Project.path,
-      encoding: 'utf8',
-      windowsHide: true,
-    });
-    if (r.status !== 0) {
-      tell('error', '算不出隧道参数', (r.stderr || r.stdout || '').trim() || `退出码 ${r.status}`);
-      return;
-    }
-
-    let plan;
-    try {
-      plan = JSON.parse(r.stdout.trim().split('\n').pop());
-    } catch (e) {
-      tell('error', '隧道参数不是合法 JSON', String(e));
-      return;
-    }
+    const plan = readPlan();
+    if (!plan) return;
 
     if (!plan.args || plan.args.length === 0) {
       tell('info', '不需要隧道', '服务端地址都指向本机（或没配）');
@@ -86,7 +114,7 @@ exports.methods = {
       const lines = busy.map(
         (b) => `127.0.0.1:${b.port} 被占（${b.by ? `${b.by.name}, pid ${b.by.pid}` : '查不到是谁'}）`,
       );
-      const allSsh = busy.every((b) => /^ssh(\.exe)?$/i.test(b.by?.name ?? ''));
+      const allSsh = busy.every((b) => isSsh(b.by?.name));
       if (allSsh && busy.length === plan.forwards.length) {
         // 已经有一条在转发了 —— 目的已达到，别报成错误（多半是终端里跑着 `pnpm tunnel`）。
         tell('info', '已经有一条隧道在转发了', `${lines.join('\n')}\n直接用就行，不必重开。`);
@@ -133,26 +161,101 @@ exports.methods = {
     }, 1500);
   },
 
-  stopTunnel() {
-    if (!proc) {
-      tell('info', 'SSH 隧道没有开着', '');
+  async stopTunnel() {
+    if (proc && proc.exitCode === null) {
+      const p = proc;
+      proc = null; // 先置空，免得 exit 回调把正常停止报成「断了」
+      p.kill();
+      tell('info', 'SSH 隧道已停', '端口已释放');
       return;
     }
-    const p = proc;
-    proc = null; // 先置空，免得 exit 回调把正常停止报成「断了」
-    p.kill();
-    tell('info', 'SSH 隧道已停', '端口已释放');
+    proc = null;
+
+    // 本扩展没起过 —— 但端口上很可能有**别人起的**那条（终端里的 `pnpm tunnel`，或本扩展
+    // 重载之前起的那条：重载会丢掉 proc 句柄，进程却还活着）。「开启」认得出它、「停止」
+    // 却说「没有开着」，是自相矛盾的 —— 两个菜单必须对同一个事实说同一句话。
+    const plan = readPlan();
+    if (!plan) return;
+
+    const busy = plan.busy ?? [];
+    if (busy.length === 0) {
+      tell('info', 'SSH 隧道没有开着', '要转的端口都是空的');
+      return;
+    }
+
+    const owners = sshOwners(plan);
+    const portList = busy.map((b) => b.port).join(' / ');
+    if (owners.length === 0) {
+      const who = busy
+        .map((b) => `127.0.0.1:${b.port} ← ${b.by ? `${b.by.name}, pid ${b.by.pid}` : '查不到是谁'}`)
+        .join('\n');
+      tell('info', '端口被占，但占用者不是 ssh', `${who}\n不是隧道，没动它。`);
+      return;
+    }
+
+    // 要杀的是**别的进程**，不可逆 —— 先问。它确实占着我们要用的端口，但也可能是手工开的、
+    // 还转发着别的东西的 ssh，不该替人做主。
+    const list = owners.map((o) => `${o.name}, pid ${o.pid}`).join('\n');
+    let answer;
+    try {
+      answer = await Editor.Dialog.warn('要停掉这条不是本扩展起的隧道吗？', {
+        title: 'SSH 隧道',
+        detail: `${list}\n\n它占着 ${portList}。多半是终端里跑着 pnpm tunnel，或本扩展重载前起的那条。`,
+        buttons: ['停掉它', '取消'],
+        default: 1,
+      });
+    } catch {
+      answer = { response: 1 }; // 弹不出框就当没答应，别在无人值守时乱杀进程
+    }
+    if (answer?.response !== 0) {
+      tell('info', '没有停', `隧道还开着（${list.replace(/\n/g, '；')}）`);
+      return;
+    }
+
+    const failed = owners.filter((o) => !killPid(o.pid));
+    if (failed.length > 0) {
+      tell('error', '没能全停掉', `还剩：${failed.map((o) => `pid ${o.pid}`).join('、')}`);
+      return;
+    }
+    // 杀完复查：说「已停」得有依据，别只凭 taskkill 的退出码。
+    const after = readPlan();
+    const stillBusy = after?.busy?.length ?? 0;
+    tell(
+      'info',
+      'SSH 隧道已停',
+      stillBusy === 0 ? '端口已释放' : `⚠️ 还有 ${stillBusy} 个端口被占，详见「SSH 隧道状态」`,
+    );
   },
 
   tunnelStatus() {
-    const r = spawnSync('node', [scriptPath(), '--dry-run'], {
-      cwd: Editor.Project.path,
-      encoding: 'utf8',
-      windowsHide: true,
-    });
-    const plan = (r.stdout || '').trim() || (r.stderr || '').trim();
-    const live = proc && proc.exitCode === null;
-    tell('info', live ? `SSH 隧道开着（pid ${proc.pid}）` : 'SSH 隧道没有开着', plan);
+    const plan = readPlan();
+    if (!plan) return;
+
+    if (!plan.forwards || plan.forwards.length === 0) {
+      tell('info', '不需要隧道', '服务端地址都指向本机（或没配）');
+      return;
+    }
+
+    const lines = plan.forwards.map((f) => `127.0.0.1:${f.port} → ${f.remote}（${f.key}）`);
+    const busy = plan.busy ?? [];
+    const owners = sshOwners(plan);
+
+    // 三态，别再只看 proc：本扩展起的 / 别人起的 / 没开。
+    let head;
+    if (proc && proc.exitCode === null) head = `SSH 隧道开着（本扩展起的，pid ${proc.pid}）`;
+    else if (owners.length > 0)
+      head = `SSH 隧道开着（别处起的，${owners.map((o) => `pid ${o.pid}`).join('、')}）`;
+    else if (busy.length > 0) head = '端口被占，但占用者不是 ssh';
+    else head = 'SSH 隧道没有开着';
+
+    const detail =
+      busy.length > 0 && busy.length < plan.forwards.length
+        ? `${lines.join('\n')}\n⚠️ 只转了一部分：少了 ${plan.forwards
+            .filter((f) => !busy.some((b) => b.port === f.port))
+            .map((f) => f.port)
+            .join(' / ')}`
+        : lines.join('\n');
+    tell('info', head, detail);
   },
 };
 
