@@ -10,7 +10,7 @@
 
 ### AssetLoadOptions
 
-Defined in: [packages/core/src/asset/asset-loader.ts:15](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L15)
+Defined in: [packages/core/src/asset/asset-loader.ts:15](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L15)
 
 AssetLoader（IAssetLoader）—— 资源粒度加载/释放。引用计数 + 并发去重 + group 批量释放，
 account 全在 core（纯逻辑可测），经异步 IAssetSource 接缝落到引擎。设计见 docs/modules/asset-manager.md。
@@ -21,7 +21,7 @@ account 全在 core（纯逻辑可测），经异步 IAssetSource 接缝落到�
 
 > `optional` **bundle**: `string`
 
-Defined in: [packages/core/src/asset/asset-loader.ts:17](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L17)
+Defined in: [packages/core/src/asset/asset-loader.ts:17](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L17)
 
 bundle name，缺省 'resources'（内置 bundle）。
 
@@ -29,7 +29,7 @@ bundle name，缺省 'resources'（内置 bundle）。
 
 > `optional` **group**: `string`
 
-Defined in: [packages/core/src/asset/asset-loader.ts:21](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L21)
+Defined in: [packages/core/src/asset/asset-loader.ts:21](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L21)
 
 归组，供 releaseGroup 批量回收（scope 语义：整组强制拆除）。
 
@@ -37,7 +37,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:21](https://hlgit.5518game.
 
 > `optional` **onProgress**: (`finished`, `total`) => `void`
 
-Defined in: [packages/core/src/asset/asset-loader.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L22)
+Defined in: [packages/core/src/asset/asset-loader.ts:22](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L22)
 
 ###### Parameters
 
@@ -57,7 +57,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:22](https://hlgit.5518game.
 
 > `optional` **type**: [`AssetTypeToken`](asset.md#assettypetoken)
 
-Defined in: [packages/core/src/asset/asset-loader.ts:19](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L19)
+Defined in: [packages/core/src/asset/asset-loader.ts:19](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L19)
 
 资源类型 token，缺省 'asset'（loadAny）。
 
@@ -65,7 +65,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:19](https://hlgit.5518game.
 
 ### AssetSourceOptions
 
-Defined in: [packages/core/src/asset/asset-source.ts:24](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L24)
+Defined in: [packages/core/src/asset/asset-source.ts:24](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L24)
 
 引擎侧加载单个/目录资源的选项。
 
@@ -75,13 +75,13 @@ Defined in: [packages/core/src/asset/asset-source.ts:24](https://hlgit.5518game.
 
 > `optional` **bundle**: `string`
 
-Defined in: [packages/core/src/asset/asset-source.ts:25](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L25)
+Defined in: [packages/core/src/asset/asset-source.ts:25](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L25)
 
 ##### onProgress()?
 
 > `optional` **onProgress**: (`finished`, `total`) => `void`
 
-Defined in: [packages/core/src/asset/asset-source.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L27)
+Defined in: [packages/core/src/asset/asset-source.ts:27](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L27)
 
 ###### Parameters
 
@@ -101,13 +101,13 @@ Defined in: [packages/core/src/asset/asset-source.ts:27](https://hlgit.5518game.
 
 > `optional` **type**: [`AssetTypeToken`](asset.md#assettypetoken)
 
-Defined in: [packages/core/src/asset/asset-source.ts:26](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L26)
+Defined in: [packages/core/src/asset/asset-source.ts:26](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L26)
 
 ***
 
 ### DirAssetItem\<T\>
 
-Defined in: [packages/core/src/asset/asset-source.ts:31](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L31)
+Defined in: [packages/core/src/asset/asset-source.ts:31](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L31)
 
 loadDir 的一项：路径 + 资源值（core 需要各自 path 做引用计数键）。
 
@@ -121,19 +121,19 @@ loadDir 的一项：路径 + 资源值（core 需要各自 path 做引用计数�
 
 > **asset**: `T`
 
-Defined in: [packages/core/src/asset/asset-source.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L33)
+Defined in: [packages/core/src/asset/asset-source.ts:33](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L33)
 
 ##### path
 
 > **path**: `string`
 
-Defined in: [packages/core/src/asset/asset-source.ts:32](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L32)
+Defined in: [packages/core/src/asset/asset-source.ts:32](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L32)
 
 ***
 
 ### IAssetLoader
 
-Defined in: [packages/core/src/asset/asset-loader.ts:25](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L25)
+Defined in: [packages/core/src/asset/asset-loader.ts:25](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L25)
 
 #### Methods
 
@@ -141,7 +141,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:25](https://hlgit.5518game.
 
 > **get**\<`T`\>(`path`, `opts`?): `undefined` \| `T`
 
-Defined in: [packages/core/src/asset/asset-loader.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L39)
+Defined in: [packages/core/src/asset/asset-loader.ts:39](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L39)
 
 取已加载缓存（未加载/加载中→undefined）。
 
@@ -173,7 +173,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:39](https://hlgit.5518game.
 
 > **load**\<`T`\>(`path`, `opts`?): `Promise`\<`T`\>
 
-Defined in: [packages/core/src/asset/asset-loader.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L27)
+Defined in: [packages/core/src/asset/asset-loader.ts:27](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L27)
 
 加载/引用一个资源；计数+1。已加载→命中缓存+计数；并发同键→共享 inflight；失败→reject（回滚）。
 
@@ -199,7 +199,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:27](https://hlgit.5518game.
 
 > **loadDir**\<`T`\>(`dir`, `opts`?): `Promise`\<`T`[]\>
 
-Defined in: [packages/core/src/asset/asset-loader.ts:29](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L29)
+Defined in: [packages/core/src/asset/asset-loader.ts:29](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L29)
 
 加载一个目录下资源（每个子资源各自建条目、计数、并组）。
 
@@ -225,7 +225,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:29](https://hlgit.5518game.
 
 > **loadRemote**\<`T`\>(`url`, `opts`?): `Promise`\<`T`\>
 
-Defined in: [packages/core/src/asset/asset-loader.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L33)
+Defined in: [packages/core/src/asset/asset-loader.ts:33](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L33)
 
 远程散图/音/文本（不走 bundle）。
 
@@ -251,7 +251,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:33](https://hlgit.5518game.
 
 > **preload**(`path`, `opts`?): `Promise`\<`void`\>
 
-Defined in: [packages/core/src/asset/asset-loader.ts:31](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L31)
+Defined in: [packages/core/src/asset/asset-loader.ts:31](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L31)
 
 预热（加载进缓存但不计业务引用，弱缓存）；后续 load 命中即转正、不重复加载。忽略 group。
 
@@ -273,7 +273,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:31](https://hlgit.5518game.
 
 > **release**(`path`, `opts`?): `void`
 
-Defined in: [packages/core/src/asset/asset-loader.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L35)
+Defined in: [packages/core/src/asset/asset-loader.ts:35](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L35)
 
 解引用；计数归零→真释放并从所有 group 移除。未加载键→告警 no-op。
 
@@ -301,7 +301,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:35](https://hlgit.5518game.
 
 > **releaseGroup**(`group`): `void`
 
-Defined in: [packages/core/src/asset/asset-loader.ts:37](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L37)
+Defined in: [packages/core/src/asset/asset-loader.ts:37](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L37)
 
 批量释放：把该组内全部资源强制拆除（scope 语义，忽略各自 refCount）。
 
@@ -319,7 +319,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:37](https://hlgit.5518game.
 
 ### IAssetSource
 
-Defined in: [packages/core/src/asset/asset-source.ts:41](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L41)
+Defined in: [packages/core/src/asset/asset-source.ts:41](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L41)
 
 AssetLoader 的引擎 IO 接缝：只做原子「真加载一个 / 真加载目录 / 真加载远程 / 真释放一个」，零 cc。
 engine 实现走 cc 的 bundle.load / bundle.loadDir / assetManager.loadRemote / addRef·decRef；
@@ -331,7 +331,7 @@ engine 实现走 cc 的 bundle.load / bundle.loadDir / assetManager.loadRemote /
 
 > **loadDir**\<`T`\>(`dir`, `opts`?): `Promise`\<[`DirAssetItem`](asset.md#dirassetitemt)\<`T`\>[]\>
 
-Defined in: [packages/core/src/asset/asset-source.ts:43](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L43)
+Defined in: [packages/core/src/asset/asset-source.ts:43](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L43)
 
 ###### Type Parameters
 
@@ -355,7 +355,7 @@ Defined in: [packages/core/src/asset/asset-source.ts:43](https://hlgit.5518game.
 
 > **loadOne**\<`T`\>(`path`, `opts`?): `Promise`\<`T`\>
 
-Defined in: [packages/core/src/asset/asset-source.ts:42](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L42)
+Defined in: [packages/core/src/asset/asset-source.ts:42](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L42)
 
 ###### Type Parameters
 
@@ -379,7 +379,7 @@ Defined in: [packages/core/src/asset/asset-source.ts:42](https://hlgit.5518game.
 
 > **loadRemote**\<`T`\>(`url`, `opts`?): `Promise`\<`T`\>
 
-Defined in: [packages/core/src/asset/asset-source.ts:44](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L44)
+Defined in: [packages/core/src/asset/asset-source.ts:44](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L44)
 
 ###### Type Parameters
 
@@ -405,7 +405,7 @@ Defined in: [packages/core/src/asset/asset-source.ts:44](https://hlgit.5518game.
 
 > **releaseOne**(`path`, `opts`?): `void`
 
-Defined in: [packages/core/src/asset/asset-source.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L45)
+Defined in: [packages/core/src/asset/asset-source.ts:45](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L45)
 
 ###### Parameters
 
@@ -431,7 +431,7 @@ Defined in: [packages/core/src/asset/asset-source.ts:45](https://hlgit.5518game.
 
 > `optional` **releaseValue**(`asset`): `void`
 
-Defined in: [packages/core/src/asset/asset-source.ts:55](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L55)
+Defined in: [packages/core/src/asset/asset-source.ts:55](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L55)
 
 按**资源本身**释放（可选实现）。手里有资源时 AssetLoader 优先走这条。
 
@@ -457,7 +457,7 @@ engine 实现 = `assetManager.releaseAsset(asset)`，与 `bundle.release(path)` 
 
 > **AssetTypeToken**: `"asset"` \| `"prefab"` \| `"scene"` \| `"spriteFrame"` \| `"spriteAtlas"` \| `"texture"` \| `"imageAsset"` \| `"audioClip"` \| `"json"` \| `"text"` \| `"material"` \| `"font"` \| `"animationClip"` \| `string` & `object`
 
-Defined in: [packages/core/src/asset/asset-source.ts:7](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L7)
+Defined in: [packages/core/src/asset/asset-source.ts:7](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L7)
 
 资源类型 token（core 零 cc）：engine 侧维护 token → cc Constructor<Asset> 映射。
 'asset' = 通配（走 assetManager.loadAny，不指定类型）。字符串联合带逃逸口，engine 可扩展。
@@ -468,7 +468,7 @@ Defined in: [packages/core/src/asset/asset-source.ts:7](https://hlgit.5518game.c
 
 > `const` **ASSET\_LOADER**: [`Token`](di.md#tokent)\<[`IAssetLoader`](asset.md#iassetloader)\>
 
-Defined in: [packages/core/src/asset/asset-loader.ts:241](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L241)
+Defined in: [packages/core/src/asset/asset-loader.ts:241](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L241)
 
 DI token：项目可 register 自己的 AssetLoader 覆盖默认。
 
@@ -478,7 +478,7 @@ DI token：项目可 register 自己的 AssetLoader 覆盖默认。
 
 > `const` **ASSET\_SOURCE**: [`Token`](di.md#tokent)\<[`IAssetSource`](asset.md#iassetsource)\>
 
-Defined in: [packages/core/src/asset/asset-source.ts:59](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L59)
+Defined in: [packages/core/src/asset/asset-source.ts:59](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L59)
 
 DI token：engine 注册 cc 适配，createAssetLoader() 自动拾取。
 
@@ -488,7 +488,7 @@ DI token：engine 注册 cc 适配，createAssetLoader() 自动拾取。
 
 > **createAssetLoader**(`opts`?): [`IAssetLoader`](asset.md#iassetloader)
 
-Defined in: [packages/core/src/asset/asset-loader.ts:60](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L60)
+Defined in: [packages/core/src/asset/asset-loader.ts:60](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L60)
 
 造 AssetLoader（纯逻辑、零 cc；引擎 IO 经接缝注入）。
 
@@ -514,7 +514,7 @@ Defined in: [packages/core/src/asset/asset-loader.ts:60](https://hlgit.5518game.
 
 > **createMemoryAssetSource**(`preset`?): [`IAssetSource`](asset.md#iassetsource)
 
-Defined in: [packages/core/src/asset/asset-source.ts:65](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L65)
+Defined in: [packages/core/src/asset/asset-source.ts:65](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-source.ts#L65)
 
 内存 fake（默认 / 测试）：按 path 返回预置资源，缺省合成一个稳定 stub（`{ __asset: path }`）。
 releaseOne 无副作用（真释放交给引擎）。不含真 cc。
@@ -537,7 +537,7 @@ releaseOne 无副作用（真释放交给引擎）。不含真 cc。
 
 > **getAssetLoader**(): [`IAssetLoader`](asset.md#iassetloader)
 
-Defined in: [packages/core/src/asset/asset-loader.ts:246](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L246)
+Defined in: [packages/core/src/asset/asset-loader.ts:246](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/asset/asset-loader.ts#L246)
 
 便捷取用：优先 tryResolve(ASSET_LOADER)；未注册则进程级默认（ASSET_SOURCE/内存背书）。
 

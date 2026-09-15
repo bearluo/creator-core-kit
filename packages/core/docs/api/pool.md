@@ -10,7 +10,7 @@
 
 ### PoolExhaustedError
 
-Defined in: [packages/core/src/pool/pool.ts:7](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L7)
+Defined in: [packages/core/src/pool/pool.ts:7](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L7)
 
 池已达容量上限且无空闲实例可复用时 acquire() 抛出。
 仅在创建时设置了 max（>0）才可能发生；默认不限容量永不抛。
@@ -25,7 +25,7 @@ Defined in: [packages/core/src/pool/pool.ts:7](https://hlgit.5518game.com/luohao
 
 > **new PoolExhaustedError**(`max`): [`PoolExhaustedError`](pool.md#poolexhaustederror)
 
-Defined in: [packages/core/src/pool/pool.ts:8](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L8)
+Defined in: [packages/core/src/pool/pool.ts:8](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L8)
 
 ###### Parameters
 
@@ -195,7 +195,7 @@ https://v8.dev/docs/stack-trace-api#customizing-stack-traces
 
 ### Pool\<T\>
 
-Defined in: [packages/core/src/pool/pool.ts:31](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L31)
+Defined in: [packages/core/src/pool/pool.ts:31](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L31)
 
 #### Type Parameters
 
@@ -207,7 +207,7 @@ Defined in: [packages/core/src/pool/pool.ts:31](https://hlgit.5518game.com/luoha
 
 > `readonly` **available**: `number`
 
-Defined in: [packages/core/src/pool/pool.ts:41](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L41)
+Defined in: [packages/core/src/pool/pool.ts:41](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L41)
 
 空闲队列长度。
 
@@ -215,7 +215,7 @@ Defined in: [packages/core/src/pool/pool.ts:41](https://hlgit.5518game.com/luoha
 
 > `readonly` **inUse**: `number`
 
-Defined in: [packages/core/src/pool/pool.ts:43](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L43)
+Defined in: [packages/core/src/pool/pool.ts:43](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L43)
 
 当前借出数。
 
@@ -223,7 +223,7 @@ Defined in: [packages/core/src/pool/pool.ts:43](https://hlgit.5518game.com/luoha
 
 > `readonly` **size**: `number`
 
-Defined in: [packages/core/src/pool/pool.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L39)
+Defined in: [packages/core/src/pool/pool.ts:39](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L39)
 
 已创建实例总数（in-use + available）。
 
@@ -233,7 +233,7 @@ Defined in: [packages/core/src/pool/pool.ts:39](https://hlgit.5518game.com/luoha
 
 > **acquire**(): `T`
 
-Defined in: [packages/core/src/pool/pool.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L33)
+Defined in: [packages/core/src/pool/pool.ts:33](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L33)
 
 借出：优先复用空闲（LIFO），否则 factory() 新建；达上限且无空闲则抛 PoolExhaustedError。
 
@@ -245,7 +245,7 @@ Defined in: [packages/core/src/pool/pool.ts:33](https://hlgit.5518game.com/luoha
 
 > **clear**(): `void`
 
-Defined in: [packages/core/src/pool/pool.ts:37](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L37)
+Defined in: [packages/core/src/pool/pool.ts:37](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L37)
 
 释放全部空闲实例（各调 dispose）并清空空闲队列；在借出的实例不受影响。保留配置，之后仍可 acquire。
 
@@ -257,7 +257,7 @@ Defined in: [packages/core/src/pool/pool.ts:37](https://hlgit.5518game.com/luoha
 
 > **release**(`obj`): `void`
 
-Defined in: [packages/core/src/pool/pool.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L35)
+Defined in: [packages/core/src/pool/pool.ts:35](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L35)
 
 归还：外来对象 / 重复归还 / 已在池内 → 告警 no-op（不抛）。
 
@@ -275,7 +275,7 @@ Defined in: [packages/core/src/pool/pool.ts:35](https://hlgit.5518game.com/luoha
 
 ### PoolOptions\<T\>
 
-Defined in: [packages/core/src/pool/pool.ts:14](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L14)
+Defined in: [packages/core/src/pool/pool.ts:14](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L14)
 
 #### Type Parameters
 
@@ -287,7 +287,7 @@ Defined in: [packages/core/src/pool/pool.ts:14](https://hlgit.5518game.com/luoha
 
 > `optional` **dispose**: (`obj`) => `void`
 
-Defined in: [packages/core/src/pool/pool.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L22)
+Defined in: [packages/core/src/pool/pool.ts:22](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L22)
 
 clear() 释放空闲实例时对每个实例调用（释放其占用的资源）。默认无。
 
@@ -305,7 +305,7 @@ clear() 释放空闲实例时对每个实例调用（释放其占用的资源）
 
 > **factory**: () => `T`
 
-Defined in: [packages/core/src/pool/pool.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L16)
+Defined in: [packages/core/src/pool/pool.ts:16](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L16)
 
 造一个全新实例。空闲队列为空且未达上限时调用。
 
@@ -317,7 +317,7 @@ Defined in: [packages/core/src/pool/pool.ts:16](https://hlgit.5518game.com/luoha
 
 > `optional` **logger**: [`ILogger`](logging.md#ilogger)
 
-Defined in: [packages/core/src/pool/pool.ts:28](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L28)
+Defined in: [packages/core/src/pool/pool.ts:28](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L28)
 
 告警日志（prewarm 越界 / 外来或重复 release）。默认 getLogger('ObjectPool')。
 
@@ -325,7 +325,7 @@ Defined in: [packages/core/src/pool/pool.ts:28](https://hlgit.5518game.com/luoha
 
 > `optional` **max**: `number`
 
-Defined in: [packages/core/src/pool/pool.ts:24](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L24)
+Defined in: [packages/core/src/pool/pool.ts:24](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L24)
 
 实例总数（in-use + available）上限；>0 生效，0/省略 = 不限。
 
@@ -333,7 +333,7 @@ Defined in: [packages/core/src/pool/pool.ts:24](https://hlgit.5518game.com/luoha
 
 > `optional` **onAcquire**: (`obj`) => `void`
 
-Defined in: [packages/core/src/pool/pool.ts:20](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L20)
+Defined in: [packages/core/src/pool/pool.ts:20](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L20)
 
 借出时调用（取出复用或新建后都会调）。默认无。
 
@@ -351,7 +351,7 @@ Defined in: [packages/core/src/pool/pool.ts:20](https://hlgit.5518game.com/luoha
 
 > `optional` **prewarm**: `number`
 
-Defined in: [packages/core/src/pool/pool.ts:26](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L26)
+Defined in: [packages/core/src/pool/pool.ts:26](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L26)
 
 注册时预建并入空闲队列的实例数，默认 0。超过 max 会收紧并告警。
 
@@ -359,7 +359,7 @@ Defined in: [packages/core/src/pool/pool.ts:26](https://hlgit.5518game.com/luoha
 
 > `optional` **reset**: (`obj`) => `void`
 
-Defined in: [packages/core/src/pool/pool.ts:18](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L18)
+Defined in: [packages/core/src/pool/pool.ts:18](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L18)
 
 归还入池时调用（清理本轮使用留下的状态）。默认无。
 
@@ -379,7 +379,7 @@ Defined in: [packages/core/src/pool/pool.ts:18](https://hlgit.5518game.com/luoha
 
 > **createPool**\<`T`\>(`opts`): [`Pool`](pool.md#poolt)\<`T`\>
 
-Defined in: [packages/core/src/pool/pool.ts:50](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L50)
+Defined in: [packages/core/src/pool/pool.ts:50](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/pool/pool.ts#L50)
 
 造一个泛型对象池（纯逻辑、零 cc）。复用高频 new/丢弃的对象，削峰实例化开销与 GC 抖动。
 归属判定用借出集合（Set），无需在对象上打标记；故 T 应为对象引用类型。

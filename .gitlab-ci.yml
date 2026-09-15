@@ -8,7 +8,7 @@
 #
 # 镜像走内网 Harbor 而不是 docker.io：**runner 没有公网**，直连 registry-1.docker.io
 # 每次 30s 超时 ×2 后整个 job 失败（连 clone 都到不了）。基础镜像已搬运到
-# harbor.5518game.com:6443/match/，与 remove-bg-api 等仓同一套路；拉取凭据是项目
+# harbor.huanchanghuyu.com/match/，与 remove-bg-api 等仓同一套路；拉取凭据是项目
 # CI/CD Variable `DOCKER_AUTH_CONFIG`（match 只读 robot，不入库）。
 # 换 node 版本要先把新 tag 推进 Harbor，否则同样拉不到。
 #
@@ -25,7 +25,7 @@ workflow:
     - if: $CI_COMMIT_BRANCH
 
 verify:
-  image: harbor.5518game.com:6443/match/node:22-slim-git
+  image: harbor.huanchanghuyu.com/match/node:22-slim-git
   variables:
     COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
   cache:
@@ -38,7 +38,7 @@ verify:
     # 拉私有契约仓 kit-proto 用**本次 job 的令牌**，不放长期密钥：
     # 读权限由 kit-proto 侧的 CI_JOB_TOKEN inbound allowlist 授予（那边加了本项目 id=49）。
     # 撤销就是从那个白名单里删一行，本仓不留任何凭据。
-    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@hlgit.5518game.com/".insteadOf "https://hlgit.5518game.com/"
+    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.huanchanghuyu.com/".insteadOf "https://gitlab.huanchanghuyu.com/"
     - corepack enable
     - pnpm install --frozen-lockfile --store-dir .pnpm-store
   script:
@@ -115,7 +115,7 @@ android-flavors:
     # ANDROID_HOME / node 的 PATH 都在那里面。
     - source ~/.bash_profile
     # 拉私有契约仓 kit-proto 用本次 job 的令牌（同 verify）。落点是上面那份 job 内配置。
-    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@hlgit.5518game.com/".insteadOf "https://hlgit.5518game.com/"
+    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.huanchanghuyu.com/".insteadOf "https://gitlab.huanchanghuyu.com/"
     - corepack enable
     - pnpm install --frozen-lockfile
     # 本机路径（Creator / SDK / NDK / JDK）不入库，常驻宿主 ~/ci/。放 checkout 里没用 ——

@@ -12,5 +12,5 @@
   "githubPages": false,
   "outputFileStrategy": "modules",
   "gitRevision": "main",
-  "sourceLinkTemplate": "https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/{path}#L{line}"
+  "sourceLinkTemplate": "https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/{path}#L{line}"
 }

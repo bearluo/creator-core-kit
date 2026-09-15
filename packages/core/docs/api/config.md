@@ -10,7 +10,7 @@
 
 ### ConfigRowNotFoundError
 
-Defined in: [packages/core/src/config/config-table.ts:18](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L18)
+Defined in: [packages/core/src/config/config-table.ts:18](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L18)
 
 表中按主键取不到行、且调用方要求必得（getOrThrow）时抛出。
 
@@ -24,7 +24,7 @@ Defined in: [packages/core/src/config/config-table.ts:18](https://hlgit.5518game
 
 > **new ConfigRowNotFoundError**(`table`, `id`): [`ConfigRowNotFoundError`](config.md#configrownotfounderror)
 
-Defined in: [packages/core/src/config/config-table.ts:19](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L19)
+Defined in: [packages/core/src/config/config-table.ts:19](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L19)
 
 ###### Parameters
 
@@ -198,7 +198,7 @@ https://v8.dev/docs/stack-trace-api#customizing-stack-traces
 
 ### ConfigTableNotFoundError
 
-Defined in: [packages/core/src/config/config-table.ts:26](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L26)
+Defined in: [packages/core/src/config/config-table.ts:26](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L26)
 
 按名取表、且要求必得（tableOrThrow）却未注册时抛出。
 
@@ -212,7 +212,7 @@ Defined in: [packages/core/src/config/config-table.ts:26](https://hlgit.5518game
 
 > **new ConfigTableNotFoundError**(`name`): [`ConfigTableNotFoundError`](config.md#configtablenotfounderror)
 
-Defined in: [packages/core/src/config/config-table.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L27)
+Defined in: [packages/core/src/config/config-table.ts:27](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L27)
 
 ###### Parameters
 
@@ -382,7 +382,7 @@ https://v8.dev/docs/stack-trace-api#customizing-stack-traces
 
 ### ConfigTable\<T\>
 
-Defined in: [packages/core/src/config/config-table.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L33)
+Defined in: [packages/core/src/config/config-table.ts:33](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L33)
 
 #### Type Parameters
 
@@ -394,7 +394,7 @@ Defined in: [packages/core/src/config/config-table.ts:33](https://hlgit.5518game
 
 > `readonly` **name**: `string`
 
-Defined in: [packages/core/src/config/config-table.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L35)
+Defined in: [packages/core/src/config/config-table.ts:35](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L35)
 
 表名。
 
@@ -402,7 +402,7 @@ Defined in: [packages/core/src/config/config-table.ts:35](https://hlgit.5518game
 
 > `readonly` **size**: `number`
 
-Defined in: [packages/core/src/config/config-table.ts:37](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L37)
+Defined in: [packages/core/src/config/config-table.ts:37](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L37)
 
 行数（去重后，= 索引条目数）。
 
@@ -412,7 +412,7 @@ Defined in: [packages/core/src/config/config-table.ts:37](https://hlgit.5518game
 
 > **all**(): readonly `T`[]
 
-Defined in: [packages/core/src/config/config-table.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L45)
+Defined in: [packages/core/src/config/config-table.ts:45](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L45)
 
 全部行（按插入顺序，只读快照）。
 
@@ -424,7 +424,7 @@ readonly `T`[]
 
 > **filter**(`pred`): `T`[]
 
-Defined in: [packages/core/src/config/config-table.ts:51](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L51)
+Defined in: [packages/core/src/config/config-table.ts:51](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L51)
 
 所有满足断言的行。
 
@@ -442,7 +442,7 @@ Defined in: [packages/core/src/config/config-table.ts:51](https://hlgit.5518game
 
 > **find**(`pred`): `undefined` \| `T`
 
-Defined in: [packages/core/src/config/config-table.ts:49](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L49)
+Defined in: [packages/core/src/config/config-table.ts:49](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L49)
 
 第一个满足断言的行，无 → undefined。
 
@@ -460,7 +460,7 @@ Defined in: [packages/core/src/config/config-table.ts:49](https://hlgit.5518game
 
 > **get**(`id`): `undefined` \| `T`
 
-Defined in: [packages/core/src/config/config-table.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L39)
+Defined in: [packages/core/src/config/config-table.ts:39](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L39)
 
 按主键取行，无 → undefined。
 
@@ -478,7 +478,7 @@ Defined in: [packages/core/src/config/config-table.ts:39](https://hlgit.5518game
 
 > **getOrThrow**(`id`): `T`
 
-Defined in: [packages/core/src/config/config-table.ts:41](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L41)
+Defined in: [packages/core/src/config/config-table.ts:41](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L41)
 
 按主键取行，无 → 抛 ConfigRowNotFoundError。
 
@@ -496,7 +496,7 @@ Defined in: [packages/core/src/config/config-table.ts:41](https://hlgit.5518game
 
 > **has**(`id`): `boolean`
 
-Defined in: [packages/core/src/config/config-table.ts:43](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L43)
+Defined in: [packages/core/src/config/config-table.ts:43](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L43)
 
 是否有该主键。
 
@@ -514,7 +514,7 @@ Defined in: [packages/core/src/config/config-table.ts:43](https://hlgit.5518game
 
 > **keys**(): [`RowKey`](config.md#rowkey)[]
 
-Defined in: [packages/core/src/config/config-table.ts:47](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L47)
+Defined in: [packages/core/src/config/config-table.ts:47](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L47)
 
 全部主键（按插入顺序）。
 
@@ -526,7 +526,7 @@ Defined in: [packages/core/src/config/config-table.ts:47](https://hlgit.5518game
 
 ### ConfigTableManager
 
-Defined in: [packages/core/src/config/config-table.ts:121](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L121)
+Defined in: [packages/core/src/config/config-table.ts:121](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L121)
 
 #### Methods
 
@@ -534,7 +534,7 @@ Defined in: [packages/core/src/config/config-table.ts:121](https://hlgit.5518gam
 
 > **add**\<`T`\>(`table`): `void`
 
-Defined in: [packages/core/src/config/config-table.ts:125](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L125)
+Defined in: [packages/core/src/config/config-table.ts:125](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L125)
 
 放入一张已建好的表（按其 name）。同名已存在 → 告警 + 覆盖。
 
@@ -556,7 +556,7 @@ Defined in: [packages/core/src/config/config-table.ts:125](https://hlgit.5518gam
 
 > **clear**(): `void`
 
-Defined in: [packages/core/src/config/config-table.ts:139](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L139)
+Defined in: [packages/core/src/config/config-table.ts:139](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L139)
 
 清空全部表。
 
@@ -568,7 +568,7 @@ Defined in: [packages/core/src/config/config-table.ts:139](https://hlgit.5518gam
 
 > **getRow**\<`T`\>(`name`, `id`): `undefined` \| `T`
 
-Defined in: [packages/core/src/config/config-table.ts:133](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L133)
+Defined in: [packages/core/src/config/config-table.ts:133](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L133)
 
 便捷：取某表某行，表或行不存在 → undefined。
 
@@ -594,7 +594,7 @@ Defined in: [packages/core/src/config/config-table.ts:133](https://hlgit.5518gam
 
 > **has**(`name`): `boolean`
 
-Defined in: [packages/core/src/config/config-table.ts:131](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L131)
+Defined in: [packages/core/src/config/config-table.ts:131](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L131)
 
 是否已注册该表。
 
@@ -612,7 +612,7 @@ Defined in: [packages/core/src/config/config-table.ts:131](https://hlgit.5518gam
 
 > **names**(): `string`[]
 
-Defined in: [packages/core/src/config/config-table.ts:135](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L135)
+Defined in: [packages/core/src/config/config-table.ts:135](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L135)
 
 已注册表名（按插入顺序）。
 
@@ -624,7 +624,7 @@ Defined in: [packages/core/src/config/config-table.ts:135](https://hlgit.5518gam
 
 > **register**\<`T`\>(`name`, `rows`, `opts`?): [`ConfigTable`](config.md#configtablet)\<`T`\>
 
-Defined in: [packages/core/src/config/config-table.ts:123](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L123)
+Defined in: [packages/core/src/config/config-table.ts:123](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L123)
 
 建表并注册（就地索引）。同名已存在 → 告警 + 覆盖。返回建好的表。
 
@@ -654,7 +654,7 @@ readonly `T`[]
 
 > **table**\<`T`\>(`name`): `undefined` \| [`ConfigTable`](config.md#configtablet)\<`T`\>
 
-Defined in: [packages/core/src/config/config-table.ts:127](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L127)
+Defined in: [packages/core/src/config/config-table.ts:127](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L127)
 
 取表，无 → undefined。类型由调用方以泛型断言。
 
@@ -676,7 +676,7 @@ Defined in: [packages/core/src/config/config-table.ts:127](https://hlgit.5518gam
 
 > **tableOrThrow**\<`T`\>(`name`): [`ConfigTable`](config.md#configtablet)\<`T`\>
 
-Defined in: [packages/core/src/config/config-table.ts:129](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L129)
+Defined in: [packages/core/src/config/config-table.ts:129](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L129)
 
 取表，无 → 抛 ConfigTableNotFoundError。
 
@@ -698,7 +698,7 @@ Defined in: [packages/core/src/config/config-table.ts:129](https://hlgit.5518gam
 
 > **unregister**(`name`): `boolean`
 
-Defined in: [packages/core/src/config/config-table.ts:137](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L137)
+Defined in: [packages/core/src/config/config-table.ts:137](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L137)
 
 反注册一张表（按名）。存在→删除返回 true；不存在→no-op 返回 false。用于卸载模块撤其配表。
 
@@ -716,7 +716,7 @@ Defined in: [packages/core/src/config/config-table.ts:137](https://hlgit.5518gam
 
 ### TableOptions\<T\>
 
-Defined in: [packages/core/src/config/config-table.ts:10](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L10)
+Defined in: [packages/core/src/config/config-table.ts:10](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L10)
 
 #### Type Parameters
 
@@ -728,7 +728,7 @@ Defined in: [packages/core/src/config/config-table.ts:10](https://hlgit.5518game
 
 > `optional` **key**: [`KeyExtractor`](config.md#keyextractort)\<`T`\>
 
-Defined in: [packages/core/src/config/config-table.ts:12](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L12)
+Defined in: [packages/core/src/config/config-table.ts:12](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L12)
 
 主键：字段名（默认 'id'）或提取函数。
 
@@ -736,7 +736,7 @@ Defined in: [packages/core/src/config/config-table.ts:12](https://hlgit.5518game
 
 > `optional` **logger**: [`ILogger`](logging.md#ilogger)
 
-Defined in: [packages/core/src/config/config-table.ts:14](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L14)
+Defined in: [packages/core/src/config/config-table.ts:14](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L14)
 
 告警日志（重复主键 / 非法主键）。默认 getLogger('ConfigTable')。
 
@@ -746,7 +746,7 @@ Defined in: [packages/core/src/config/config-table.ts:14](https://hlgit.5518game
 
 > **KeyExtractor**\<`T`\>: keyof `T` \| (`row`) => [`RowKey`](config.md#rowkey)
 
-Defined in: [packages/core/src/config/config-table.ts:8](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L8)
+Defined in: [packages/core/src/config/config-table.ts:8](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L8)
 
 主键提取：字段名 或 从行算出 key 的函数。
 
@@ -760,7 +760,7 @@ Defined in: [packages/core/src/config/config-table.ts:8](https://hlgit.5518game.
 
 > **RowKey**: `string` \| `number`
 
-Defined in: [packages/core/src/config/config-table.ts:5](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L5)
+Defined in: [packages/core/src/config/config-table.ts:5](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L5)
 
 行主键类型。
 
@@ -770,7 +770,7 @@ Defined in: [packages/core/src/config/config-table.ts:5](https://hlgit.5518game.
 
 > `const` **CONFIG\_TABLES**: [`Token`](di.md#tokent)\<[`ConfigTableManager`](config.md#configtablemanager)\>
 
-Defined in: [packages/core/src/config/config-table.ts:185](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L185)
+Defined in: [packages/core/src/config/config-table.ts:185](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L185)
 
 DI token：跨 bundle 共享同一套配表（照 ADR-0001，Symbol.for 全局一致）。
 
@@ -780,7 +780,7 @@ DI token：跨 bundle 共享同一套配表（照 ADR-0001，Symbol.for 全局�
 
 > **createConfigTableManager**(`opts`?): [`ConfigTableManager`](config.md#configtablemanager)
 
-Defined in: [packages/core/src/config/config-table.ts:143](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L143)
+Defined in: [packages/core/src/config/config-table.ts:143](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L143)
 
 造配置表注册表门面（纯逻辑、零 cc）。游戏配表天生复数，按名集中管理。
 
@@ -802,7 +802,7 @@ Defined in: [packages/core/src/config/config-table.ts:143](https://hlgit.5518gam
 
 > **createTable**\<`T`\>(`name`, `rows`, `opts`?): [`ConfigTable`](config.md#configtablet)\<`T`\>
 
-Defined in: [packages/core/src/config/config-table.ts:65](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L65)
+Defined in: [packages/core/src/config/config-table.ts:65](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L65)
 
 造一张只读配置表（纯逻辑、零 cc）：把已解析的行数组按主键索引成 Map。
 重复主键 → 告警 + 后者覆盖（last-wins）；非法主键（undefined/null）→ 告警 + 跳过该行。
@@ -836,7 +836,7 @@ readonly `T`[]
 
 > **getConfigTables**(): [`ConfigTableManager`](config.md#configtablemanager)
 
-Defined in: [packages/core/src/config/config-table.ts:191](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L191)
+Defined in: [packages/core/src/config/config-table.ts:191](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/config/config-table.ts#L191)
 
 便捷取用：优先 getRootContainer().tryResolve(CONFIG_TABLES)；未注册则用进程级默认。
 

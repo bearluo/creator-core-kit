@@ -8,6 +8,6 @@
     "@cck/core": "workspace:*",
     "@cck/ecs-bitecs": "workspace:*",
     "@cck/engine": "workspace:*",
-    "@kit/proto": "git+https://hlgit.5518game.com/luohao/kit-proto.git#v0.4.0"
+    "@kit/proto": "git+https://gitlab.huanchanghuyu.com/luohao/kit-proto.git#v0.4.0"
   }
 }

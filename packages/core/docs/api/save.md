@@ -10,7 +10,7 @@
 
 ### IStorage
 
-Defined in: [packages/core/src/save/storage.ts:8](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L8)
+Defined in: [packages/core/src/save/storage.ts:8](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L8)
 
 存储接缝：异步 string→string KV。core 只认本接口（守零 cc 铁律）。
 engine 注册 cc.sys.localStorage 适配；微信/抖音小游戏可接其异步 storage；测试/默认用内存实现。
@@ -22,7 +22,7 @@ engine 注册 cc.sys.localStorage 适配；微信/抖音小游戏可接其异步
 
 > **get**(`key`): `Promise`\<`null` \| `string`\>
 
-Defined in: [packages/core/src/save/storage.ts:10](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L10)
+Defined in: [packages/core/src/save/storage.ts:10](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L10)
 
 读取；键不存在返回 null。
 
@@ -40,7 +40,7 @@ Defined in: [packages/core/src/save/storage.ts:10](https://hlgit.5518game.com/lu
 
 > **keys**(): `Promise`\<`string`[]\>
 
-Defined in: [packages/core/src/save/storage.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L16)
+Defined in: [packages/core/src/save/storage.ts:16](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L16)
 
 返回当前全部 key（无序）。SaveManager 用它按命名空间前缀筛存档位。
 
@@ -52,7 +52,7 @@ Defined in: [packages/core/src/save/storage.ts:16](https://hlgit.5518game.com/lu
 
 > **remove**(`key`): `Promise`\<`void`\>
 
-Defined in: [packages/core/src/save/storage.ts:14](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L14)
+Defined in: [packages/core/src/save/storage.ts:14](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L14)
 
 删除；键不存在为 no-op。
 
@@ -70,7 +70,7 @@ Defined in: [packages/core/src/save/storage.ts:14](https://hlgit.5518game.com/lu
 
 > **set**(`key`, `value`): `Promise`\<`void`\>
 
-Defined in: [packages/core/src/save/storage.ts:12](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L12)
+Defined in: [packages/core/src/save/storage.ts:12](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L12)
 
 写入（覆盖）。
 
@@ -92,7 +92,7 @@ Defined in: [packages/core/src/save/storage.ts:12](https://hlgit.5518game.com/lu
 
 ### SaveManager
 
-Defined in: [packages/core/src/save/save-manager.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L39)
+Defined in: [packages/core/src/save/save-manager.ts:39](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L39)
 
 #### Properties
 
@@ -100,7 +100,7 @@ Defined in: [packages/core/src/save/save-manager.ts:39](https://hlgit.5518game.c
 
 > `readonly` **version**: `number`
 
-Defined in: [packages/core/src/save/save-manager.ts:41](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L41)
+Defined in: [packages/core/src/save/save-manager.ts:41](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L41)
 
 当前数据版本。
 
@@ -110,7 +110,7 @@ Defined in: [packages/core/src/save/save-manager.ts:41](https://hlgit.5518game.c
 
 > **delete**(`slot`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/save/save-manager.ts:51](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L51)
+Defined in: [packages/core/src/save/save-manager.ts:51](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L51)
 
 删除 slot。删掉 true；不存在 / 非法名 → false。
 
@@ -128,7 +128,7 @@ Defined in: [packages/core/src/save/save-manager.ts:51](https://hlgit.5518game.c
 
 > **has**(`slot`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/save/save-manager.ts:49](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L49)
+Defined in: [packages/core/src/save/save-manager.ts:49](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L49)
 
 slot 是否存在。
 
@@ -146,7 +146,7 @@ slot 是否存在。
 
 > **list**(): `Promise`\<`string`[]\>
 
-Defined in: [packages/core/src/save/save-manager.ts:53](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L53)
+Defined in: [packages/core/src/save/save-manager.ts:53](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L53)
 
 列出全部 slot 名（升序）。
 
@@ -158,7 +158,7 @@ Defined in: [packages/core/src/save/save-manager.ts:53](https://hlgit.5518game.c
 
 > **load**(`slot`): `Promise`\<`null` \| [`SaveData`](save.md#savedata)\>
 
-Defined in: [packages/core/src/save/save-manager.ts:47](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L47)
+Defined in: [packages/core/src/save/save-manager.ts:47](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L47)
 
 读回 slot。不存在 / 损坏 / 迁移失败 → null；合法地存了 {} → 返回 {}。
 
@@ -176,7 +176,7 @@ Defined in: [packages/core/src/save/save-manager.ts:47](https://hlgit.5518game.c
 
 > **registerMigration**(`fromVersion`, `migrate`): `void`
 
-Defined in: [packages/core/src/save/save-manager.ts:43](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L43)
+Defined in: [packages/core/src/save/save-manager.ts:43](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L43)
 
 注册一步迁移 v(from)→v(from+1)。from 须 >=1；重复覆盖。
 
@@ -198,7 +198,7 @@ Defined in: [packages/core/src/save/save-manager.ts:43](https://hlgit.5518game.c
 
 > **save**(`slot`, `data`): `Promise`\<`boolean`\>
 
-Defined in: [packages/core/src/save/save-manager.ts:45](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L45)
+Defined in: [packages/core/src/save/save-manager.ts:45](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L45)
 
 写入 slot（覆盖）。成功 true；slot 非法 / 序列化失败 / 写入抛错 → false。
 
@@ -220,7 +220,7 @@ Defined in: [packages/core/src/save/save-manager.ts:45](https://hlgit.5518game.c
 
 ### SaveManagerOptions
 
-Defined in: [packages/core/src/save/save-manager.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L27)
+Defined in: [packages/core/src/save/save-manager.ts:27](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L27)
 
 #### Properties
 
@@ -228,13 +228,13 @@ Defined in: [packages/core/src/save/save-manager.ts:27](https://hlgit.5518game.c
 
 > `optional` **logger**: [`ILogger`](logging.md#ilogger)
 
-Defined in: [packages/core/src/save/save-manager.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L36)
+Defined in: [packages/core/src/save/save-manager.ts:36](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L36)
 
 ##### namespace?
 
 > `optional` **namespace**: `string`
 
-Defined in: [packages/core/src/save/save-manager.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L33)
+Defined in: [packages/core/src/save/save-manager.ts:33](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L33)
 
 key 前缀（命名空间），默认 'save'。存档位落 `<namespace>/<slot>`。
 
@@ -242,7 +242,7 @@ key 前缀（命名空间），默认 'save'。存档位落 `<namespace>/<slot>`
 
 > `optional` **serializer**: [`SaveSerializer`](save.md#saveserializer)
 
-Defined in: [packages/core/src/save/save-manager.ts:31](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L31)
+Defined in: [packages/core/src/save/save-manager.ts:31](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L31)
 
 序列化策略。默认 JSON。
 
@@ -250,7 +250,7 @@ Defined in: [packages/core/src/save/save-manager.ts:31](https://hlgit.5518game.c
 
 > `optional` **storage**: [`IStorage`](save.md#istorage)
 
-Defined in: [packages/core/src/save/save-manager.ts:29](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L29)
+Defined in: [packages/core/src/save/save-manager.ts:29](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L29)
 
 存储后端。默认：DI STORAGE，未注册则新建进程内存实现。
 
@@ -258,7 +258,7 @@ Defined in: [packages/core/src/save/save-manager.ts:29](https://hlgit.5518game.c
 
 > `optional` **version**: `number`
 
-Defined in: [packages/core/src/save/save-manager.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L35)
+Defined in: [packages/core/src/save/save-manager.ts:35](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L35)
 
 当前数据版本（save 盖此版本；load 时低于它的存档走迁移链）。须 >=1，默认 1。
 
@@ -266,7 +266,7 @@ Defined in: [packages/core/src/save/save-manager.ts:35](https://hlgit.5518game.c
 
 ### SaveSerializer
 
-Defined in: [packages/core/src/save/save-manager.ts:9](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L9)
+Defined in: [packages/core/src/save/save-manager.ts:9](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L9)
 
 序列化策略：对象 <-> 字符串。encode/decode 失败可抛，SaveManager 会捕获并按失败/损坏处理。
 
@@ -276,7 +276,7 @@ Defined in: [packages/core/src/save/save-manager.ts:9](https://hlgit.5518game.co
 
 > `readonly` **name**: `string`
 
-Defined in: [packages/core/src/save/save-manager.ts:10](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L10)
+Defined in: [packages/core/src/save/save-manager.ts:10](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L10)
 
 #### Methods
 
@@ -284,7 +284,7 @@ Defined in: [packages/core/src/save/save-manager.ts:10](https://hlgit.5518game.c
 
 > **decode**(`text`): `unknown`
 
-Defined in: [packages/core/src/save/save-manager.ts:12](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L12)
+Defined in: [packages/core/src/save/save-manager.ts:12](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L12)
 
 ###### Parameters
 
@@ -300,7 +300,7 @@ Defined in: [packages/core/src/save/save-manager.ts:12](https://hlgit.5518game.c
 
 > **encode**(`value`): `string`
 
-Defined in: [packages/core/src/save/save-manager.ts:11](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L11)
+Defined in: [packages/core/src/save/save-manager.ts:11](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L11)
 
 ###### Parameters
 
@@ -318,7 +318,7 @@ Defined in: [packages/core/src/save/save-manager.ts:11](https://hlgit.5518game.c
 
 > **Migration**: (`data`) => [`SaveData`](save.md#savedata)
 
-Defined in: [packages/core/src/save/save-manager.ts:25](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L25)
+Defined in: [packages/core/src/save/save-manager.ts:25](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L25)
 
 迁移函数：把 fromVersion 的 data 升级为 fromVersion+1 的 data 并返回。
 
@@ -338,7 +338,7 @@ Defined in: [packages/core/src/save/save-manager.ts:25](https://hlgit.5518game.c
 
 > **SaveData**: `Record`\<`string`, `unknown`\>
 
-Defined in: [packages/core/src/save/save-manager.ts:6](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L6)
+Defined in: [packages/core/src/save/save-manager.ts:6](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L6)
 
 存档数据：JSON 兼容的对象（键 string，值任意可序列化）。
 
@@ -348,7 +348,7 @@ Defined in: [packages/core/src/save/save-manager.ts:6](https://hlgit.5518game.co
 
 > `const` **SAVE\_MANAGER**: [`Token`](di.md#tokent)\<[`SaveManager`](save.md#savemanager)\>
 
-Defined in: [packages/core/src/save/save-manager.ts:195](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L195)
+Defined in: [packages/core/src/save/save-manager.ts:195](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L195)
 
 DI token：项目可 register 自己的 SaveManager 覆盖默认（见 di-container）。
 
@@ -358,7 +358,7 @@ DI token：项目可 register 自己的 SaveManager 覆盖默认（见 di-contai
 
 > `const` **STORAGE**: [`Token`](di.md#tokent)\<[`IStorage`](save.md#istorage)\>
 
-Defined in: [packages/core/src/save/storage.ts:20](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L20)
+Defined in: [packages/core/src/save/storage.ts:20](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L20)
 
 DI token：engine Bootstrap register cc.sys.localStorage 适配；未注册时 SaveManager 回退内存实现。
 
@@ -368,7 +368,7 @@ DI token：engine Bootstrap register cc.sys.localStorage 适配；未注册时 S
 
 > **createJsonSerializer**(): [`SaveSerializer`](save.md#saveserializer)
 
-Defined in: [packages/core/src/save/save-manager.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L16)
+Defined in: [packages/core/src/save/save-manager.ts:16](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L16)
 
 默认 JSON 序列化器。
 
@@ -382,7 +382,7 @@ Defined in: [packages/core/src/save/save-manager.ts:16](https://hlgit.5518game.c
 
 > **createMemoryStorage**(`initial`?): [`IStorage`](save.md#istorage)
 
-Defined in: [packages/core/src/save/storage.ts:23](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L23)
+Defined in: [packages/core/src/save/storage.ts:23](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/storage.ts#L23)
 
 进程内存 IStorage（Map 背书）。默认实现 + 测试用；非持久，进程退出即丢。
 
@@ -402,7 +402,7 @@ Defined in: [packages/core/src/save/storage.ts:23](https://hlgit.5518game.com/lu
 
 > **createSaveManager**(`opts`?): [`SaveManager`](save.md#savemanager)
 
-Defined in: [packages/core/src/save/save-manager.ts:74](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L74)
+Defined in: [packages/core/src/save/save-manager.ts:74](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L74)
 
 造 SaveManager（纯逻辑、零 cc；存储/序列化经接缝注入）。
 
@@ -422,7 +422,7 @@ Defined in: [packages/core/src/save/save-manager.ts:74](https://hlgit.5518game.c
 
 > **getSaveManager**(): [`SaveManager`](save.md#savemanager)
 
-Defined in: [packages/core/src/save/save-manager.ts:200](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L200)
+Defined in: [packages/core/src/save/save-manager.ts:200](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/save/save-manager.ts#L200)
 
 便捷取用：优先 getRootContainer().tryResolve(SAVE_MANAGER)；未注册则用进程级默认（内存/STORAGE 背书）。
 

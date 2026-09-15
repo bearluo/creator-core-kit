@@ -10,7 +10,7 @@
 
 ### Container
 
-Defined in: [packages/core/src/di/container.ts:18](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L18)
+Defined in: [packages/core/src/di/container.ts:18](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L18)
 
 层级作用域 DI 容器。
 
@@ -20,13 +20,13 @@ Defined in: [packages/core/src/di/container.ts:18](https://hlgit.5518game.com/lu
 
 > `readonly` **name**: `string`
 
-Defined in: [packages/core/src/di/container.ts:19](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L19)
+Defined in: [packages/core/src/di/container.ts:19](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L19)
 
 ##### parent
 
 > `readonly` **parent**: `null` \| [`Container`](di.md#container)
 
-Defined in: [packages/core/src/di/container.ts:20](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L20)
+Defined in: [packages/core/src/di/container.ts:20](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L20)
 
 #### Methods
 
@@ -34,7 +34,7 @@ Defined in: [packages/core/src/di/container.ts:20](https://hlgit.5518game.com/lu
 
 > **createScope**(`name`?): [`Container`](di.md#container)
 
-Defined in: [packages/core/src/di/container.ts:35](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L35)
+Defined in: [packages/core/src/di/container.ts:35](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L35)
 
 建子作用域（parent=this）。
 
@@ -52,7 +52,7 @@ Defined in: [packages/core/src/di/container.ts:35](https://hlgit.5518game.com/lu
 
 > **dispose**(): `void`
 
-Defined in: [packages/core/src/di/container.ts:37](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L37)
+Defined in: [packages/core/src/di/container.ts:37](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L37)
 
 释放本作用域：级联子作用域 → dispose 本层 Disposable → 清表 → 从 parent 摘除。根不可 dispose。
 
@@ -64,7 +64,7 @@ Defined in: [packages/core/src/di/container.ts:37](https://hlgit.5518game.com/lu
 
 > **has**\<`T`\>(`token`): `boolean`
 
-Defined in: [packages/core/src/di/container.ts:29](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L29)
+Defined in: [packages/core/src/di/container.ts:29](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L29)
 
 沿链存在性检查。
 
@@ -86,7 +86,7 @@ Defined in: [packages/core/src/di/container.ts:29](https://hlgit.5518game.com/lu
 
 > **hasLocal**\<`T`\>(`token`): `boolean`
 
-Defined in: [packages/core/src/di/container.ts:31](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L31)
+Defined in: [packages/core/src/di/container.ts:31](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L31)
 
 只查本层。
 
@@ -108,7 +108,7 @@ Defined in: [packages/core/src/di/container.ts:31](https://hlgit.5518game.com/lu
 
 > **register**\<`T`\>(`token`, `provider`, `opts`?): `void`
 
-Defined in: [packages/core/src/di/container.ts:23](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L23)
+Defined in: [packages/core/src/di/container.ts:23](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L23)
 
 注册到本层。默认重复注册抛错；allowOverride 显式覆盖并清旧缓存。
 
@@ -140,7 +140,7 @@ Defined in: [packages/core/src/di/container.ts:23](https://hlgit.5518game.com/lu
 
 > **resolve**\<`T`\>(`token`): `T`
 
-Defined in: [packages/core/src/di/container.ts:25](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L25)
+Defined in: [packages/core/src/di/container.ts:25](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L25)
 
 解析：本层 → parent 链 → 根；全链 miss 抛错。
 
@@ -162,7 +162,7 @@ Defined in: [packages/core/src/di/container.ts:25](https://hlgit.5518game.com/lu
 
 > **tryResolve**\<`T`\>(`token`): `undefined` \| `T`
 
-Defined in: [packages/core/src/di/container.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L27)
+Defined in: [packages/core/src/di/container.ts:27](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L27)
 
 同 resolve，但全链 miss 返回 undefined。
 
@@ -184,7 +184,7 @@ Defined in: [packages/core/src/di/container.ts:27](https://hlgit.5518game.com/lu
 
 > **unregister**\<`T`\>(`token`): `void`
 
-Defined in: [packages/core/src/di/container.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L33)
+Defined in: [packages/core/src/di/container.ts:33](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L33)
 
 注销本层注册（含清缓存）。
 
@@ -206,7 +206,7 @@ Defined in: [packages/core/src/di/container.ts:33](https://hlgit.5518game.com/lu
 
 ### Disposable
 
-Defined in: [packages/core/src/di/container.ts:13](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L13)
+Defined in: [packages/core/src/di/container.ts:13](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L13)
 
 可选清理协议：dispose 作用域时自动调用本层注册服务的 dispose()。
 
@@ -216,7 +216,7 @@ Defined in: [packages/core/src/di/container.ts:13](https://hlgit.5518game.com/lu
 
 > **dispose**(): `void`
 
-Defined in: [packages/core/src/di/container.ts:14](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L14)
+Defined in: [packages/core/src/di/container.ts:14](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L14)
 
 ###### Returns
 
@@ -226,7 +226,7 @@ Defined in: [packages/core/src/di/container.ts:14](https://hlgit.5518game.com/lu
 
 ### Token\<T\>
 
-Defined in: [packages/core/src/di/token.ts:6](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/token.ts#L6)
+Defined in: [packages/core/src/di/token.ts:6](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/token.ts#L6)
 
 类型安全 token。泛型 T 是 phantom（仅编译期携带类型），运行时只有 key/name。
 key = Symbol.for(...)：同名 token 在任何 bundle 得到同一个 symbol，
@@ -242,7 +242,7 @@ key = Symbol.for(...)：同名 token 在任何 bundle 得到同一个 symbol，
 
 > `readonly` `optional` **\_\_type\_\_**: `T`
 
-Defined in: [packages/core/src/di/token.ts:10](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/token.ts#L10)
+Defined in: [packages/core/src/di/token.ts:10](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/token.ts#L10)
 
 phantom：仅用于让 T 参与结构、令 resolve 推断出返回类型；运行时永远是 undefined。
 
@@ -250,13 +250,13 @@ phantom：仅用于让 T 参与结构、令 resolve 推断出返回类型；运�
 
 > `readonly` **key**: `symbol`
 
-Defined in: [packages/core/src/di/token.ts:7](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/token.ts#L7)
+Defined in: [packages/core/src/di/token.ts:7](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/token.ts#L7)
 
 ##### name
 
 > `readonly` **name**: `string`
 
-Defined in: [packages/core/src/di/token.ts:8](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/token.ts#L8)
+Defined in: [packages/core/src/di/token.ts:8](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/token.ts#L8)
 
 ## Type Aliases
 
@@ -264,7 +264,7 @@ Defined in: [packages/core/src/di/token.ts:8](https://hlgit.5518game.com/luohao/
 
 > **Lifetime**: `"singleton"` \| `"transient"` \| `"containerScoped"`
 
-Defined in: [packages/core/src/di/container.ts:4](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L4)
+Defined in: [packages/core/src/di/container.ts:4](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L4)
 
 服务生命周期。
 
@@ -274,7 +274,7 @@ Defined in: [packages/core/src/di/container.ts:4](https://hlgit.5518game.com/luo
 
 > **Provider**\<`T`\>: \{ `useValue`: `T`; \} \| \{ `lifetime`: [`Lifetime`](di.md#lifetime); `useFactory`: (`c`) => `T`; \} \| \{ `useToken`: [`Token`](di.md#tokent)\<`T`\>; \}
 
-Defined in: [packages/core/src/di/container.ts:7](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L7)
+Defined in: [packages/core/src/di/container.ts:7](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L7)
 
 三种注册方式：常量 / 工厂（按生命周期）/ token 重定向（alias）。
 
@@ -288,7 +288,7 @@ Defined in: [packages/core/src/di/container.ts:7](https://hlgit.5518game.com/luo
 
 > `const` **cck**: `object`
 
-Defined in: [packages/core/src/di/container.ts:200](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L200)
+Defined in: [packages/core/src/di/container.ts:200](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L200)
 
 便捷门面（轻）：根容器 resolve/tryResolve 的糖。绝不缓存结果——每次走 resolve，防跨 bundle 分裂。
 
@@ -342,7 +342,7 @@ Defined in: [packages/core/src/di/container.ts:200](https://hlgit.5518game.com/l
 
 > **createToken**\<`T`\>(`name`): [`Token`](di.md#tokent)\<`T`\>
 
-Defined in: [packages/core/src/di/token.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/token.ts#L16)
+Defined in: [packages/core/src/di/token.ts:16](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/token.ts#L16)
 
 造 token。同名 name 跨 bundle key 一致（Symbol.for 全局注册表）。
 
@@ -366,7 +366,7 @@ Defined in: [packages/core/src/di/token.ts:16](https://hlgit.5518game.com/luohao
 
 > **getRootContainer**(): [`Container`](di.md#container)
 
-Defined in: [packages/core/src/di/container.ts:189](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L189)
+Defined in: [packages/core/src/di/container.ts:189](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/di/container.ts#L189)
 
 全局根容器（挂 globalThis[Symbol.for('cck.di.root')]，跨 bundle 唯一，首个初始化者胜出）。
 

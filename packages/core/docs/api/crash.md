@@ -10,7 +10,7 @@
 
 ### CrashEvent
 
-Defined in: [packages/core/src/crash/crash.ts:20](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L20)
+Defined in: [packages/core/src/crash/crash.ts:20](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L20)
 
 收敛并规整之后、可以过河的形状。
 
@@ -20,7 +20,7 @@ Defined in: [packages/core/src/crash/crash.ts:20](https://hlgit.5518game.com/luo
 
 > `readonly` **fingerprint**: `string`
 
-Defined in: [packages/core/src/crash/crash.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L27)
+Defined in: [packages/core/src/crash/crash.ts:27](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L27)
 
 指纹，供调试与单测断言；**不参与**上报载荷。
 
@@ -28,13 +28,13 @@ Defined in: [packages/core/src/crash/crash.ts:27](https://hlgit.5518game.com/luo
 
 > `readonly` **linenum**: `number`
 
-Defined in: [packages/core/src/crash/crash.ts:23](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L23)
+Defined in: [packages/core/src/crash/crash.ts:23](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L23)
 
 ##### location
 
 > `readonly` **location**: `string`
 
-Defined in: [packages/core/src/crash/crash.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L22)
+Defined in: [packages/core/src/crash/crash.ts:22](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L22)
 
 已截首行。
 
@@ -42,19 +42,19 @@ Defined in: [packages/core/src/crash/crash.ts:22](https://hlgit.5518game.com/luo
 
 > `readonly` **message**: `string`
 
-Defined in: [packages/core/src/crash/crash.ts:24](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L24)
+Defined in: [packages/core/src/crash/crash.ts:24](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L24)
 
 ##### stack
 
 > `readonly` **stack**: `string`
 
-Defined in: [packages/core/src/crash/crash.ts:25](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L25)
+Defined in: [packages/core/src/crash/crash.ts:25](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L25)
 
 ***
 
 ### CrashFilter
 
-Defined in: [packages/core/src/crash/crash.ts:30](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L30)
+Defined in: [packages/core/src/crash/crash.ts:30](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L30)
 
 #### Methods
 
@@ -62,7 +62,7 @@ Defined in: [packages/core/src/crash/crash.ts:30](https://hlgit.5518game.com/luo
 
 > **accept**(`raw`): `null` \| [`CrashEvent`](crash.md#crashevent)
 
-Defined in: [packages/core/src/crash/crash.ts:32](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L32)
+Defined in: [packages/core/src/crash/crash.ts:32](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L32)
 
 规整 + 判定。返回 `null` = 这条不报（重复，或已达种类上限）。
 
@@ -80,7 +80,7 @@ Defined in: [packages/core/src/crash/crash.ts:32](https://hlgit.5518game.com/luo
 
 ### JsFrame
 
-Defined in: [packages/core/src/crash/crash.ts:69](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L69)
+Defined in: [packages/core/src/crash/crash.ts:69](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L69)
 
 一帧 JS 堆栈。Java 侧照着造 `StackTraceElement(fn, file, line)`。
 
@@ -90,13 +90,13 @@ Defined in: [packages/core/src/crash/crash.ts:69](https://hlgit.5518game.com/luo
 
 > `readonly` **file**: `string`
 
-Defined in: [packages/core/src/crash/crash.ts:72](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L72)
+Defined in: [packages/core/src/crash/crash.ts:72](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L72)
 
 ##### fn
 
 > `readonly` **fn**: `string`
 
-Defined in: [packages/core/src/crash/crash.ts:71](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L71)
+Defined in: [packages/core/src/crash/crash.ts:71](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L71)
 
 函数名。匿名帧记 `<anonymous>`，因为 `StackTraceElement` 不吃 null。
 
@@ -104,13 +104,13 @@ Defined in: [packages/core/src/crash/crash.ts:71](https://hlgit.5518game.com/luo
 
 > `readonly` **line**: `number`
 
-Defined in: [packages/core/src/crash/crash.ts:73](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L73)
+Defined in: [packages/core/src/crash/crash.ts:73](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L73)
 
 ***
 
 ### RawCrash
 
-Defined in: [packages/core/src/crash/crash.ts:11](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L11)
+Defined in: [packages/core/src/crash/crash.ts:11](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L11)
 
 `globalThis.__errorHandler` 递过来的四段原始数据，未经处理。
 
@@ -120,13 +120,13 @@ Defined in: [packages/core/src/crash/crash.ts:11](https://hlgit.5518game.com/luo
 
 > `readonly` **linenum**: `number`
 
-Defined in: [packages/core/src/crash/crash.ts:14](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L14)
+Defined in: [packages/core/src/crash/crash.ts:14](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L14)
 
 ##### location
 
 > `readonly` **location**: `string`
 
-Defined in: [packages/core/src/crash/crash.ts:13](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L13)
+Defined in: [packages/core/src/crash/crash.ts:13](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L13)
 
 ⚠️ 引擎会把出错那行的源码连同等长空格附在后面，release 下单次可达约 100 KB。
 
@@ -134,13 +134,13 @@ Defined in: [packages/core/src/crash/crash.ts:13](https://hlgit.5518game.com/luo
 
 > `readonly` **message**: `string`
 
-Defined in: [packages/core/src/crash/crash.ts:15](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L15)
+Defined in: [packages/core/src/crash/crash.ts:15](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L15)
 
 ##### stack
 
 > `readonly` **stack**: `string`
 
-Defined in: [packages/core/src/crash/crash.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L16)
+Defined in: [packages/core/src/crash/crash.ts:16](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L16)
 
 ## Functions
 
@@ -148,7 +148,7 @@ Defined in: [packages/core/src/crash/crash.ts:16](https://hlgit.5518game.com/luo
 
 > **crashContext**(`getContext`): `Record`\<`string`, `string`\>
 
-Defined in: [packages/core/src/crash/crash.ts:112](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L112)
+Defined in: [packages/core/src/crash/crash.ts:112](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L112)
 
 现取上下文。**它自己抛不算错**，退化成空表 —— 少一块上下文远好过整条崩溃报不出去
 （真相源可能是登录态、bundle 表，崩溃发生时它们没就绪恰恰是常态）。
@@ -172,7 +172,7 @@ Defined in: [packages/core/src/crash/crash.ts:112](https://hlgit.5518game.com/lu
 
 > **crashPayload**(`event`, `getContext`): `string`
 
-Defined in: [packages/core/src/crash/crash.ts:127](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L127)
+Defined in: [packages/core/src/crash/crash.ts:127](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L127)
 
 拼成过河的 JSON。各渠道的 `CckReport.report(String json)` 自己解、自己决定塞进哪家 API
 ——两家 SDK 能力不对称（Bugly 的 `stack` 吃任意字符串，Crashlytics 只能造 `Throwable`）。
@@ -200,7 +200,7 @@ Defined in: [packages/core/src/crash/crash.ts:127](https://hlgit.5518game.com/lu
 
 > **createCrashFilter**(`opts`?): [`CrashFilter`](crash.md#crashfilter)
 
-Defined in: [packages/core/src/crash/crash.ts:46](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L46)
+Defined in: [packages/core/src/crash/crash.ts:46](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L46)
 
 造一个收敛器。`opts.maxKinds` 是一次会话最多上报多少**种**不同指纹，默认 8。
 
@@ -222,7 +222,7 @@ Defined in: [packages/core/src/crash/crash.ts:46](https://hlgit.5518game.com/luo
 
 > **parseJsFrames**(`stack`, `max`): [`JsFrame`](crash.md#jsframe)[]
 
-Defined in: [packages/core/src/crash/crash.ts:94](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L94)
+Defined in: [packages/core/src/crash/crash.ts:94](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/crash/crash.ts#L94)
 
 把 V8 的堆栈字符串拆成结构化帧。畸形行（`at [native code]`、空行）安静跳过。
 

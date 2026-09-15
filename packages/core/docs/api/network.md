@@ -10,7 +10,7 @@
 
 ### HeartbeatOptions
 
-Defined in: [packages/core/src/network/network.ts:25](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L25)
+Defined in: [packages/core/src/network/network.ts:25](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L25)
 
 #### Properties
 
@@ -18,7 +18,7 @@ Defined in: [packages/core/src/network/network.ts:25](https://hlgit.5518game.com
 
 > `optional` **enabled**: `boolean`
 
-Defined in: [packages/core/src/network/network.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L27)
+Defined in: [packages/core/src/network/network.ts:27](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L27)
 
 默认 true。
 
@@ -26,7 +26,7 @@ Defined in: [packages/core/src/network/network.ts:27](https://hlgit.5518game.com
 
 > `optional` **intervalSec**: `number`
 
-Defined in: [packages/core/src/network/network.ts:29](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L29)
+Defined in: [packages/core/src/network/network.ts:29](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L29)
 
 心跳间隔（秒），默认 15；一个间隔内无任何入站消息则判死→关闭触发重连。
 
@@ -34,7 +34,7 @@ Defined in: [packages/core/src/network/network.ts:29](https://hlgit.5518game.com
 
 > `optional` **type**: `string`
 
-Defined in: [packages/core/src/network/network.ts:31](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L31)
+Defined in: [packages/core/src/network/network.ts:31](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L31)
 
 ping 消息 type，默认 '__ping'。
 
@@ -42,7 +42,7 @@ ping 消息 type，默认 '__ping'。
 
 ### HttpRequest
 
-Defined in: [packages/core/src/network/http.ts:11](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L11)
+Defined in: [packages/core/src/network/http.ts:11](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L11)
 
 HTTP 短请求接缝。长连接之外还需要它：启动握手（dispatcher）、版本表、公告这类
 一问一答的东西架在 socket 上要先连上才能问，而「能不能连」正是握手要回答的。
@@ -56,7 +56,7 @@ core 只定义形状，真实 IO 在 engine（`createXhrHttp`）。**不返回�
 
 > `readonly` `optional` **body**: `string`
 
-Defined in: [packages/core/src/network/http.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L16)
+Defined in: [packages/core/src/network/http.ts:16](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L16)
 
 已序列化的请求体。
 
@@ -64,13 +64,13 @@ Defined in: [packages/core/src/network/http.ts:16](https://hlgit.5518game.com/lu
 
 > `readonly` `optional` **headers**: `Readonly`\<`Record`\<`string`, `string`\>\>
 
-Defined in: [packages/core/src/network/http.ts:17](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L17)
+Defined in: [packages/core/src/network/http.ts:17](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L17)
 
 ##### method?
 
 > `readonly` `optional` **method**: `"GET"` \| `"POST"`
 
-Defined in: [packages/core/src/network/http.ts:14](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L14)
+Defined in: [packages/core/src/network/http.ts:14](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L14)
 
 默认 `'GET'`。
 
@@ -78,7 +78,7 @@ Defined in: [packages/core/src/network/http.ts:14](https://hlgit.5518game.com/lu
 
 > `readonly` `optional` **timeoutSec**: `number`
 
-Defined in: [packages/core/src/network/http.ts:19](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L19)
+Defined in: [packages/core/src/network/http.ts:19](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L19)
 
 默认由适配层定（engine 侧 10s）。
 
@@ -86,13 +86,13 @@ Defined in: [packages/core/src/network/http.ts:19](https://hlgit.5518game.com/lu
 
 > `readonly` **url**: `string`
 
-Defined in: [packages/core/src/network/http.ts:12](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L12)
+Defined in: [packages/core/src/network/http.ts:12](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L12)
 
 ***
 
 ### HttpResponse
 
-Defined in: [packages/core/src/network/http.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L22)
+Defined in: [packages/core/src/network/http.ts:22](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L22)
 
 #### Properties
 
@@ -100,19 +100,19 @@ Defined in: [packages/core/src/network/http.ts:22](https://hlgit.5518game.com/lu
 
 > `readonly` **status**: `number`
 
-Defined in: [packages/core/src/network/http.ts:23](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L23)
+Defined in: [packages/core/src/network/http.ts:23](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L23)
 
 ##### text
 
 > `readonly` **text**: `string`
 
-Defined in: [packages/core/src/network/http.ts:24](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L24)
+Defined in: [packages/core/src/network/http.ts:24](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L24)
 
 ***
 
 ### ICodec
 
-Defined in: [packages/core/src/network/codec.ts:15](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L15)
+Defined in: [packages/core/src/network/codec.ts:15](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L15)
 
 协议编解码接缝：消息信封 ↔ 线上数据（字节/字符串）。core 用它把 seq 落到/读出协议约定字段——
 换 protobuf / 自定义二进制只换 codec，core 的请求关联/路由逻辑不动（见 network 横评 N5/Q-N3）。
@@ -123,7 +123,7 @@ Defined in: [packages/core/src/network/codec.ts:15](https://hlgit.5518game.com/l
 
 > **decode**(`data`): [`NetMessage`](network.md#netmessage)
 
-Defined in: [packages/core/src/network/codec.ts:19](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L19)
+Defined in: [packages/core/src/network/codec.ts:19](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L19)
 
 收到数据 → 信封。须从协议字段读出 seq（无关联 id 则 seq=undefined，core 按推送处理）。
 
@@ -141,7 +141,7 @@ Defined in: [packages/core/src/network/codec.ts:19](https://hlgit.5518game.com/l
 
 > **encode**(`msg`): `unknown`
 
-Defined in: [packages/core/src/network/codec.ts:17](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L17)
+Defined in: [packages/core/src/network/codec.ts:17](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L17)
 
 信封 → 发送数据。须把 msg.seq 落到协议里服务器会原样回传的字段。
 
@@ -159,7 +159,7 @@ Defined in: [packages/core/src/network/codec.ts:17](https://hlgit.5518game.com/l
 
 ### IHttp
 
-Defined in: [packages/core/src/network/http.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L27)
+Defined in: [packages/core/src/network/http.ts:27](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L27)
 
 #### Methods
 
@@ -167,7 +167,7 @@ Defined in: [packages/core/src/network/http.ts:27](https://hlgit.5518game.com/lu
 
 > **request**(`req`): `Promise`\<[`HttpResponse`](network.md#httpresponse)\>
 
-Defined in: [packages/core/src/network/http.ts:29](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L29)
+Defined in: [packages/core/src/network/http.ts:29](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L29)
 
 传输层出错（DNS / 连不上 / 超时）reject；服务器有回应即 resolve，状态码由调用方判。
 
@@ -185,7 +185,7 @@ Defined in: [packages/core/src/network/http.ts:29](https://hlgit.5518game.com/lu
 
 ### INetwork
 
-Defined in: [packages/core/src/network/network.ts:39](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L39)
+Defined in: [packages/core/src/network/network.ts:39](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L39)
 
 #### Properties
 
@@ -193,7 +193,7 @@ Defined in: [packages/core/src/network/network.ts:39](https://hlgit.5518game.com
 
 > `readonly` **state**: [`NetState`](network.md#netstate)
 
-Defined in: [packages/core/src/network/network.ts:40](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L40)
+Defined in: [packages/core/src/network/network.ts:40](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L40)
 
 #### Methods
 
@@ -201,7 +201,7 @@ Defined in: [packages/core/src/network/network.ts:40](https://hlgit.5518game.com
 
 > **close**(): `void`
 
-Defined in: [packages/core/src/network/network.ts:44](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L44)
+Defined in: [packages/core/src/network/network.ts:44](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L44)
 
 主动关闭（不触发重连）。
 
@@ -213,7 +213,7 @@ Defined in: [packages/core/src/network/network.ts:44](https://hlgit.5518game.com
 
 > **connect**(`url`?): `void`
 
-Defined in: [packages/core/src/network/network.ts:42](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L42)
+Defined in: [packages/core/src/network/network.ts:42](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L42)
 
 连接（可传 url 覆盖）。重置重连计数。
 
@@ -231,7 +231,7 @@ Defined in: [packages/core/src/network/network.ts:42](https://hlgit.5518game.com
 
 > **off**(`type`, `handler`): `void`
 
-Defined in: [packages/core/src/network/network.ts:52](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L52)
+Defined in: [packages/core/src/network/network.ts:52](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L52)
 
 移除推送处理器。
 
@@ -253,7 +253,7 @@ Defined in: [packages/core/src/network/network.ts:52](https://hlgit.5518game.com
 
 > **on**(`type`, `handler`): [`Disposer`](eventbus.md#disposer)
 
-Defined in: [packages/core/src/network/network.ts:50](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L50)
+Defined in: [packages/core/src/network/network.ts:50](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L50)
 
 注册推送处理器，返回取消订阅 disposer。
 
@@ -275,7 +275,7 @@ Defined in: [packages/core/src/network/network.ts:50](https://hlgit.5518game.com
 
 > **onState**(`cb`): [`Disposer`](eventbus.md#disposer)
 
-Defined in: [packages/core/src/network/network.ts:54](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L54)
+Defined in: [packages/core/src/network/network.ts:54](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L54)
 
 订阅状态变化，返回取消订阅 disposer。
 
@@ -293,7 +293,7 @@ Defined in: [packages/core/src/network/network.ts:54](https://hlgit.5518game.com
 
 > **request**(`type`, `body`?, `opts`?): `Promise`\<[`NetMessage`](network.md#netmessage)\>
 
-Defined in: [packages/core/src/network/network.ts:48](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L48)
+Defined in: [packages/core/src/network/network.ts:48](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L48)
 
 请求（seq 关联 + 超时），返回响应信封。未连接立即 reject；超时/断线 reject。
 
@@ -319,7 +319,7 @@ Defined in: [packages/core/src/network/network.ts:48](https://hlgit.5518game.com
 
 > **send**(`type`, `body`?): `void`
 
-Defined in: [packages/core/src/network/network.ts:46](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L46)
+Defined in: [packages/core/src/network/network.ts:46](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L46)
 
 发送消息（fire-and-forget）。未连接则告警丢弃。
 
@@ -341,7 +341,7 @@ Defined in: [packages/core/src/network/network.ts:46](https://hlgit.5518game.com
 
 ### ISocket
 
-Defined in: [packages/core/src/network/socket.ts:9](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L9)
+Defined in: [packages/core/src/network/socket.ts:9](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L9)
 
 传输接缝：一条消息型长连接（WebSocket 式）。core 只认本接口（守零 cc 铁律）。
 engine 按平台适配——Web 原生 WebSocket / native jsb WebSocket / 小游戏 wx.connectSocket。
@@ -354,7 +354,7 @@ connect() 可在 close 后再次调用（重连由 core 编排，engine 每次�
 
 > `optional` **onClose**: () => `void`
 
-Defined in: [packages/core/src/network/socket.ts:21](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L21)
+Defined in: [packages/core/src/network/socket.ts:21](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L21)
 
 连接关闭（主动/被动均触发）。
 
@@ -366,7 +366,7 @@ Defined in: [packages/core/src/network/socket.ts:21](https://hlgit.5518game.com/
 
 > `optional` **onError**: (`err`) => `void`
 
-Defined in: [packages/core/src/network/socket.ts:23](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L23)
+Defined in: [packages/core/src/network/socket.ts:23](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L23)
 
 传输错误（可选，仅告警；关闭以 onClose 为准）。
 
@@ -384,7 +384,7 @@ Defined in: [packages/core/src/network/socket.ts:23](https://hlgit.5518game.com/
 
 > `optional` **onMessage**: (`data`) => `void`
 
-Defined in: [packages/core/src/network/socket.ts:19](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L19)
+Defined in: [packages/core/src/network/socket.ts:19](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L19)
 
 收到一条消息（原始数据，交 ICodec 解码）。
 
@@ -402,7 +402,7 @@ Defined in: [packages/core/src/network/socket.ts:19](https://hlgit.5518game.com/
 
 > `optional` **onOpen**: () => `void`
 
-Defined in: [packages/core/src/network/socket.ts:17](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L17)
+Defined in: [packages/core/src/network/socket.ts:17](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L17)
 
 连接就绪。
 
@@ -416,7 +416,7 @@ Defined in: [packages/core/src/network/socket.ts:17](https://hlgit.5518game.com/
 
 > **close**(): `void`
 
-Defined in: [packages/core/src/network/socket.ts:15](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L15)
+Defined in: [packages/core/src/network/socket.ts:15](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L15)
 
 主动关闭。
 
@@ -428,7 +428,7 @@ Defined in: [packages/core/src/network/socket.ts:15](https://hlgit.5518game.com/
 
 > **connect**(`url`): `void`
 
-Defined in: [packages/core/src/network/socket.ts:11](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L11)
+Defined in: [packages/core/src/network/socket.ts:11](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L11)
 
 发起连接（重连时会被再次调用）。
 
@@ -446,7 +446,7 @@ Defined in: [packages/core/src/network/socket.ts:11](https://hlgit.5518game.com/
 
 > **send**(`data`): `void`
 
-Defined in: [packages/core/src/network/socket.ts:13](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L13)
+Defined in: [packages/core/src/network/socket.ts:13](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L13)
 
 发送已编码数据（由 ICodec 编码后的字节/字符串）。
 
@@ -464,7 +464,7 @@ Defined in: [packages/core/src/network/socket.ts:13](https://hlgit.5518game.com/
 
 ### NetMessage
 
-Defined in: [packages/core/src/network/codec.ts:5](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L5)
+Defined in: [packages/core/src/network/codec.ts:5](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L5)
 
 框架中立消息信封。type=消息类型/协议号（路由 + 请求响应匹配用）；body=业务负载；
 seq=关联 id（request 时框架分配，由 codec 写入协议约定字段；response 由 codec 从协议读出）。
@@ -475,25 +475,25 @@ seq=关联 id（request 时框架分配，由 codec 写入协议约定字段；r
 
 > `optional` **body**: `unknown`
 
-Defined in: [packages/core/src/network/codec.ts:7](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L7)
+Defined in: [packages/core/src/network/codec.ts:7](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L7)
 
 ##### seq?
 
 > `optional` **seq**: `number`
 
-Defined in: [packages/core/src/network/codec.ts:8](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L8)
+Defined in: [packages/core/src/network/codec.ts:8](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L8)
 
 ##### type
 
 > **type**: `string`
 
-Defined in: [packages/core/src/network/codec.ts:6](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L6)
+Defined in: [packages/core/src/network/codec.ts:6](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L6)
 
 ***
 
 ### NetworkOptions
 
-Defined in: [packages/core/src/network/network.ts:57](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L57)
+Defined in: [packages/core/src/network/network.ts:57](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L57)
 
 #### Properties
 
@@ -501,49 +501,49 @@ Defined in: [packages/core/src/network/network.ts:57](https://hlgit.5518game.com
 
 > `optional` **codec**: [`ICodec`](network.md#icodec)
 
-Defined in: [packages/core/src/network/network.ts:59](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L59)
+Defined in: [packages/core/src/network/network.ts:59](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L59)
 
 ##### heartbeat?
 
 > `optional` **heartbeat**: [`HeartbeatOptions`](network.md#heartbeatoptions)
 
-Defined in: [packages/core/src/network/network.ts:63](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L63)
+Defined in: [packages/core/src/network/network.ts:63](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L63)
 
 ##### logger?
 
 > `optional` **logger**: [`ILogger`](logging.md#ilogger)
 
-Defined in: [packages/core/src/network/network.ts:64](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L64)
+Defined in: [packages/core/src/network/network.ts:64](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L64)
 
 ##### reconnect?
 
 > `optional` **reconnect**: [`ReconnectOptions`](network.md#reconnectoptions)
 
-Defined in: [packages/core/src/network/network.ts:62](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L62)
+Defined in: [packages/core/src/network/network.ts:62](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L62)
 
 ##### socket?
 
 > `optional` **socket**: [`ISocket`](network.md#isocket)
 
-Defined in: [packages/core/src/network/network.ts:58](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L58)
+Defined in: [packages/core/src/network/network.ts:58](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L58)
 
 ##### timer?
 
 > `optional` **timer**: [`ITimer`](timer.md#itimer)
 
-Defined in: [packages/core/src/network/network.ts:60](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L60)
+Defined in: [packages/core/src/network/network.ts:60](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L60)
 
 ##### url?
 
 > `optional` **url**: `string`
 
-Defined in: [packages/core/src/network/network.ts:61](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L61)
+Defined in: [packages/core/src/network/network.ts:61](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L61)
 
 ***
 
 ### PbSchema
 
-Defined in: [packages/core/src/network/pb-codec.ts:28](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L28)
+Defined in: [packages/core/src/network/pb-codec.ts:28](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L28)
 
 协议 schema 接缝，由 `.proto` 的生成代码实现。
 
@@ -560,7 +560,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:28](https://hlgit.5518game.co
 
 > **cmdOf**(`type`): `undefined` \| `number`
 
-Defined in: [packages/core/src/network/pb-codec.ts:30](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L30)
+Defined in: [packages/core/src/network/pb-codec.ts:30](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L30)
 
 消息类型名 → cmd 号。未知类型返回 `undefined`。
 
@@ -578,7 +578,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:30](https://hlgit.5518game.co
 
 > **decodeBody**(`type`, `bytes`): `unknown`
 
-Defined in: [packages/core/src/network/pb-codec.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L36)
+Defined in: [packages/core/src/network/pb-codec.ts:36](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L36)
 
 解码消息体（不含帧头）。
 
@@ -600,7 +600,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:36](https://hlgit.5518game.co
 
 > **encodeBody**(`type`, `body`): `Uint8Array`
 
-Defined in: [packages/core/src/network/pb-codec.ts:34](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L34)
+Defined in: [packages/core/src/network/pb-codec.ts:34](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L34)
 
 编码消息体（不含帧头）。
 
@@ -622,7 +622,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:34](https://hlgit.5518game.co
 
 > **typeOf**(`cmd`): `undefined` \| `string`
 
-Defined in: [packages/core/src/network/pb-codec.ts:32](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L32)
+Defined in: [packages/core/src/network/pb-codec.ts:32](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L32)
 
 cmd 号 → 消息类型名。未知 cmd 返回 `undefined`。
 
@@ -640,7 +640,7 @@ cmd 号 → 消息类型名。未知 cmd 返回 `undefined`。
 
 ### PbSchemaRegistry
 
-Defined in: [packages/core/src/network/pb-codec.ts:112](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L112)
+Defined in: [packages/core/src/network/pb-codec.ts:112](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L112)
 
 可增量注册的 schema —— **分包的那一半**。
 
@@ -659,7 +659,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:112](https://hlgit.5518game.c
 
 > **add**(`cmds`, `body`): () => `void`
 
-Defined in: [packages/core/src/network/pb-codec.ts:120](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L120)
+Defined in: [packages/core/src/network/pb-codec.ts:120](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L120)
 
 注册一段协议。type 重名或 cmd 撞号**当场抛**（模块 cmd 段划错要在加载时炸，
 不能等线上错发）；校验全过才落库，不留半注册的表。
@@ -689,7 +689,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:120](https://hlgit.5518game.c
 
 > **cmdOf**(`type`): `undefined` \| `number`
 
-Defined in: [packages/core/src/network/pb-codec.ts:30](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L30)
+Defined in: [packages/core/src/network/pb-codec.ts:30](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L30)
 
 消息类型名 → cmd 号。未知类型返回 `undefined`。
 
@@ -711,7 +711,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:30](https://hlgit.5518game.co
 
 > **decodeBody**(`type`, `bytes`): `unknown`
 
-Defined in: [packages/core/src/network/pb-codec.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L36)
+Defined in: [packages/core/src/network/pb-codec.ts:36](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L36)
 
 解码消息体（不含帧头）。
 
@@ -737,7 +737,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:36](https://hlgit.5518game.co
 
 > **encodeBody**(`type`, `body`): `Uint8Array`
 
-Defined in: [packages/core/src/network/pb-codec.ts:34](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L34)
+Defined in: [packages/core/src/network/pb-codec.ts:34](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L34)
 
 编码消息体（不含帧头）。
 
@@ -763,7 +763,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:34](https://hlgit.5518game.co
 
 > **typeOf**(`cmd`): `undefined` \| `string`
 
-Defined in: [packages/core/src/network/pb-codec.ts:32](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L32)
+Defined in: [packages/core/src/network/pb-codec.ts:32](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L32)
 
 cmd 号 → 消息类型名。未知 cmd 返回 `undefined`。
 
@@ -785,7 +785,7 @@ cmd 号 → 消息类型名。未知 cmd 返回 `undefined`。
 
 ### ReconnectOptions
 
-Defined in: [packages/core/src/network/network.ts:14](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L14)
+Defined in: [packages/core/src/network/network.ts:14](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L14)
 
 #### Properties
 
@@ -793,7 +793,7 @@ Defined in: [packages/core/src/network/network.ts:14](https://hlgit.5518game.com
 
 > `optional` **enabled**: `boolean`
 
-Defined in: [packages/core/src/network/network.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L16)
+Defined in: [packages/core/src/network/network.ts:16](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L16)
 
 默认 true。
 
@@ -801,7 +801,7 @@ Defined in: [packages/core/src/network/network.ts:16](https://hlgit.5518game.com
 
 > `optional` **maxAttempts**: `number`
 
-Defined in: [packages/core/src/network/network.ts:22](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L22)
+Defined in: [packages/core/src/network/network.ts:22](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L22)
 
 最大重连次数，默认 0（=无限）。
 
@@ -809,7 +809,7 @@ Defined in: [packages/core/src/network/network.ts:22](https://hlgit.5518game.com
 
 > `optional` **maxDelaySec**: `number`
 
-Defined in: [packages/core/src/network/network.ts:20](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L20)
+Defined in: [packages/core/src/network/network.ts:20](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L20)
 
 退避上限（秒），默认 30。
 
@@ -817,7 +817,7 @@ Defined in: [packages/core/src/network/network.ts:20](https://hlgit.5518game.com
 
 > `optional` **minDelaySec**: `number`
 
-Defined in: [packages/core/src/network/network.ts:18](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L18)
+Defined in: [packages/core/src/network/network.ts:18](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L18)
 
 首次重连延迟（秒），默认 1；退避 = min(max, min×2^attempt)。
 
@@ -825,7 +825,7 @@ Defined in: [packages/core/src/network/network.ts:18](https://hlgit.5518game.com
 
 ### RequestOptions
 
-Defined in: [packages/core/src/network/network.ts:34](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L34)
+Defined in: [packages/core/src/network/network.ts:34](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L34)
 
 #### Properties
 
@@ -833,7 +833,7 @@ Defined in: [packages/core/src/network/network.ts:34](https://hlgit.5518game.com
 
 > `optional` **timeoutSec**: `number`
 
-Defined in: [packages/core/src/network/network.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L36)
+Defined in: [packages/core/src/network/network.ts:36](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L36)
 
 超时（秒），默认 10。
 
@@ -843,7 +843,7 @@ Defined in: [packages/core/src/network/network.ts:36](https://hlgit.5518game.com
 
 > **NetHandler**: (`body`, `msg`) => `void`
 
-Defined in: [packages/core/src/network/network.ts:12](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L12)
+Defined in: [packages/core/src/network/network.ts:12](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L12)
 
 推送消息处理器。
 
@@ -867,7 +867,7 @@ Defined in: [packages/core/src/network/network.ts:12](https://hlgit.5518game.com
 
 > **NetState**: `"closed"` \| `"connecting"` \| `"open"` \| `"reconnecting"`
 
-Defined in: [packages/core/src/network/network.ts:9](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L9)
+Defined in: [packages/core/src/network/network.ts:9](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L9)
 
 连接状态。
 
@@ -877,7 +877,7 @@ Defined in: [packages/core/src/network/network.ts:9](https://hlgit.5518game.com/
 
 > **SegmentBody**: `Pick`\<[`PbSchema`](network.md#pbschema), `"encodeBody"` \| `"decodeBody"`\>
 
-Defined in: [packages/core/src/network/pb-codec.ts:102](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L102)
+Defined in: [packages/core/src/network/pb-codec.ts:102](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L102)
 
 一段协议的 body 编解码（由该段的生成代码提供）。
 
@@ -887,7 +887,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:102](https://hlgit.5518game.c
 
 > `const` **HTTP**: [`Token`](di.md#tokent)\<[`IHttp`](network.md#ihttp)\>
 
-Defined in: [packages/core/src/network/http.ts:33](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L33)
+Defined in: [packages/core/src/network/http.ts:33](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L33)
 
 DI token：engine 的 `ccHttpModule()` 注册 XHR 实现。
 
@@ -897,7 +897,7 @@ DI token：engine 的 `ccHttpModule()` 注册 XHR 实现。
 
 > `const` **NETWORK**: [`Token`](di.md#tokent)\<[`INetwork`](network.md#inetwork)\>
 
-Defined in: [packages/core/src/network/network.ts:270](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L270)
+Defined in: [packages/core/src/network/network.ts:270](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L270)
 
 DI token：项目可 register 自己的 Network 覆盖默认。
 
@@ -907,7 +907,7 @@ DI token：项目可 register 自己的 Network 覆盖默认。
 
 > `const` **NETWORK\_SOCKET**: [`Token`](di.md#tokent)\<[`ISocket`](network.md#isocket)\>
 
-Defined in: [packages/core/src/network/socket.ts:27](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L27)
+Defined in: [packages/core/src/network/socket.ts:27](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L27)
 
 DI token：engine Bootstrap register 平台 socket 适配；未注册时 Network 回退空 socket（永不 open）。
 
@@ -917,7 +917,7 @@ DI token：engine Bootstrap register 平台 socket 适配；未注册时 Network
 
 > `const` **PB\_SCHEMA**: [`Token`](di.md#tokent)\<[`PbSchemaRegistry`](network.md#pbschemaregistry)\>
 
-Defined in: [packages/core/src/network/pb-codec.ts:127](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L127)
+Defined in: [packages/core/src/network/pb-codec.ts:127](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L127)
 
 DI token：项目在启动时把注册表放进来（基础段已注册好），
 各模块 bundle 加载时取出来注册自己那段——模块不认识 `INetwork`，只认这张表。
@@ -928,7 +928,7 @@ DI token：项目在启动时把注册表放进来（基础段已注册好），
 
 > **createJsonCodec**(): [`ICodec`](network.md#icodec)
 
-Defined in: [packages/core/src/network/codec.ts:23](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L23)
+Defined in: [packages/core/src/network/codec.ts:23](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/codec.ts#L23)
 
 默认 JSON codec：type/body/seq 直接作 JSON 字段。项目可换 protobuf/二进制 codec。
 
@@ -942,7 +942,7 @@ Defined in: [packages/core/src/network/codec.ts:23](https://hlgit.5518game.com/l
 
 > **createMemorySocket**(): [`ISocket`](network.md#isocket)
 
-Defined in: [packages/core/src/network/socket.ts:30](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L30)
+Defined in: [packages/core/src/network/socket.ts:30](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/socket.ts#L30)
 
 空 socket（null object）：connect/send/close 皆 no-op、回调永不触发。默认实现（无 engine 时）。
 
@@ -956,7 +956,7 @@ Defined in: [packages/core/src/network/socket.ts:30](https://hlgit.5518game.com/
 
 > **createNetwork**(`opts`?): [`INetwork`](network.md#inetwork)
 
-Defined in: [packages/core/src/network/network.ts:74](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L74)
+Defined in: [packages/core/src/network/network.ts:74](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L74)
 
 造 Network（纯逻辑、零 cc；传输经 ISocket、协议经 ICodec、调度经 ITimer 注入）。
 
@@ -976,7 +976,7 @@ Defined in: [packages/core/src/network/network.ts:74](https://hlgit.5518game.com
 
 > **createPbSchema**(`cmds`, `body`): [`PbSchema`](network.md#pbschema)
 
-Defined in: [packages/core/src/network/pb-codec.ts:192](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L192)
+Defined in: [packages/core/src/network/pb-codec.ts:192](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L192)
 
 从一张 `{type: cmd}` 表建**单段**不可变 schema，body 编解码仍要调用方给。
 只有一段协议（不分包）时用它；要分包见 [createPbSchemaRegistry](network.md#createpbschemaregistry)。
@@ -1001,7 +1001,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:192](https://hlgit.5518game.c
 
 > **createPbSchemaRegistry**(): [`PbSchemaRegistry`](network.md#pbschemaregistry)
 
-Defined in: [packages/core/src/network/pb-codec.ts:130](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L130)
+Defined in: [packages/core/src/network/pb-codec.ts:130](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L130)
 
 建一个空的协议注册表，等各段自己 [PbSchemaRegistry.add](network.md#add) 进来。
 
@@ -1015,7 +1015,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:130](https://hlgit.5518game.c
 
 > **createProtobufCodec**(`schema`): [`ICodec`](network.md#icodec)
 
-Defined in: [packages/core/src/network/pb-codec.ts:64](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L64)
+Defined in: [packages/core/src/network/pb-codec.ts:64](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/pb-codec.ts#L64)
 
 建 protobuf codec。
 
@@ -1042,7 +1042,7 @@ Defined in: [packages/core/src/network/pb-codec.ts:64](https://hlgit.5518game.co
 
 > **getHttp**(): [`IHttp`](network.md#ihttp)
 
-Defined in: [packages/core/src/network/http.ts:36](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L36)
+Defined in: [packages/core/src/network/http.ts:36](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L36)
 
 取全局 IHttp。core 做不了 IO，所以没有默认实现——没注册就是装配漏了，响亮地说。
 
@@ -1056,7 +1056,7 @@ Defined in: [packages/core/src/network/http.ts:36](https://hlgit.5518game.com/lu
 
 > **getNetwork**(): [`INetwork`](network.md#inetwork)
 
-Defined in: [packages/core/src/network/network.ts:275](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L275)
+Defined in: [packages/core/src/network/network.ts:275](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/network.ts#L275)
 
 便捷取用：优先 tryResolve(NETWORK)；未注册则进程级默认（空 socket 背书）。
 
@@ -1070,7 +1070,7 @@ Defined in: [packages/core/src/network/network.ts:275](https://hlgit.5518game.co
 
 > **postJson**(`http`, `url`, `body`, `timeoutSec`?): `Promise`\<`unknown`\>
 
-Defined in: [packages/core/src/network/http.ts:51](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L51)
+Defined in: [packages/core/src/network/http.ts:51](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/network/http.ts#L51)
 
 POST 一个 JSON 并解析回来。服务端契约是 **POST-only RPC**（`POST /api/<Method>`），
 且**业务错误一律 HTTP 200** + body 里带 code——CDN / 渠道 SDK 代理 / 企业网关会篡改

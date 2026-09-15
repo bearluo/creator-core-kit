@@ -10,7 +10,7 @@
 
 ### ReadSignal\<T\>
 
-Defined in: [packages/core/src/reactive/reactive.ts:13](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L13)
+Defined in: [packages/core/src/reactive/reactive.ts:13](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L13)
 
 只读响应式值。读 .value 会在当前 effect 内建立依赖；peek() 读值但不建立依赖。
 
@@ -28,7 +28,7 @@ Defined in: [packages/core/src/reactive/reactive.ts:13](https://hlgit.5518game.c
 
 > `readonly` **value**: `T`
 
-Defined in: [packages/core/src/reactive/reactive.ts:14](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L14)
+Defined in: [packages/core/src/reactive/reactive.ts:14](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L14)
 
 #### Methods
 
@@ -36,7 +36,7 @@ Defined in: [packages/core/src/reactive/reactive.ts:14](https://hlgit.5518game.c
 
 > **peek**(): `T`
 
-Defined in: [packages/core/src/reactive/reactive.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L16)
+Defined in: [packages/core/src/reactive/reactive.ts:16](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L16)
 
 读当前值但不订阅（effect 内只想取值、不想因它重跑时用）。
 
@@ -48,7 +48,7 @@ Defined in: [packages/core/src/reactive/reactive.ts:16](https://hlgit.5518game.c
 
 ### Signal\<T\>
 
-Defined in: [packages/core/src/reactive/reactive.ts:20](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L20)
+Defined in: [packages/core/src/reactive/reactive.ts:20](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L20)
 
 可写响应式值。setter 用 Object.is 幂等——值未变不通知（天然挡双向绑定回环）。
 
@@ -66,7 +66,7 @@ Defined in: [packages/core/src/reactive/reactive.ts:20](https://hlgit.5518game.c
 
 > **value**: `T`
 
-Defined in: [packages/core/src/reactive/reactive.ts:21](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L21)
+Defined in: [packages/core/src/reactive/reactive.ts:21](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L21)
 
 ###### Overrides
 
@@ -78,7 +78,7 @@ Defined in: [packages/core/src/reactive/reactive.ts:21](https://hlgit.5518game.c
 
 > **peek**(): `T`
 
-Defined in: [packages/core/src/reactive/reactive.ts:16](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L16)
+Defined in: [packages/core/src/reactive/reactive.ts:16](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L16)
 
 读当前值但不订阅（effect 内只想取值、不想因它重跑时用）。
 
@@ -96,7 +96,7 @@ Defined in: [packages/core/src/reactive/reactive.ts:16](https://hlgit.5518game.c
 
 > **Dispose**: () => `void`
 
-Defined in: [packages/core/src/reactive/reactive.ts:10](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L10)
+Defined in: [packages/core/src/reactive/reactive.ts:10](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L10)
 
 响应式原语：signal / computed / effect —— MVVM 数据绑定的 core 地基（纯 TS、零 cc）。
 自动 getter 依赖追踪：跑 effect 时读到的 signal 自动成为其依赖，改值 → 依赖它的 effect 重跑。
@@ -115,7 +115,7 @@ ponytail: 朴素同步 push，无 glitch-free 拓扑调度——菱形依赖至�
 
 > **computed**\<`T`\>(`getter`): [`ReadSignal`](reactive.md#readsignalt)\<`T`\>
 
-Defined in: [packages/core/src/reactive/reactive.ts:161](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L161)
+Defined in: [packages/core/src/reactive/reactive.ts:161](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L161)
 
 惰性 + 缓存的派生值：只在被读时求值，依赖变才失效重算；无人读则不算。
 
@@ -139,7 +139,7 @@ Defined in: [packages/core/src/reactive/reactive.ts:161](https://hlgit.5518game.
 
 > **effect**(`fn`): [`Dispose`](reactive.md#dispose)
 
-Defined in: [packages/core/src/reactive/reactive.ts:170](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L170)
+Defined in: [packages/core/src/reactive/reactive.ts:170](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L170)
 
 副作用：立即同步跑一次并收集依赖；此后任一依赖变化即重跑。
 fn 可返回清理函数，在「下次重跑前」和「dispose 时」被调用（如反注册 cc 事件）。
@@ -161,7 +161,7 @@ fn 可返回清理函数，在「下次重跑前」和「dispose 时」被调用
 
 > **signal**\<`T`\>(`initial`): [`Signal`](reactive.md#signalt)\<`T`\>
 
-Defined in: [packages/core/src/reactive/reactive.ts:156](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L156)
+Defined in: [packages/core/src/reactive/reactive.ts:156](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L156)
 
 造一个可写 signal。
 
@@ -185,7 +185,7 @@ Defined in: [packages/core/src/reactive/reactive.ts:156](https://hlgit.5518game.
 
 > **untracked**\<`T`\>(`fn`): `T`
 
-Defined in: [packages/core/src/reactive/reactive.ts:176](https://hlgit.5518game.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L176)
+Defined in: [packages/core/src/reactive/reactive.ts:176](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/blob/main/packages/core/src/reactive/reactive.ts#L176)
 
 读值时不建立任何依赖（effect 内「看一眼别的 signal 但不想被它触发」时用）。
 
