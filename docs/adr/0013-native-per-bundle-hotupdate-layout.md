@@ -139,7 +139,7 @@ hotupdate 37% → 100% → restart
 `热更检查失败: java.net.ConnectException: Failed to connect to /127.0.0.1:9`。
 
 > 该轮 `cdn_url` 由本机假 dispatcher（scratchpad，验证用）下发 —— 真的那台配的值仍是错形态的
-> `…:8081/cdn/`，已提 [server-core-kit#1](https://hlgit.5518game.com/luohao/server-core-kit/-/issues/1)。
+> `…:8081/cdn/`，已提 [server-core-kit#1](https://gitlab.huanchanghuyu.com/luohao/server-core-kit/-/issues/1)。
 > 改那个文件属别的仓，本仓不动。
 
 **至此整条热更链路只剩一个烘死的地址：`dispatcherUrl`**（`boot/app-config.ts` 的打包期常量）。它救不了

@@ -1,8 +1,8 @@
 # Issue tracker: GitLab
 
-Issues and PRDs for this repo live as GitLab issues on the company self-hosted GitLab **hlgit** (`https://hlgit.5518game.com/`). Use the [`glab`](https://gitlab.com/gitlab-org/cli) CLI for all operations.
+Issues and PRDs for this repo live as GitLab issues on the company self-hosted GitLab **hlgit** (`https://gitlab.huanchanghuyu.com/`). Use the [`glab`](https://gitlab.com/gitlab-org/cli) CLI for all operations.
 
-> **本仓 remote**：`origin` = `https://hlgit.5518game.com/luohao/creator-core-kit.git`，`glab` 在仓内即可推断项目，不必带 `-R`。`glab` 已登录 hlgit（身份 `luohao`），且 User 级环境变量 `GITLAB_HOST=hlgit.5518game.com` 已设，故默认实例即 hlgit，一般无需 `--hostname`。别用 `--stdin` 传 token（PowerShell 的 `\r\n` 会致 401），用 `--token` 或交互式。新建仓库后按全局约定设 fast-forward 合并（线性历史，见根 `CLAUDE.md` / 全局 skill `/rebase-merge`）。
+> **本仓 remote**：`origin` = `https://gitlab.huanchanghuyu.com/luohao/creator-core-kit.git`，`glab` 在仓内即可推断项目，不必带 `-R`。`glab` 已登录 hlgit（身份 `luohao`），且 User 级环境变量 `GITLAB_HOST=gitlab.huanchanghuyu.com` 已设，故默认实例即 hlgit，一般无需 `--hostname`。别用 `--stdin` 传 token（PowerShell 的 `\r\n` 会致 401），用 `--token` 或交互式。新建仓库后按全局约定设 fast-forward 合并（线性历史，见根 `CLAUDE.md` / 全局 skill `/rebase-merge`）。
 
 ## Conventions
 

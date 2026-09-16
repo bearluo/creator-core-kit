@@ -103,7 +103,7 @@ http://172.25.50.135:8081/api/public/dl/<hash>/
 
 hash 永久不变 → 可以放心烘进 APK；绑 `0.0.0.0` → 模拟器 / 真机 / Tailscale 全通；服务随 Docker Desktop 自启 → 不用起进程。本仓的分享是 `/creator-core-kit/cdn`，hash `shCo8WNE`。
 
-⚠️ **URL 形态错了会 `200` + HTML，不是 404。** filebrowser 只在 `/api/public/dl/<hash>/` 下发文件，其它任意路径（`/cdn/`、`/share/<hash>`…）都回 SPA 首页，**状态码照样 200**。客户端「下载成功」，写下一个 HTML，直到解析才炸 `readFile failed!` —— 探活只看 status code 会一路绿灯。**判据是 `Content-Type: application/octet-stream`，不是 200。** 2026-08-18 服务端下发的 `cdn_url` 正是踩这个（[server-core-kit#1](https://hlgit.5518game.com/luohao/server-core-kit/-/issues/1)）。
+⚠️ **URL 形态错了会 `200` + HTML，不是 404。** filebrowser 只在 `/api/public/dl/<hash>/` 下发文件，其它任意路径（`/cdn/`、`/share/<hash>`…）都回 SPA 首页，**状态码照样 200**。客户端「下载成功」，写下一个 HTML，直到解析才炸 `readFile failed!` —— 探活只看 status code 会一路绿灯。**判据是 `Content-Type: application/octet-stream`，不是 200。** 2026-08-18 服务端下发的 `cdn_url` 正是踩这个（[server-core-kit#1](https://gitlab.huanchanghuyu.com/luohao/server-core-kit/-/issues/1)）。
 
 **另：`10.0.2.2` 的其它出现处也多半是同期遗留。** 比如 `http://10.0.2.2:9200/` —— `9200` 是 server-core-kit **gateway 的 admin 面**，跟热更托管无关；而且 gateway 早已迁到 dev139、admin 面**设计上只在容器内监听**，所以那个地址两头皆空。要调 admin 面走
 `ssh dev139 "docker exec server-core-kit-gateway-1 wget -qO- --post-data='{}' http://127.0.0.1:9200/admin/retire"`（镜像无 curl）。

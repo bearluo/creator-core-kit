@@ -5,7 +5,7 @@
 **何时读**：动手实现上述任一模块之前；或要判断「某个跟设备能力有关的东西该不该进 kit」时。
 **依赖**：[ADR-0001](../adr/0001-cross-bundle-singleton-and-aot-hotupdate.md)（DI 与跨 bundle 单例）、[ADR-0002](../adr/0002-engine-test-strategy-capped-cc-mock.md)（core/engine 测试策略）、[ADR-0011](../adr/0011-server-framework-split-and-protocol-contract.md)（服务端协议契约边界）、[ADR-0017](../adr/0017-base-hotupdate-via-fixed-name-pointer.md)（base 层热更边界）
 
-> 本文是 hlgit 地图 [#21](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/21) 走完之后的产物，八张子票的结论都收在这里。
+> 本文是 hlgit 地图 [#21](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/21) 走完之后的产物，八张子票的结论都收在这里。
 > **决策的权威出处是各张票**（文末有索引），本文只做拼装与形状定义，不复述论证过程。
 
 ---
@@ -185,7 +185,7 @@ export interface DeviceTierOptions {
 
 这**不只是 fail-fast，是排序的正确性前提**：`topoSort`（`packages/core/src/bootstrap/bootstrap.ts:59`）保证画像模块先 `install`。项目漏注册画像模块，`boot()` 当场抛「depends on missing module」，而不是等到判档那一步在 1.5 秒赛跑里静默失败。
 
-> 这一条比 [#27](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/27) 记的更强 —— 那里写的是「install 时并不 resolve 画像，声明 deps 只为 fail-fast」。写规格时发现 install 期捕获更简单、且没有合理的缺省可退（没有画像就打不了分），故收紧。
+> 这一条比 [#27](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/27) 记的更强 —— 那里写的是「install 时并不 resolve 画像，声明 deps 只为 fail-fast」。写规格时发现 install 期捕获更简单、且没有合理的缺省可退（没有画像就打不了分），故收紧。
 
 ### 3.4 启动时序：另起一步，排在 `dispatch` 之后、`shared` 之前
 
@@ -216,7 +216,7 @@ export type LaunchPhase =
 
 **为什么不让项目自己 splice 一个 `tierStep()` 进去**，两条理由，第二条是硬的：
 
-1. 上面那个顺序是整张 [#25](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/25) 推出来的结论。交给每个接入方各排一次，**排错了是静默的** —— 排到 `shared` 之后，档位照样判出来、缓存照样写，只是常驻地基皮包已按默认档装好，这一版白判，日志里一个字都不会出现。
+1. 上面那个顺序是整张 [#25](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/25) 推出来的结论。交给每个接入方各排一次，**排错了是静默的** —— 排到 `shared` 之后，档位照样判出来、缓存照样写，只是常驻地基皮包已按默认档装好，这一版白判，日志里一个字都不会出现。
 2. **`LaunchStep.phase` 的类型是封闭联合 `LaunchPhase`** —— 项目自己插的步骤**没法给自己一个准确的 phase**，只能借用一个不相干的（借 `'dispatch'`，那 1.5 秒会被启动界面显示成「连接服务器」，排查直接指错方向）。外部扩不了这个联合，这条路从类型上就是残的。
 
 加 `'tier'` 成员会让所有 `switch` 在编译期报出来（demo 的 `LaunchOverlay` 会被点名），不会静默漏文案。
@@ -368,7 +368,7 @@ registerUI('Shop', { bundle: (v) => `shop-${v.tier}`, prefab: 'Shop' });
 
 **`device-tier` 必测的那一条**：`await` 回来先确认「自己还在」（`CLAUDE.md` 硬规则 4）。它只在弱网现形，本机永远碰不到，所以必须靠测试而不是靠运气。
 
-**`device-profile` 的 engine 半怎么做到「没有逻辑可测」**：照 [#51](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/51) 那次学到的办法 —— 把单位换算、`readFailures` 记账、`REASON_*` 常量到字符串的映射**全部下沉成 core 的纯函数并全测**，engine 只剩「按平台挑一条取值路径 + 把结果塞进结构」，没有分支可以出错。
+**`device-profile` 的 engine 半怎么做到「没有逻辑可测」**：照 [#51](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/51) 那次学到的办法 —— 把单位换算、`readFailures` 记账、`REASON_*` 常量到字符串的映射**全部下沉成 core 的纯函数并全测**，engine 只剩「按平台挑一条取值路径 + 把结果塞进结构」，没有分支可以出错。
 
 **`check:vm-tests` 不扩** —— 它只扫 `apps/` 下的 `assets/` 或 `src/`（`scripts/check-vm-tests.mjs`），`packages/` 不在管辖内。
 
@@ -380,7 +380,7 @@ registerUI('Shop', { bundle: (v) => `shop-${v.tier}`, prefab: 'Shop' });
 
 **kit 只给等级，业务层自己转旋钮。**
 
-调研（[#39](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/39)）给降级器定过五个旋钮，实测之后只剩两行代码：
+调研（[#39](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/39)）给降级器定过五个旋钮，实测之后只剩两行代码：
 
 | 旋钮 | 现状 |
 |---|---|
@@ -414,7 +414,7 @@ registerUI('Shop', { bundle: (v) => `shop-${v.tier}`, prefab: 'Shop' });
 - **内存必须拆成三个字段**（§2.1），合并会让打分拿到含义随平台漂移的数字；
 - ⇒ kit 的默认打分要跨平台，就**必须**在内部把那三个字段挑一个用（正是上一条禁掉的事）；要不漂移，就只能对 Android 成立、其余平台恒落默认档（那不叫兜底）。
 
-而且它犯的正是 [#25](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/25) 否决「服务器下发规则让客户端算」时给的毛病：**第二套算法要维护，两边算出不同结果时排查会很痛** —— kit 的默认与服务器的真算法必然不一致，且不一致时没人会发现。
+而且它犯的正是 [#25](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/25) 否决「服务器下发规则让客户端算」时给的毛病：**第二套算法要维护，两边算出不同结果时排查会很痛** —— kit 的默认与服务器的真算法必然不一致，且不一致时没人会发现。
 
 **编排参数照旧烧默认值**（超时预算 1500ms、缓存 key、来源标记）—— 那些是机制不是策略，跨平台没有漂移问题。
 
@@ -441,7 +441,7 @@ registerUI('Shop', { bundle: (v) => `shop-${v.tier}`, prefab: 'Shop' });
 | ④ | 厂商 ROM 对 `/sys/.../cpu/**` 的实际可读性 | **要目标市场真实低端机抽样，模拟器测不出来** |
 | ⑤ | 字节小游戏字段清单 | 该平台的退化程度 |
 
-**已被答掉的一项**：「Android Java 源码往 `build-templates/` 哪一层放」—— 由崩溃上报那张图（[#42](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/42)）解决了：`apps/demo/native/` 已入库，三份 `CckReport.java` 真落在 `app/src/cap-report-*/java/com/cck/report/`，落点表可直接抄。
+**已被答掉的一项**：「Android Java 源码往 `build-templates/` 哪一层放」—— 由崩溃上报那张图（[#42](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/42)）解决了：`apps/demo/native/` 已入库，三份 `CckReport.java` 真落在 `app/src/cap-report-*/java/com/cck/report/`，落点表可直接抄。
 
 **待验证的 API**：`ActivityManager.getHistoricalProcessExitReasons()` 的版本门槛、字段名、`REASON_*` 常量清单 —— 实现第一件事对官方文档，别凭记忆写。常量到字符串的映射由 engine 侧做，不能让每个消费者各背一张 Android 常量表。
 
@@ -463,12 +463,12 @@ registerUI('Shop', { bundle: (v) => `shop-${v.tier}`, prefab: 'Shop' });
 
 | 票 | 定了什么 |
 |---|---|
-| [#22 设备参数取得到哪些、要不要权限](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/22) | **零权限能做到**（19 项无一需要权限声明）；引擎只白送 GPU 型号 / 分辨率 / 压缩格式支持 / adpf，内存与 CPU 全部要自写 Java 桥；三项在新系统上静默返回空值不抛错 |
-| [#23 kit 给数据还是给决策](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/23) | 资源档会话内定死、运行中不换包；闭环改成跨启动；档位持有者不给 `setTier()` |
-| [#24 档位进不进 UIVariant](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/24) | `UIVariant` 加 `tier`；分档是登记制；缺档由构建期保证、运行期不回退 |
-| [#25 策略注入载体](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/25) | 判档另起一步排在 `dispatch` 后 `shared` 前；缓存优先 + 短超时不重试；`fetchTier` 由项目注入 |
-| [#26 性能采集器接口形状](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/26) | `PerfWindow` 一个类三个接口都不做；P95 抓不到卡顿；两个「挂错时钟」的坑 |
-| [#37 DeviceProfile 怎么跨平台建模](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/37) | 内存拆三个字段；`readFailures` 区分两种「取不到」；接缝定在「给我一份画像」这层 |
-| [#39 运行时还能省哪些内存](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/39) | **纹理内存压不了**（四条独立证据）；降级器旋钮清单；`macro.*` 全家是启动期配置 |
-| [#41 实测 shadingScale](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/41) | 开箱即坏（多相机 × post-process）；不可热更；固定 +904 KB APK |
-| [#27 收口：切几个模块](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/27) | **本文的直接来源** —— 模块划分、分层、依赖方向、token、文档与测试归属 |
+| [#22 设备参数取得到哪些、要不要权限](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/22) | **零权限能做到**（19 项无一需要权限声明）；引擎只白送 GPU 型号 / 分辨率 / 压缩格式支持 / adpf，内存与 CPU 全部要自写 Java 桥；三项在新系统上静默返回空值不抛错 |
+| [#23 kit 给数据还是给决策](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/23) | 资源档会话内定死、运行中不换包；闭环改成跨启动；档位持有者不给 `setTier()` |
+| [#24 档位进不进 UIVariant](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/24) | `UIVariant` 加 `tier`；分档是登记制；缺档由构建期保证、运行期不回退 |
+| [#25 策略注入载体](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/25) | 判档另起一步排在 `dispatch` 后 `shared` 前；缓存优先 + 短超时不重试；`fetchTier` 由项目注入 |
+| [#26 性能采集器接口形状](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/26) | `PerfWindow` 一个类三个接口都不做；P95 抓不到卡顿；两个「挂错时钟」的坑 |
+| [#37 DeviceProfile 怎么跨平台建模](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/37) | 内存拆三个字段；`readFailures` 区分两种「取不到」；接缝定在「给我一份画像」这层 |
+| [#39 运行时还能省哪些内存](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/39) | **纹理内存压不了**（四条独立证据）；降级器旋钮清单；`macro.*` 全家是启动期配置 |
+| [#41 实测 shadingScale](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/41) | 开箱即坏（多相机 × post-process）；不可热更；固定 +904 KB APK |
+| [#27 收口：切几个模块](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/27) | **本文的直接来源** —— 模块划分、分层、依赖方向、token、文档与测试归属 |

@@ -20,7 +20,7 @@
 > （两个页签、分段贝塞尔、真弧长恒速、控件形态），只有「宿主与装配」那部分作废。
 > 当时的可交互原型不再单独留一份 —— 它**就是**现在那个工具的界面。
 
-**决策出处**：[图 · 鱼阵编辑器 v2](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/11)。
+**决策出处**：[图 · 鱼阵编辑器 v2](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/11)。
 每条决策住在它自己的票里，本文只**引用**并补上「怎么落地」那一半 —— 改哪些文件、什么顺序、每步的闸。
 
 ---
@@ -31,7 +31,7 @@
 
 ### 1. 上一版的交互是**缩水**，不是平台限制
 
-[原型](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/5)定的 `<input type=number>` / `<select>` / 可拖进度条，实施时被换成了 ◀▶ 步进和裸 Label 按钮，没有底、没有边框、没有 hover。实测整个 `FishEditor.ts` 用了 **0 个 `Layout`、0 个 `EditBox`**，`Sprite` 六处还都是鱼的图不是 UI 底。
+[原型](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/5)定的 `<input type=number>` / `<select>` / 可拖进度条，实施时被换成了 ◀▶ 步进和裸 Label 按钮，没有底、没有边框、没有 hover。实测整个 `FishEditor.ts` 用了 **0 个 `Layout`、0 个 `EditBox`**，`Sprite` 六处还都是鱼的图不是 UI 底。
 
 而 Cocos 这些**都有**：`EditBox`（web 端是真 DOM input）、`Slider`、`Button` 自带 COLOR transition、`Layout`、`ToggleContainer`；`packages/engine/src/reactive-bind.ts` 里 `bindEditBox` / `bindToggle` 已经写好了。唯一真没有原生等价物的是 `<select>` 下拉，而自绘弹层只要几十行。
 
@@ -139,17 +139,17 @@ corners(): readonly { seg: number; deg: number }[];
 
 | # | 决策 | 一句话 |
 |---|---|---|
-| [#12](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/12) | 数据形状 | 一维 `6n+2` 拼接，相邻段共享接点 ⇒ 位置连续是**结构保证**的；`n=1` 即 8 个数 ⇒ **零迁移、`rev` 不跳** |
-| [#12](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/12) | `t` 语义 | 真弧长参数化，**每段 128 采样**（32→1.093× / 64→1.041× / **128→1.017×**；取 128 是给 ≤1.05 的闸留三倍余量） |
-| [#12](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/12) | 接点连续性 | **允许折角**（鱼沿屏边跑再拐进来是常见鱼阵），镜像是编辑器的事；`angleAt` 在接点取右段切线 |
-| [#12](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/12) | `MIN_HANDLE = 60` | 手柄归零 ⇒ 导数 `3(P1−P0)=0` ⇒ `angleAt` 守卫返回 0 ⇒ **鱼突然朝右，不崩不报错**。夹紧在 VM |
-| [#13](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/13) | 页签划分 | 画布**共用一块**；走带**只在鱼阵页**（路径页不跑运行时，「恒速」由单测闸担保不靠肉眼） |
-| [#13](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/13) | `EditorVM` **不拆** | 「删路径 ⇒ group 标红」这条跨表关系现在**跨页签**，拆了反而要造同步 |
-| [#13](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/13) | prefab 拆五张 | 切页签用 `active` 不换 prefab（同包内动态加载省不了下载、只换来闪烁） |
-| [#14](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/14) | 框 = 一张 16×16 九宫格 | 圆角 6px、1px 描边、**灰底 180 + 白边 255** ⇒ 染色后边比底亮 43%，一个节点拿到深底亮边 |
-| [#14](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/14) | 控件对应物 | 下拉自绘弹层 · hover 统一走 `Button`（**列表行也是 Button**）· 数字 `EditBox` **夹紧不拒绝** · 进度条 `Slider` · 不塞等宽字体 · `Layout` 只用在一维列表 |
-| [#15](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/15) | 验收单 = 原型 | 当时存在 `apps/demo/docs/mockups/fish-editor-v2-prototype.html`，**少一样就是偏差**。⚠️ 它现在**就是** `apps/fish-editor/` 的界面（同一份 DOM 与 CSS），不再单独留一份对照物 —— 留着必漂 |
-| [图 Notes 4](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/11) | 视觉风格 | **不跟** `ui-style-guide.md` 的明亮卡通 —— 内部工具，深色才看得清曲线；要在风格文档里补上这个边界 |
+| [#12](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/12) | 数据形状 | 一维 `6n+2` 拼接，相邻段共享接点 ⇒ 位置连续是**结构保证**的；`n=1` 即 8 个数 ⇒ **零迁移、`rev` 不跳** |
+| [#12](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/12) | `t` 语义 | 真弧长参数化，**每段 128 采样**（32→1.093× / 64→1.041× / **128→1.017×**；取 128 是给 ≤1.05 的闸留三倍余量） |
+| [#12](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/12) | 接点连续性 | **允许折角**（鱼沿屏边跑再拐进来是常见鱼阵），镜像是编辑器的事；`angleAt` 在接点取右段切线 |
+| [#12](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/12) | `MIN_HANDLE = 60` | 手柄归零 ⇒ 导数 `3(P1−P0)=0` ⇒ `angleAt` 守卫返回 0 ⇒ **鱼突然朝右，不崩不报错**。夹紧在 VM |
+| [#13](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/13) | 页签划分 | 画布**共用一块**；走带**只在鱼阵页**（路径页不跑运行时，「恒速」由单测闸担保不靠肉眼） |
+| [#13](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/13) | `EditorVM` **不拆** | 「删路径 ⇒ group 标红」这条跨表关系现在**跨页签**，拆了反而要造同步 |
+| [#13](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/13) | prefab 拆五张 | 切页签用 `active` 不换 prefab（同包内动态加载省不了下载、只换来闪烁） |
+| [#14](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/14) | 框 = 一张 16×16 九宫格 | 圆角 6px、1px 描边、**灰底 180 + 白边 255** ⇒ 染色后边比底亮 43%，一个节点拿到深底亮边 |
+| [#14](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/14) | 控件对应物 | 下拉自绘弹层 · hover 统一走 `Button`（**列表行也是 Button**）· 数字 `EditBox` **夹紧不拒绝** · 进度条 `Slider` · 不塞等宽字体 · `Layout` 只用在一维列表 |
+| [#15](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/15) | 验收单 = 原型 | 当时存在 `apps/demo/docs/mockups/fish-editor-v2-prototype.html`，**少一样就是偏差**。⚠️ 它现在**就是** `apps/fish-editor/` 的界面（同一份 DOM 与 CSS），不再单独留一份对照物 —— 留着必漂 |
+| [图 Notes 4](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/11) | 视觉风格 | **不跟** `ui-style-guide.md` 的明亮卡通 —— 内部工具，深色才看得清曲线；要在风格文档里补上这个边界 |
 
 ### 原型试用逮到的四条，必须带进实施
 
@@ -200,11 +200,11 @@ corners(): readonly { seg: number; deg: number }[];
 
 | 刀 | 票 | 内容 | 完成判据 |
 |---|---|---|---|
-| ① | 本文（[#16](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/16)） | 提案定稿 | 本文标「已定稿」+ 现状文档加 `改造中:` 指针 |
-| ② | [#17](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/17) | 分段贝塞尔 + 弧长参数化 + 三条闸 + `PathFollow.t` 改名 | `pnpm test` 全绿，`loop-left` 快慢比从 4.01× 降到 ~1.02× |
-| ③ | [#18](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/18) | `EditorVM` 多段编辑、镜像、夹紧 | `check:vm-tests` 绿，上面那组用例全过 |
-| ④ | [#19](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/19) | 九宫格图 + 五张 prefab + 两页 + 控件 + 平移缩放 | **逐条对照原型** |
-| ⑤ | [#20](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/20) | 八道门 + e2e + 文档收尾 | 抵达终点 |
+| ① | 本文（[#16](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/16)） | 提案定稿 | 本文标「已定稿」+ 现状文档加 `改造中:` 指针 |
+| ② | [#17](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/17) | 分段贝塞尔 + 弧长参数化 + 三条闸 + `PathFollow.t` 改名 | `pnpm test` 全绿，`loop-left` 快慢比从 4.01× 降到 ~1.02× |
+| ③ | [#18](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/18) | `EditorVM` 多段编辑、镜像、夹紧 | `check:vm-tests` 绿，上面那组用例全过 |
+| ④ | [#19](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/19) | 九宫格图 + 五张 prefab + 两页 + 控件 + 平移缩放 | **逐条对照原型** |
+| ⑤ | [#20](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/20) | 八道门 + e2e + 文档收尾 | 抵达终点 |
 
 **先写测试**（仓规 TDD）。②③ 的逻辑都零 `cc`、node 直跑，测试写起来没有借口。
 

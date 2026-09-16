@@ -12,8 +12,8 @@
 > **数据格式是照着「将来整份由服务端下发」设计的**，客户端这套是离线默认内容。
 > 何时读：要动这个编辑器、要给别的子游戏做同类内容工具、或要接服务端下发鱼群时。
 
-> 决策沿革不在本文，在 [wayfinder map #1](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/1)
-> 与 [#11](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/11) 的 ticket 里。本文只描述**现状**。
+> 决策沿革不在本文，在 [wayfinder map #1](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/1)
+> 与 [#11](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/11) 的 ticket 里。本文只描述**现状**。
 
 ## TL;DR
 
@@ -37,7 +37,7 @@
 
 **不编**：出鱼权重、控分参数、库存 —— 那是**策略**不是**内容**，将来住服务端自己的配置。策略混进内容表，编辑器就得开始显示它编不了的字段。
 
-## 2. 数据格式（[#3](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/3)、[#12](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/12)）
+## 2. 数据格式（[#3](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/3)、[#12](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/12)）
 
 ```ts
 // assets/modules/mini-fish/content/content.ts —— 编辑器导出的就是这个文件的全文
@@ -150,7 +150,7 @@ main.ts（View）
 `angleAt` 的守卫返回 0 ⇒ 鱼游到那儿**突然朝右**，不崩不报错。镜像时对面那根同样有下限 ——
 少了它一旦塌到零就再也回不来（长度恒为 0，镜像永远把它算回锚点）。
 
-## 5. 预览与交互形态（[#4](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/4)、[#13](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/13)）
+## 5. 预览与交互形态（[#4](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/4)、[#13](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/13)）
 
 **预览直接跑 `FishVM`，且这么做成本是零**：
 
@@ -193,7 +193,7 @@ new FishVM({ feeder: waveFeeder(content, { order: [编辑中那条], loop: false
   各 group 路径长短与速度不同，后生的短路径可能先跑完；按最后出生算会把主队伍的后半程砍掉。
 - 删掉被引用的路径 ⇒ 那个 group 的 `path` **标红**，不静默改指别处。
 
-## 6. 内容怎么落回仓库（[#8](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/8)）
+## 6. 内容怎么落回仓库（[#8](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/8)）
 
 ```
 编辑器里改  →  debounce 写一份草稿进 localStorage（防崩，不参与发布）
@@ -214,7 +214,7 @@ git diff    →  改了哪几条路径、哪几个 group，逐行看得见
 - **`rev` 只在导出时 +1** —— 它是「这份内容被**发布**过一次」的编号，不是操作计数。于是两个人同时编，
   两份都是 `rev 8`，**贴回时 git 直接冲突而不是静默覆盖**：并发交给 git，编辑器不长合并逻辑。
 
-## 7. 鱼阵接进游戏本体（[#6](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/6)）
+## 7. 鱼阵接进游戏本体（[#6](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/6)）
 
 ```ts
 combineFeeders(
@@ -350,7 +350,7 @@ D2 定的外挂防线：**客户端自己随机 = 外挂能预知下一波、能
 2. **`waveFeeder` 是可搬走的纯函数**：零 `cc`、不碰 DI、不调 `Math.random`、时间**只从 `dt` 来**。
    将来这套逻辑要在服务端（Go）重写一遍，**确定性是能不能逐行对照的前提**。
 
-由此三条硬约束（[#3](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/3) 决策 4）：
+由此三条硬约束（[#3](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/3) 决策 4）：
 
 - **只发几何、不发派生量**：弧长 `length` 客户端收到控制点后自己算。两份采样实现的浮点一漂，
   同一条鱼在不同客户端就位置不同。
@@ -382,4 +382,4 @@ D2 定的外挂防线：**客户端自己随机 = 外挂能预知下一波、能
 - **`loop` 播第二遍时 `school` id 会重号**（id 在载入时发一遍，不是每次投放现发）。上一遍那群
   早游远了，最坏也只是两批同路径的鱼互相让一下位。
 - **七个 `kind:'game'` 子游戏的界面目前全是代码建的**，补 prefab 是欠账，见
-  [#10](https://hlgit.5518game.com/luohao/creator-core-kit/-/issues/10)。
+  [#10](https://gitlab.huanchanghuyu.com/luohao/creator-core-kit/-/issues/10)。
