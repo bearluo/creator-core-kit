@@ -1,0 +1,279 @@
+CCEffect %{
+  techniques:
+  - name: straight-normal
+    passes:
+    - vert: spine-vat-v2-vs:vert
+      frag: spine-vat-v2-fs:frag
+      embeddedMacros: &vatMacros { CC_RECEIVE_SHADOW: false }
+      rasterizerState: &raster { cullMode: none }
+      depthStencilState: &depth { depthTest: false, depthWrite: false }
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: &props
+        mainTexture:      { value: white }
+        positionTexture0: { value: black }
+        positionTexture1: { value: black }
+        positionTexture2: { value: black }
+        positionTexture3: { value: black }
+        lightTexture0:    { value: white }
+        lightTexture1:    { value: white }
+        lightTexture2:    { value: white }
+        lightTexture3:    { value: white }
+        darkTexture0:     { value: black }
+        darkTexture1:     { value: black }
+        darkTexture2:     { value: black }
+        darkTexture3:     { value: black }
+        vatLayout:        { value: [1, 1, 1, 0] }
+        vatPageSize0:     { value: [1, 1, 1, 1] }
+        vatPageSize1:     { value: [1, 1, 1, 1] }
+        vatPageSize2:     { value: [1, 1, 1, 1] }
+        vatPageSize3:     { value: [1, 1, 1, 1] }
+  - name: straight-additive
+    passes:
+    - vert: spine-vat-v2-vs:vert
+      frag: spine-vat-v2-fs:frag
+      embeddedMacros: *vatMacros
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one
+      properties: *props
+  - name: straight-multiply
+    passes:
+    - vert: spine-vat-v2-vs:vert
+      frag: spine-vat-v2-fs:frag
+      embeddedMacros: *vatMacros
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: dst_color
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: dst_color
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+  - name: straight-screen
+    passes:
+    - vert: spine-vat-v2-vs:vert
+      frag: spine-vat-v2-fs:frag
+      embeddedMacros: *vatMacros
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_color
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one_minus_src_color
+      properties: *props
+  - name: pma-normal
+    passes:
+    - vert: spine-vat-v2-vs:vert
+      frag: spine-vat-v2-fs:frag
+      embeddedMacros: *vatMacros
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: one
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: one
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+  - name: pma-additive
+    passes:
+    - vert: spine-vat-v2-vs:vert
+      frag: spine-vat-v2-fs:frag
+      embeddedMacros: *vatMacros
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: one
+          blendDst: one
+          blendSrcAlpha: one
+          blendDstAlpha: one
+      properties: *props
+  - name: pma-multiply
+    passes:
+    - vert: spine-vat-v2-vs:vert
+      frag: spine-vat-v2-fs:frag
+      embeddedMacros: *vatMacros
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: dst_color
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: dst_color
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+  - name: pma-screen
+    passes:
+    - vert: spine-vat-v2-vs:vert
+      frag: spine-vat-v2-fs:frag
+      embeddedMacros: *vatMacros
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: one
+          blendDst: one_minus_src_color
+          blendSrcAlpha: one
+          blendDstAlpha: one_minus_src_color
+      properties: *props
+}%
+CCProgram spine-vat-v2-vs %{
+  precision highp float;
+  #include <legacy/input>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/decode-base>
+  #include <legacy/local-batch>
+
+  #if USE_INSTANCING
+    in vec4 a_vatAnim0;
+    in vec4 a_vatAnim1;
+    in vec4 a_vatColor;
+  #endif
+
+  uniform sampler2D positionTexture0;
+  uniform sampler2D positionTexture1;
+  uniform sampler2D positionTexture2;
+  uniform sampler2D positionTexture3;
+  // 颜色通道按数据裁剪（运行时按 manifest 设宏，全部无损）：
+  //   VAT_NO_LIGHT    整份数据 light 恒为白 → 不采样
+  //   VAT_LIGHT_ALPHA light 的 RGB 恒为 255 → 纹理只存 alpha（1 B/texel，GPU 上 R8 / WebGL1 L8）
+  //   VAT_NO_DARK     没有 tint black → 不采样
+  #if !VAT_NO_LIGHT
+  uniform sampler2D lightTexture0;
+  uniform sampler2D lightTexture1;
+  uniform sampler2D lightTexture2;
+  uniform sampler2D lightTexture3;
+  #endif
+  #if !VAT_NO_DARK
+  uniform sampler2D darkTexture0;
+  uniform sampler2D darkTexture1;
+  uniform sampler2D darkTexture2;
+  uniform sampler2D darkTexture3;
+  #endif
+  uniform SpineVatV2Constants {
+    vec4 vatLayout;
+    vec4 vatPageSize0;
+    vec4 vatPageSize1;
+    vec4 vatPageSize2;
+    vec4 vatPageSize3;
+  };
+
+  out vec2 v_atlasUV;
+  out lowp vec4 v_light;
+  out lowp vec4 v_dark;
+  out lowp vec4 v_instanceColor;
+
+  vec2 pageUV(float localIndex, vec4 pageSize) {
+    float x = mod(localIndex, pageSize.x);
+    float y = floor(localIndex / pageSize.x);
+    return (vec2(x, y) + vec2(0.5)) / pageSize.xy;
+  }
+
+  vec4 samplePosition(float page, float localIndex) {
+    if (page < 0.5) return texture(positionTexture0, pageUV(localIndex, vatPageSize0));
+    if (page < 1.5) return texture(positionTexture1, pageUV(localIndex, vatPageSize1));
+    if (page < 2.5) return texture(positionTexture2, pageUV(localIndex, vatPageSize2));
+    return texture(positionTexture3, pageUV(localIndex, vatPageSize3));
+  }
+
+  #if !VAT_NO_LIGHT
+  vec4 sampleLight(float page, float localIndex) {
+    if (page < 0.5) return texture(lightTexture0, pageUV(localIndex, vatPageSize0));
+    if (page < 1.5) return texture(lightTexture1, pageUV(localIndex, vatPageSize1));
+    if (page < 2.5) return texture(lightTexture2, pageUV(localIndex, vatPageSize2));
+    return texture(lightTexture3, pageUV(localIndex, vatPageSize3));
+  }
+  #endif
+
+  #if !VAT_NO_DARK
+  vec4 sampleDark(float page, float localIndex) {
+    if (page < 0.5) return texture(darkTexture0, pageUV(localIndex, vatPageSize0));
+    if (page < 1.5) return texture(darkTexture1, pageUV(localIndex, vatPageSize1));
+    if (page < 2.5) return texture(darkTexture2, pageUV(localIndex, vatPageSize2));
+    return texture(darkTexture3, pageUV(localIndex, vatPageSize3));
+  }
+  #endif
+
+  vec4 vert () {
+    float rawFrame = a_vatAnim1.x
+      + (cc_time.x - a_vatAnim0.w) * a_vatAnim0.z * a_vatAnim1.y;
+    // 循环取模后再 min 一次：GLSL 的 mod(x, N) = x - N * floor(x / N)，而 x / N 在 GPU 上只保证
+    // 2.5 ULP —— x 恰好是 N 的整数倍时商可能算成 k - ε，floor 掉一档，mod 就返回 N 而不是 0。
+    // 少这一道 min，localFrame == N 会越过本 clip 落到 frameOffset + N —— 正是下一个动画的第 0 帧
+    //（最后一个 clip 则落到 VAT 末尾之外、CLAMP_TO_EDGE 采到脏 texel），每圈回绕闪一帧。
+    // 桌面 GPU 除法基本是正确舍入的所以看不到；Mali / Adreno 上会现形。
+    // mod 对负数已经按除数符号取值（floor 语义），不需要再 + N 一次。
+    float localFrame = a_vatAnim1.w >= 0.0
+      ? a_vatAnim1.w
+      : a_vatAnim1.z > 0.5
+        ? min(mod(floor(rawFrame), a_vatAnim0.y), a_vatAnim0.y - 1.0)
+        : clamp(floor(rawFrame), 0.0, a_vatAnim0.y - 1.0);
+    float globalFrame = a_vatAnim0.x + localFrame;
+    float linearIndex = globalFrame * vatLayout.x + a_position.x;
+    float page = min(floor(linearIndex / vatLayout.y), vatLayout.z - 1.0);
+    float localIndex = linearIndex - page * vatLayout.y;
+    vec4 positionUV = samplePosition(page, localIndex);
+    v_atlasUV = positionUV.zw;
+    #if VAT_NO_LIGHT
+      v_light = vec4(1.0);
+    #else
+      #if VAT_LIGHT_ALPHA
+        v_light = vec4(1.0, 1.0, 1.0, sampleLight(page, localIndex).r);
+      #else
+        v_light = sampleLight(page, localIndex);
+      #endif
+    #endif
+    #if VAT_NO_DARK
+      v_dark = vec4(0.0);
+    #else
+      v_dark = sampleDark(page, localIndex);
+    #endif
+    v_instanceColor = a_vatColor;
+
+    mat4 matWorld;
+    CCGetWorldMatrix(matWorld);
+    return cc_matViewProj * matWorld * vec4(positionUV.xy, 0.0, 1.0);
+  }
+}%
+
+CCProgram spine-vat-v2-fs %{
+  precision highp float;
+  #include <legacy/output>
+
+  in vec2 v_atlasUV;
+  in lowp vec4 v_light;
+  in lowp vec4 v_dark;
+  in lowp vec4 v_instanceColor;
+  uniform sampler2D mainTexture;
+
+  vec4 frag () {
+    vec4 texColor = texture(mainTexture, v_atlasUV);
+    vec4 outputColor;
+    outputColor.a = texColor.a * v_light.a;
+    outputColor.rgb = ((texColor.a - 1.0) * v_dark.a + 1.0 - texColor.rgb)
+      * v_dark.rgb + texColor.rgb * v_light.rgb;
+    return outputColor * v_instanceColor;
+  }
+}%

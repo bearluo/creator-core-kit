@@ -1,0 +1,52 @@
+{
+  "name": "spine-vat-importer",
+  "title": "Spine VAT Importer",
+  "package_version": 2,
+  "version": "1.4.2",
+  "description": "Imports spine-vat-2 manifests and provides the spinevat.Skeleton runtime.",
+  "main": "./browser.js",
+  "contributions": {
+    "asset-db": {
+      "mount": {
+        "path": "./assets",
+        "readonly": true,
+        "visible": true
+      },
+      "script": "./dist/asset-db.js",
+      "importer": {
+        "script": "./dist/asset-db.js",
+        "priority": [],
+        "list": [
+          "registerSpineVatImporter380"
+        ]
+      },
+      "asset-handler": [
+        {
+          "handler": "registerSpineVatHandler",
+          "name": "spine-vat",
+          "extnames": [
+            ".spinevat"
+          ]
+        }
+      ]
+    },
+    "inspector": {
+      "section": {
+        "asset": {
+          "spine-vat": "./inspector/spine-vat-asset.js"
+        },
+        "node": {
+          "spinevat.Skeleton": "./inspector/spine-vat-component.js"
+        }
+      },
+      "footer": {
+        "asset": {
+          "spine-vat": "./inspector/spine-vat-preview.js"
+        }
+      }
+    },
+    "scene": {
+      "script": "./scene.js"
+    }
+  }
+}

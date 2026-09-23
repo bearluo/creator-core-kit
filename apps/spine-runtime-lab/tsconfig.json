@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2018",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": false,
+    "experimentalDecorators": true,
+    "skipLibCheck": true,
+    "types": ["@cocos/creator-types/engine"],
+    "baseUrl": "."
+  },
+  "include": ["assets/**/*.ts", "types/**/*.d.ts"]
+}

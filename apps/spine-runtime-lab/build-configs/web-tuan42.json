@@ -1,0 +1,18 @@
+{
+  "platform": "web-mobile",
+  "outputName": "web-tuan42",
+  "taskName": "spine-runtime-web-tuan42",
+  "startScene": "0f7d27a8-2a3f-47c2-bd8b-6e62979664a1",
+  "debug": true,
+  "md5Cache": false,
+  "sourceMaps": true,
+  "buildMode": "normal",
+  "mainBundleCompressionType": "merge_dep",
+  "engineModulesConfigKey": "spine42Config",
+  "packages": {
+    "web-mobile": {
+      "orientation": "portrait",
+      "embedWebDebugger": false
+    }
+  }
+}

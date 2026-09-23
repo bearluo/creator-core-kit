@@ -1,0 +1,46 @@
+{
+  "platform": "android",
+  "outputName": "android-mid",
+  "taskName": "spine-runtime-mid",
+  "startScene": "e7642275-4064-43e1-a7dd-b5ac03937351",
+  "debug": true,
+  "md5Cache": false,
+  "sourceMaps": false,
+  "buildMode": "normal",
+  "mainBundleCompressionType": "merge_dep",
+  "engineModulesConfigKey": "defaultConfig",
+  "packages": {
+    "android": {
+      "packageName": "com.corekit.spineruntimelab",
+      "apiLevel": 34,
+      "appABIs": ["x86_64"],
+      "orientation": {
+        "portrait": true,
+        "upsideDown": false,
+        "landscapeRight": false,
+        "landscapeLeft": false
+      },
+      "useDebugKeystore": true,
+      "appBundle": false,
+      "androidInstant": false,
+      "sdkPath": "E:\\android-sdk",
+      "ndkPath": "E:\\android-sdk\\ndk\\23.2.8568313",
+      "javaHome": "C:\\Program Files\\Microsoft\\jdk-17.0.19.10-hotspot",
+      "resizeableActivity": true,
+      "maxAspectRatio": "2.4",
+      "renderBackEnd": {
+        "vulkan": false,
+        "gles3": true,
+        "gles2": true
+      },
+      "swappy": false,
+      "keystorePath": "",
+      "keystorePassword": "",
+      "keystoreAlias": "",
+      "keystoreAliasPassword": "",
+      "inputSDK": false,
+      "remoteUrl": "",
+      "javaPath": ""
+    }
+  }
+}

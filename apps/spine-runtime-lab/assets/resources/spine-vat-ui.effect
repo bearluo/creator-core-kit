@@ -1,0 +1,416 @@
+// 原型：VAT 走 2D UI 提交流程（UIRenderer + Batcher2D），和 Sprite/Spine 同一条 batch 列表。
+// 顶点只有 4 B：a_vatVertex = (槽位 + additive ? 64 : 0) * vatLayout.w + 帧内顶点序号（见 SpineVatUiLane.ts）；
+// 逐实例参数放 vatInstances（每实例 5 个 vec4）。
+// technique 顺序与 spine-vat-v2.effect 一致：straight n/a/m/s，pma n/a/m/s；第 8 个 merged 见下。
+// merged：normal 与 additive 共用一个预乘混合（one, one_minus_src_alpha）材质，additive 顶点在 FS 里把 a 置 0
+//   → 结果 = rgb + dst，与 Spine 官方让 additive 同批的做法相同。
+// VAT_LERP：相邻两帧在 VS 里插值（多一倍 VS 采样）；关掉就是逐帧阶跃，按机型档位开关（SpineVatUiSkeleton.interpolate）。
+// VAT_CLIP：固定槽位 layout 的 GPU 剪裁（见 docs/spine-vat-fixed-slot-gpu-clip.md）。
+//   vatClip.x = 静态区所在帧（每顶点一个 texel，.x = 所属剪裁序号，-1 不裁）；vatClip.y = 帧内剪裁区起点。
+//   剪裁区每个剪裁 8 个 texel：(x, y, 生效?, 顶点数)，不足 8 点用第 0 点补齐；FS 奇偶判定，像素中心在外就 discard。
+CCEffect %{
+  techniques:
+  - name: straight-normal
+    passes:
+    - vert: spine-vat-ui-vs:vert
+      frag: spine-vat-ui-fs:frag
+      rasterizerState: &raster { cullMode: none }
+      depthStencilState: &depth { depthTest: false, depthWrite: false }
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: &props
+        positionTexture0: { value: black }
+        positionTexture1: { value: black }
+        positionTexture2: { value: black }
+        positionTexture3: { value: black }
+        lightTexture0:    { value: white }
+        lightTexture1:    { value: white }
+        lightTexture2:    { value: white }
+        lightTexture3:    { value: white }
+        darkTexture0:     { value: black }
+        darkTexture1:     { value: black }
+        darkTexture2:     { value: black }
+        darkTexture3:     { value: black }
+        vatLayout:        { value: [1, 1, 1, 0] }
+        vatClip:          { value: [0, 0, 0, 0] }
+        vatPageSize0:     { value: [1, 1, 1, 1] }
+        vatPageSize1:     { value: [1, 1, 1, 1] }
+        vatPageSize2:     { value: [1, 1, 1, 1] }
+        vatPageSize3:     { value: [1, 1, 1, 1] }
+  - name: straight-additive
+    passes:
+    - vert: spine-vat-ui-vs:vert
+      frag: spine-vat-ui-fs:frag
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one
+      properties: *props
+  - name: straight-multiply
+    passes:
+    - vert: spine-vat-ui-vs:vert
+      frag: spine-vat-ui-fs:frag
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: dst_color
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: dst_color
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+  - name: straight-screen
+    passes:
+    - vert: spine-vat-ui-vs:vert
+      frag: spine-vat-ui-fs:frag
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_color
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one_minus_src_color
+      properties: *props
+  - name: pma-normal
+    passes:
+    - vert: spine-vat-ui-vs:vert
+      frag: spine-vat-ui-fs:frag
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: one
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: one
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+  - name: pma-additive
+    passes:
+    - vert: spine-vat-ui-vs:vert
+      frag: spine-vat-ui-fs:frag
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: one
+          blendDst: one
+          blendSrcAlpha: one
+          blendDstAlpha: one
+      properties: *props
+  - name: pma-multiply
+    passes:
+    - vert: spine-vat-ui-vs:vert
+      frag: spine-vat-ui-fs:frag
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: dst_color
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: dst_color
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+  - name: pma-screen
+    passes:
+    - vert: spine-vat-ui-vs:vert
+      frag: spine-vat-ui-fs:frag
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: one
+          blendDst: one_minus_src_color
+          blendSrcAlpha: one
+          blendDstAlpha: one_minus_src_color
+      properties: *props
+  - name: merged
+    passes:
+    - vert: spine-vat-ui-vs:vert
+      frag: spine-vat-ui-fs:frag
+      rasterizerState: *raster
+      depthStencilState: *depth
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: one
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: one
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+}%
+
+CCProgram spine-vat-ui-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+
+  in float a_vatVertex;
+
+  uniform sampler2D positionTexture0;
+  uniform sampler2D positionTexture1;
+  uniform sampler2D positionTexture2;
+  uniform sampler2D positionTexture3;
+  // 颜色通道按数据裁剪（运行时按 manifest 设宏，全部无损）：
+  //   VAT_NO_LIGHT    整份数据 light 恒为白 → 不采样
+  //   VAT_LIGHT_ALPHA light 的 RGB 恒为 255 → 纹理只存 alpha（1 B/texel，GPU 上 R8 / WebGL1 L8）
+  //   VAT_NO_DARK     没有 tint black → 不采样
+  #if !VAT_NO_LIGHT
+  uniform sampler2D lightTexture0;
+  uniform sampler2D lightTexture1;
+  uniform sampler2D lightTexture2;
+  uniform sampler2D lightTexture3;
+  #endif
+  #if !VAT_NO_DARK
+  uniform sampler2D darkTexture0;
+  uniform sampler2D darkTexture1;
+  uniform sampler2D darkTexture2;
+  uniform sampler2D darkTexture3;
+  #endif
+  // 每实例 5 个 vec4：anim0 / anim1 / color / 2x2 世界矩阵(m00,m01,m04,m05) / 平移(m12,m13)。
+  // 240 = 48 实例 × 5，须与 SpineVatUiSkeleton.ts 的 MAX_UI_INSTANCES 一致。
+  uniform SpineVatUiConstants {
+    vec4 vatLayout;
+    vec4 vatClip;
+    vec4 vatPageSize0;
+    vec4 vatPageSize1;
+    vec4 vatPageSize2;
+    vec4 vatPageSize3;
+    vec4 vatInstances[240];
+  };
+
+  out vec2 v_atlasUV;
+  out lowp vec4 v_light;
+  out lowp vec4 v_dark;
+  out lowp vec4 v_instanceColor;
+  out lowp float v_additive;
+  #if VAT_CLIP
+    // 骨骼空间坐标 + 是否裁；多边形 8 个点两两一组。
+    out vec3 v_clipPos;
+    out vec4 v_clip0;
+    out vec4 v_clip1;
+    out vec4 v_clip2;
+    out vec4 v_clip3;
+  #endif
+
+  vec2 pageUV(float localIndex, vec4 pageSize) {
+    float x = mod(localIndex, pageSize.x);
+    float y = floor(localIndex / pageSize.x);
+    return (vec2(x, y) + vec2(0.5)) / pageSize.xy;
+  }
+
+  vec4 samplePosition(float page, float localIndex) {
+    if (page < 0.5) return texture(positionTexture0, pageUV(localIndex, vatPageSize0));
+    if (page < 1.5) return texture(positionTexture1, pageUV(localIndex, vatPageSize1));
+    if (page < 2.5) return texture(positionTexture2, pageUV(localIndex, vatPageSize2));
+    return texture(positionTexture3, pageUV(localIndex, vatPageSize3));
+  }
+
+  #if !VAT_NO_LIGHT
+  vec4 sampleLight(float page, float localIndex) {
+    if (page < 0.5) return texture(lightTexture0, pageUV(localIndex, vatPageSize0));
+    if (page < 1.5) return texture(lightTexture1, pageUV(localIndex, vatPageSize1));
+    if (page < 2.5) return texture(lightTexture2, pageUV(localIndex, vatPageSize2));
+    return texture(lightTexture3, pageUV(localIndex, vatPageSize3));
+  }
+  #endif
+
+  #if !VAT_NO_DARK
+  vec4 sampleDark(float page, float localIndex) {
+    if (page < 0.5) return texture(darkTexture0, pageUV(localIndex, vatPageSize0));
+    if (page < 1.5) return texture(darkTexture1, pageUV(localIndex, vatPageSize1));
+    if (page < 2.5) return texture(darkTexture2, pageUV(localIndex, vatPageSize2));
+    return texture(darkTexture3, pageUV(localIndex, vatPageSize3));
+  }
+  #endif
+
+  #if VAT_CLIP
+  vec4 positionAt(float linearIndex) {
+    float page = min(floor(linearIndex / vatLayout.y), vatLayout.z - 1.0);
+    return samplePosition(page, linearIndex - page * vatLayout.y);
+  }
+
+  // 一帧里第 clipIndex 个剪裁的 8 个点；返回是否生效。
+  float fetchClip(float globalFrame, float clipIndex, out vec4 c0, out vec4 c1, out vec4 c2, out vec4 c3) {
+    float base = globalFrame * vatLayout.x + vatClip.y + clipIndex * 8.0;
+    vec4 p0 = positionAt(base);
+    c0 = vec4(p0.xy, positionAt(base + 1.0).xy);
+    c1 = vec4(positionAt(base + 2.0).xy, positionAt(base + 3.0).xy);
+    c2 = vec4(positionAt(base + 4.0).xy, positionAt(base + 5.0).xy);
+    c3 = vec4(positionAt(base + 6.0).xy, positionAt(base + 7.0).xy);
+    return p0.z;
+  }
+  #endif
+
+  // 取一帧：xy = 位置，zw = 图集 uv；light / dark 按通道宏裁剪。
+  void fetchFrame(float globalFrame, float vertexIndex, out vec4 positionUV, out vec4 light, out vec4 dark) {
+    float linearIndex = globalFrame * vatLayout.x + vertexIndex;
+    float page = min(floor(linearIndex / vatLayout.y), vatLayout.z - 1.0);
+    float localIndex = linearIndex - page * vatLayout.y;
+    positionUV = samplePosition(page, localIndex);
+    #if VAT_NO_LIGHT
+      light = vec4(1.0);
+    #else
+      #if VAT_LIGHT_ALPHA
+        light = vec4(1.0, 1.0, 1.0, sampleLight(page, localIndex).r);
+      #else
+        light = sampleLight(page, localIndex);
+      #endif
+    #endif
+    #if VAT_NO_DARK
+      dark = vec4(0.0);
+    #else
+      dark = sampleDark(page, localIndex);
+    #endif
+  }
+
+  vec4 vert () {
+    // 除以 2 的幂在 fp32 下精确；+0.5 防止驱动把 floor 边界算歪。
+    float high = floor((a_vatVertex + 0.5) / vatLayout.w);
+    float vertexIndex = a_vatVertex - high * vatLayout.w;
+    v_additive = step(63.5, high);
+    int base = int(high - v_additive * 64.0 + 0.5) * 5;
+    vec4 anim0 = vatInstances[base];
+    vec4 anim1 = vatInstances[base + 1];
+    vec4 xform = vatInstances[base + 3];
+    vec4 translate = vatInstances[base + 4];
+
+    // 帧计算与 spine-vat-v2.effect 保持一致（含 Mali/Adreno 上 mod 回绕的 min 保护）。
+    // 连续帧号：手动帧 anim1.w 可带小数（插值用）；循环取模，非循环夹到末帧。
+    float rawFrame = anim1.x + (cc_time.x - anim0.w) * anim0.z * anim1.y;
+    bool looping = anim1.w < 0.0 && anim1.z > 0.5;
+    float frameF = anim1.w >= 0.0
+      ? anim1.w
+      : looping
+        ? mod(rawFrame, anim0.y)
+        : clamp(rawFrame, 0.0, anim0.y - 1.0);
+    float localFrame = min(floor(frameF), anim0.y - 1.0);
+    vec4 positionUV;
+    vec4 light;
+    vec4 dark;
+    fetchFrame(anim0.x + localFrame, vertexIndex, positionUV, light, dark);
+    #if VAT_CLIP
+      float clipIndex = positionAt(vatClip.x * vatLayout.x + vertexIndex).x;
+      float clipActive = 0.0;
+      if (clipIndex > -0.5) {
+        clipActive = fetchClip(anim0.x + localFrame, clipIndex, v_clip0, v_clip1, v_clip2, v_clip3);
+      }
+    #endif
+    #if VAT_LERP
+      // 帧间插值：相邻两帧 uv 相同（同一附件同一角）才插；uv 变了 = 换附件 / 换绘制顺序 / 空槽，
+      // 插出来是两张图之间的撕扯，保持阶跃。末帧：循环回 0，非循环不插。
+      float t = clamp(frameF - localFrame, 0.0, 1.0); // mod 精度可能让 frameF 略超末帧
+      float nextFrame = localFrame + 1.0 >= anim0.y ? (looping ? 0.0 : localFrame) : localFrame + 1.0;
+      #if VAT_CLIP
+        // 剪裁多边形与内容用同一个 t；生效状态切换那一帧不插（官方也是阶跃）。
+        if (clipActive > 0.5) {
+          vec4 n0; vec4 n1; vec4 n2; vec4 n3;
+          float nextActive = fetchClip(anim0.x + nextFrame, clipIndex, n0, n1, n2, n3);
+          float clipT = t * step(0.5, nextActive);
+          v_clip0 = mix(v_clip0, n0, clipT);
+          v_clip1 = mix(v_clip1, n1, clipT);
+          v_clip2 = mix(v_clip2, n2, clipT);
+          v_clip3 = mix(v_clip3, n3, clipT);
+        }
+      #endif
+      vec4 nextPositionUV;
+      vec4 nextLight;
+      vec4 nextDark;
+      fetchFrame(anim0.x + nextFrame, vertexIndex, nextPositionUV, nextLight, nextDark);
+      vec2 uvDelta = abs(nextPositionUV.zw - positionUV.zw);
+      t *= step(max(uvDelta.x, uvDelta.y), 1e-5);
+      positionUV.xy = mix(positionUV.xy, nextPositionUV.xy, t);
+      light = mix(light, nextLight, t);
+      dark = mix(dark, nextDark, t);
+    #endif
+    v_light = light;
+    v_dark = dark;
+    v_atlasUV = positionUV.zw;
+    v_instanceColor = vatInstances[base + 2];
+
+    vec2 p = positionUV.xy;
+    #if VAT_CLIP
+      v_clipPos = vec3(p, clipActive);
+      if (clipActive < 0.5) {
+        v_clip0 = vec4(0.0);
+        v_clip1 = vec4(0.0);
+        v_clip2 = vec4(0.0);
+        v_clip3 = vec4(0.0);
+      }
+    #endif
+    vec2 world = vec2(
+      xform.x * p.x + xform.z * p.y + translate.x,
+      xform.y * p.x + xform.w * p.y + translate.y
+    );
+    return cc_matViewProj * vec4(world, 0.0, 1.0);
+  }
+}%
+
+CCProgram spine-vat-ui-fs %{
+  precision highp float;
+  #include <builtin/internal/sprite-texture>
+
+  in vec2 v_atlasUV;
+  in lowp vec4 v_light;
+  in lowp vec4 v_dark;
+  in lowp vec4 v_instanceColor;
+  in lowp float v_additive;
+  #if VAT_CLIP
+    in vec3 v_clipPos;
+    in vec4 v_clip0;
+    in vec4 v_clip1;
+    in vec4 v_clip2;
+    in vec4 v_clip3;
+
+    // 奇偶交叉：p 向 +x 的射线穿过边 a→b 就翻转一次。长度为 0 的补齐边两端 y 相同，不计数。
+    bool crosses(vec2 p, vec2 a, vec2 b) {
+      return (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x;
+    }
+  #endif
+
+  vec4 frag () {
+    #if VAT_CLIP
+      if (v_clipPos.z > 0.5) {
+        vec2 p = v_clipPos.xy;
+        bool inside = false;
+        if (crosses(p, v_clip0.xy, v_clip0.zw)) inside = !inside;
+        if (crosses(p, v_clip0.zw, v_clip1.xy)) inside = !inside;
+        if (crosses(p, v_clip1.xy, v_clip1.zw)) inside = !inside;
+        if (crosses(p, v_clip1.zw, v_clip2.xy)) inside = !inside;
+        if (crosses(p, v_clip2.xy, v_clip2.zw)) inside = !inside;
+        if (crosses(p, v_clip2.zw, v_clip3.xy)) inside = !inside;
+        if (crosses(p, v_clip3.xy, v_clip3.zw)) inside = !inside;
+        if (crosses(p, v_clip3.zw, v_clip0.xy)) inside = !inside;
+        if (!inside) discard;
+      }
+    #endif
+    vec4 texColor = texture(cc_spriteTexture, v_atlasUV);
+    vec4 outputColor;
+    outputColor.a = texColor.a * v_light.a;
+    outputColor.rgb = ((texColor.a - 1.0) * v_dark.a + 1.0 - texColor.rgb)
+      * v_dark.rgb + texColor.rgb * v_light.rgb;
+    outputColor *= v_instanceColor;
+    #if VAT_MERGED
+      #if VAT_STRAIGHT
+        outputColor.rgb *= outputColor.a;
+      #endif
+      outputColor.a *= 1.0 - v_additive;
+    #endif
+    return outputColor;
+  }
+}%

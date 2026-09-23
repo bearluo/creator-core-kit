@@ -1,0 +1,49 @@
+{
+  "engine": "Cocos Creator 3.8.7",
+  "scenario": {
+    "instances": 20,
+    "animation": "walk",
+    "warmupSeconds": 10,
+    "sampleSeconds": 30,
+    "cacheModes": ["REALTIME", "SHARED_CACHE"],
+    "enableBatch": [false, true]
+  },
+  "android": {
+    "low": {
+      "avd": "spine_runtime_low",
+      "systemImage": "system-images;android-34;google_apis;x86_64",
+      "cpuCores": 2,
+      "ramMb": 2048,
+      "dataPartitionGb": 4,
+      "width": 720,
+      "height": 1280,
+      "density": 320,
+      "gpu": "host"
+    },
+    "mid": {
+      "avd": "spine_runtime_mid",
+      "systemImage": "system-images;android-34;google_apis;x86_64",
+      "cpuCores": 4,
+      "ramMb": 3072,
+      "dataPartitionGb": 6,
+      "width": 1080,
+      "height": 1920,
+      "density": 420,
+      "gpu": "host"
+    }
+  },
+  "web": {
+    "low": {
+      "viewport": { "width": 720, "height": 1280 },
+      "deviceScaleFactor": 1,
+      "cpuSlowdown": 4,
+      "network": "offline-after-load"
+    },
+    "mid": {
+      "viewport": { "width": 1080, "height": 1920 },
+      "deviceScaleFactor": 1,
+      "cpuSlowdown": 2,
+      "network": "offline-after-load"
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "platform": "android",
+  "outputName": "android-vatui42-arm64",
+  "taskName": "spine-runtime-vatui42-arm64",
+  "startScene": "7aaf2a00-b4b1-4754-bc5b-061fa705e3ac",
+  "debug": true,
+  "md5Cache": false,
+  "sourceMaps": false,
+  "buildMode": "normal",
+  "mainBundleCompressionType": "merge_dep",
+  "engineModulesConfigKey": "spine42Config",
+  "packages": {
+    "android": {
+      "packageName": "com.corekit.spineruntimelab.vatui42",
+      "apiLevel": 34,
+      "appABIs": ["arm64-v8a"],
+      "orientation": {
+        "portrait": true,
+        "upsideDown": false,
+        "landscapeRight": false,
+        "landscapeLeft": false
+      },
+      "useDebugKeystore": true,
+      "appBundle": false,
+      "androidInstant": false,
+      "sdkPath": "E:\\android-sdk",
+      "ndkPath": "E:\\android-sdk\\ndk\\23.2.8568313",
+      "javaHome": "C:\\Program Files\\Microsoft\\jdk-17.0.19.10-hotspot",
+      "resizeableActivity": true,
+      "maxAspectRatio": "2.4",
+      "renderBackEnd": {
+        "vulkan": false,
+        "gles3": true,
+        "gles2": false
+      },
+      "swappy": false,
+      "keystorePath": "",
+      "keystorePassword": "",
+      "keystoreAlias": "",
+      "keystoreAliasPassword": "",
+      "inputSDK": false,
+      "remoteUrl": "",
+      "javaPath": ""
+    }
+  }
+}
