@@ -138,7 +138,7 @@ function splitPages(
 
 /**
  * bakes = 官方（剪裁后）输出，只取时长 / 帧率 / socket / bounds；fixed = 同一批动画的固定槽位烘焙，出几何。
- * 任何一段动画过不了固定槽位规则就整体拒绝（规则见 docs/spine-vat-fixed-slot-gpu-clip.md）。
+ * 任何一段动画过不了固定槽位规则就整体拒绝（规则见 docs/design/spine-vat-overview.md）。
  */
 export function compileSpineVatV2(
   bakes: SpineVatBakeResult[],

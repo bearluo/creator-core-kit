@@ -1,6 +1,6 @@
 // VAT 走 MeshRenderer（3D 提交流程，GPU instancing）。逐实例参数是 instanced attribute a_vatAnim0/1、a_vatColor；
 // 顶点 a_position.x = 帧内顶点序号，索引来自 manifest lane.indices（固定槽位）。
-// VAT_LERP：相邻两帧在 VS 里插值；VAT_CLIP：GPU 剪裁（见 docs/spine-vat-fixed-slot-gpu-clip.md）。
+// VAT_LERP：相邻两帧在 VS 里插值；VAT_CLIP：GPU 剪裁（见 docs/design/spine-vat-overview.md）。
 //   vatClip.x = 静态区所在帧；vatClip.y = 帧内剪裁区起点。帧计算、插值、剪裁与 spine-vat-ui.effect 保持一致。
 CCEffect %{
   techniques:

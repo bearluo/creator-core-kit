@@ -14,10 +14,10 @@
 
 | 文档 | 内容 |
 |---|---|
-| [spine-vat-tool-design](design/spine-vat-tool-design.md) | 工具整体分层：官方 Runtime 求值 + 自研编译打包与播放 |
-| [spine-vat-analyzer](design/spine-vat-analyzer.md) | Analyzer：静态分析与逐帧 dry-run |
-| [spine-vat-compiler](design/spine-vat-compiler.md) | Compiler：采样、编译、分页与 manifest |
-| [spine-vat-player](design/spine-vat-player.md) | Player：每实例播放与 GPU Instancing |
+| [spine-vat-tool-design](design/spine-vat-tool-design.md) | 总体分层、官方能力调查、功能覆盖矩阵、未实现项 |
+| [spine-vat-analyzer](design/spine-vat-analyzer.md) | 静态分析、逐帧 dry-run、兼容等级与估算 |
+| [spine-vat-compiler](design/spine-vat-compiler.md) | 双骨骼采样、固定槽位、纹理布局、分页与 manifest |
+| [spine-vat-player](design/spine-vat-player.md) | 播放状态机、3D / 2D 两个组件、合批与资源共享、事件与 socket |
 
 ## 调研（快照）
 

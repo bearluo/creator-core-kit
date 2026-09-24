@@ -5,7 +5,7 @@
 // merged：normal 与 additive 共用一个预乘混合（one, one_minus_src_alpha）材质，additive 顶点在 FS 里把 a 置 0
 //   → 结果 = rgb + dst，与 Spine 官方让 additive 同批的做法相同。
 // VAT_LERP：相邻两帧在 VS 里插值（多一倍 VS 采样）；关掉就是逐帧阶跃，按机型档位开关（SpineVatUiSkeleton.interpolate）。
-// VAT_CLIP：固定槽位 layout 的 GPU 剪裁（见 docs/spine-vat-fixed-slot-gpu-clip.md）。
+// VAT_CLIP：固定槽位 layout 的 GPU 剪裁（见 docs/design/spine-vat-overview.md）。
 //   vatClip.x = 静态区所在帧（每顶点一个 texel，.x = 所属剪裁序号，-1 不裁）；vatClip.y = 帧内剪裁区起点。
 //   剪裁区每个剪裁 8 个 texel：(x, y, 生效?, 顶点数)，不足 8 点用第 0 点补齐；FS 奇偶判定，像素中心在外就 discard。
 CCEffect %{

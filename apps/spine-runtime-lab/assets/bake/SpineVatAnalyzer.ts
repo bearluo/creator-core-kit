@@ -159,7 +159,7 @@ function parseSkeletonJson(skeletonData: sp.SkeletonData): Record<string, any> {
   const source = skeletonData.skeletonJson as unknown;
   if (typeof source === 'string') return JSON.parse(source) as Record<string, any>;
   if (!source || typeof source !== 'object') {
-    throw new Error('M1 analyzer requires JSON SkeletonData; binary static reflection is a later milestone');
+    throw new Error('Spine VAT analyzer requires JSON SkeletonData; binary (.skel) is not supported');
   }
   return source as Record<string, any>;
 }

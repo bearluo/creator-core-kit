@@ -1,91 +1,61 @@
 # Spine VAT Analyzer
 
-状态：已实现（正文待按现状修订）
-摘要：Analyzer：Spine 资源静态分析与逐帧 dry-run，输出兼容性、Render Lane 与 GPU 数据量估算。
-何时读：改 Analyzer 或排查资源为什么不适合 VAT 时。
+状态：已实现
+摘要：烘焙前的第一步。先做静态分析，再用官方 Runtime 逐帧试跑（dry-run），给出兼容等级、Render Lane 与 GPU 数据量估算。Compiler 按它的结论决定烘哪些动画、拒绝哪些。
+何时读：修改 Analyzer，或者排查某个资源为什么被判 `RUNTIME_FALLBACK` 时。
 依赖：[工具设计](spine-vat-tool-design.md)
 
-> 待更新：正文部分内容（三角形汤、V1 渲染器、旧入口与路径）仍是早期实现，尚未按现状修订；数据格式与两个组件的现状以 [spine-vat-overview.md](spine-vat-overview.md) 为准。
+## 代码
 
-> 目标：在正式烘焙前，用 Cocos Creator 3.8.7 内置 Spine 4.2 Runtime 对资源做静态分析和逐帧 dry-run，输出是否适合 VAT、预计 Render Lane 和 GPU 数据量。
+| 文件 | 内容 |
+|---|---|
+| `assets/bake/SpineVatTypes.ts` | 报告（`SpineVatAnalysisReport`）与 manifest 的类型 |
+| `assets/bake/SpineVatAnalyzerCore.ts` | 纯逻辑：解析 JSON / atlas、材质超序列、按动画估算与定级，不依赖 `cc`，可在 node 下单测 |
+| `assets/bake/SpineVatAnalyzer.ts` | 入口 `analyzeSpineVatSkeletonData(parent, skeletonData, options)`：在 Creator Web/WASM 里逐帧试跑 |
+| `test/bake/SpineVatAnalyzerCore.test.ts` | 用真实资源测静态分析和超序列 |
 
-## 已实现
+入口由烘焙场景的 `SpineVatBakeDriver` 调用（流程见工程 README），结果挂在 `window.__SPINE_VAT_ANALYSIS__` 上。
 
-- 解析 Spine JSON、atlas page 和 `pma` 声明；
-- 统计 bone、slot、skin、animation、attachment、weighted mesh、sequence 和四类 constraint；
-- 检测 deform、attachment、draw order、event、two-color timeline 和 slot blend mode；
-- 使用原始 SkeletonData 创建 REALTIME `sp.Skeleton`，固定步长调用 Runtime；
-- 从 `updateRenderData()` 读取裁剪后的最终顶点、索引、有序纹理和 blend segment；
-- 检测顶点布局、索引和材质序列是否稳定；
-- 为变化拓扑生成公共 Render Lane 超序列和每 lane 最大容量；
-- 检测 UV 是否静态、light 是否恒白、dark 是否全零；
-- 估算 `indexed-stable` / `triangle-soup-dynamic` 的纹理、静态 mesh、纹理分页和 Draw Call；
-- 输出 `LOSSLESS_VAT`、`BAKED_VARIANT`、`HYBRID` 或 `RUNTIME_FALLBACK`；
-- 对 alpha mode、Spine worker、Lane 数和 GPU 字节预算执行硬阻断。
+## 选项
 
-核心文件：
+| 字段 | 默认 | 含义 |
+|---|---|---|
+| `alphaMode` | atlas 里的 `pma` 声明 | `straight` / `premultiplied`；atlas 各页的声明不一致或缺失时为 `unknown` |
+| `frameRate` | 60 | 采样帧率；烘焙驱动传 30（URL 参数 `fps`） |
+| `textureProfile` | `balanced` | 只影响估算。实际产物始终按 `exact`（RGBA32F）存 |
+| `animations` | 全部 | 只分析其中几段 |
+| `budget` | `maxRenderLanes 12` / `maxTextureBytes 64 MiB` / `maxTextureSize 4096` | 超出就判 `RUNTIME_FALLBACK` |
 
-- `assets/scripts/SpineVatTypes.ts`：`spine-vat-2` 和 Analyzer 数据契约；
-- `assets/scripts/SpineVatAnalyzerCore.ts`：可脱离 Creator 单测的静态分析、Render Lane 和预算算法；
-- `assets/scripts/SpineVatAnalyzer.ts`：Creator Web/WASM Runtime dry-run；
-- `test/SpineVatAnalyzerCore.test.ts`：真实资源与 Render Lane 算法测试。
+## 流程
 
-## Web 使用
+1. **静态分析**（`analyzeSpineJson`）：
+   - 统计 bone、slot、skin、animation、各类附件、weighted mesh、sequence、四类约束；
+   - 检测 deform / attachment / drawOrder / event / two-color 时间轴与 slot 的 blend；
+   - 解析 atlas 每页的 `pma`。
+   - 只接受 JSON 格式的 SkeletonData，`.skel` 直接报错。
+2. **逐帧试跑**：每段动画各建一个 REALTIME `sp.Skeleton`（`useTint`，关掉 batch），`setToSetupPose` 后从 setup pose 起步，`ceil(duration × fps)` 帧，每帧推进固定的 `1/fps`，第 0 帧推进 0（让 t=0 的关键帧也生效）。
+   - 用 `_instance.updateAnimation` 推进，因为组件的 `updateAnimation` 在暂停时不动。
+   - 每帧从 `updateRenderData()` 的 wasm 内存里读：顶点数、索引数、索引 hash、uv / light / dark 的 hash、light 是否恒白、dark 是否全零，以及合并相邻同材质后的材质段。
+3. **按动画定级**（`buildClipAnalysis`）：
+   - 判断拓扑是否稳定（顶点数、索引、材质段逐帧都相同）；
+   - 用逐帧增量的最短公共超序列合并各帧材质序列，得到 lane 列表和每条 lane 的容量；
+   - 估算纹理字节、页数、网格字节。
+4. **汇总**：全部动画中最差的等级即整体等级；全部动画的 GPU 字节合计超预算时，整体判 `RUNTIME_FALLBACK`。另外对 JSON 与 atlas 文本做 SHA-256（不可用时退回 FNV-1a），写进 `source.hashes`。
 
-先构建并启动静态服务器：
+## 等级
 
-```powershell
-node tools/static-server.mjs build/web-tuan42 18088 assets/reports/tuan42
-```
+| 等级 | 条件 |
+|---|---|
+| `RUNTIME_FALLBACK` | Spine 版本不是 4.2 / alpha mode 为 `unknown` / lane 数或纹理字节超预算 |
+| `HYBRID` | 有 event 时间轴 |
+| `BAKED_VARIANT` | skin 多于一个 |
+| `LOSSLESS_VAT` | 其余 |
 
-打开：
+Compiler 只看其中两处：整体为 `RUNTIME_FALLBACK` 时拒绝编译；单段动画为 `RUNTIME_FALLBACK` 时跳过这一段。
 
-```text
-http://127.0.0.1:18088/?vatAnalyze=1&pma=straight&analyzeFps=30&vatProfile=balanced
-```
+## 已知行为与坑
 
-参数：
-
-| 参数 | 含义 |
-| --- | --- |
-| `vatAnalyze=1` | 启动全动画分析，不进入正常压力测试 |
-| `pma=straight` | 明确使用非预乘；也支持 `premultiplied`、`0`、`1` |
-| `analyzeFps=30` | dry-run 采样率，默认 60 |
-| `vatProfile=balanced` | `exact`、`balanced` 或 `compact` |
-
-结果发布到：
-
-```js
-window.__SPINE_VAT_ANALYSIS__
-```
-
-如果静态服务器配置了第四个输出目录，可调用：
-
-```js
-await window.__SPINE_VAT_ANALYSIS_EXPORT__();
-```
-
-生成 `analysis.json`。报告含源数据 hash、recipe、静态特征、逐动画拓扑、Lane、字节估算、兼容等级和具体警告。
-
-## 当前资源实测
-
-以下结果来自 Creator 3.8.7 Web/WASM，均显式指定 `straight`、30 FPS、`balanced`：
-
-| 资源 | 动画 | 拓扑 | Lane | 预计 GPU 数据 | 结论 |
-| --- | ---: | --- | ---: | ---: | --- |
-| `tuan42` | 1 | dynamic triangle soup | 2 | 971,082 B | `LOSSLESS_VAT` |
-| 水果机男舞者 | 3 | dynamic triangle soup | 每动画 4 | 6,544,344 B | `LOSSLESS_VAT` |
-
-`tuan42` 的 clipping 让 60 个采样帧中 59 帧相对首帧发生拓扑变化，但最终只需要 normal/additive 两个 Lane。水果机原始 SkeletonData 也包含 clipping；三个动画各为 60 帧，预计纹理分别为 1,851,120、2,278,800、2,289,600 字节，dark 通道全零，可以省略。
-
-这里的 `LOSSLESS_VAT` 表示“原始 Runtime 最终几何可以在当前 recipe 和预算内编译”，不代表已经完成像素差验收。M2 仍必须生成产物并与官方 Runtime 做同帧截图、透明边缘和四种 blend 对照。
-
-## M1 边界
-
-- 仅 4.2 worker 允许进入 VAT；3.8 会明确输出 `RUNTIME_FALLBACK`，等待独立 worker；
-- 静态分析目前要求 JSON SkeletonData，binary 反射未实现；
-- dry-run 只运行在 Creator Web/WASM，Native 负责加载结果，不负责烘焙；
-- 多 skin 目前只列出并标记 `BAKED_VARIANT`，尚未逐 skin 组合采样；
-- event 只标记为 `HYBRID`，事件表和 socket 轨道在 M3 实现；
-- Physics warm-up、预定义多轨 mix 和 transition recipe 尚未接入；
-- `estimatedGpuBytes` 是构建前保守估算，最终值以 M2 分页、量化和 layout 去重后的 manifest 为准。
+- **估算用的是剪裁后的输出**：Analyzer 读的是官方渲染器剪裁之后的几何，有剪裁时拓扑逐帧变化，报告里写的是 `triangle-soup-dynamic`，lane 与字节也按三角形汤估。实际产物是固定槽位（见 [总览](spine-vat-overview.md)），数据量通常小得多（原版水果机的 position 贴图：三角形汤 9.18 MB → 固定槽位 2.82 MB）。所以报告里的 `geometryMode`、lane 数和字节只能当保守上限。能不能走固定槽位，Analyzer 不判断，由 Compiler 判断。
+- **`BAKED_VARIANT` 只是一个标记**：Compiler 只烘默认 skin，不会按 skin 分别采样。
+- **Physics 约束没有预热（warm-up）**：从 setup pose 直接开始采样。
+- **哈希范围**：只哈希 JSON 与 atlas 文本，不含 PNG。

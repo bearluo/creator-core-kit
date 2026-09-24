@@ -25,7 +25,7 @@ export interface FixedLane {
 export interface FixedLayoutPlan {
   /** 走固定槽位的动画。 */
   accepted: FixedBakeResult[];
-  /** 退回三角形汤的动画 → 原因。 */
+  /** 过不了固定槽位规则的动画 → 原因（编译时整体报错）。 */
   rejected: Map<string, string>;
   lanes: FixedLane[];
   /** 顶点区大小；剪裁区紧随其后。 */

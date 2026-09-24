@@ -1,333 +1,94 @@
-# Spine VAT Player：每实例独立播放与 GPU Instancing
+# Spine VAT Player
 
-状态：已实现（正文待按现状修订）
-摘要：Player：每实例独立播放参数与 GPU Instancing。
-何时读：改播放参数、实例属性或 instancing 时。
-依赖：[Compiler](spine-vat-compiler.md)
+状态：已实现
+摘要：运行时的两个组件：`spinevat.Skeleton`（3D，MeshRenderer + GPU instancing）和 `spinevat.UiSkeleton`（2D，UI batch）。两者共用同一套播放状态机和 shader 帧计算：每个实例的播放参数只在状态变化时上传，正常播放时 CPU 每帧零写入。
+何时读：修改组件、播放 API、逐实例参数、合批或资源共享时。
+依赖：[Compiler](spine-vat-compiler.md)；数据格式和真机结果见 [总览](spine-vat-overview.md)；安装与用法见 [扩展 README](../../extensions/spine-vat-importer/README.md)
 
-> 待更新：正文部分内容（三角形汤、V1 渲染器、旧入口与路径）仍是早期实现，尚未按现状修订；数据格式与两个组件的现状以 [spine-vat-overview.md](spine-vat-overview.md) 为准。
+## 代码（`extensions/spine-vat-importer/assets/runtime/`）
 
-> Cocos Creator：3.8.7  
-> Spine 数据：4.2.43  
-> 实测资源：`FruitMachinePart` 男舞者  
-> 实测日期：2026-09-21
+| 文件 | 内容 |
+|---|---|
+| `SpineVatSchema.ts` | manifest 类型 |
+| `SpineVatSkeletonData.ts` | 资源类 `spinevat.SkeletonData`：manifest，以及 position / light / dark 页、atlas、两个 effect 的引用 |
+| `SpineVatPlayback.ts` | 纯逻辑播放状态机：锚点、帧号、事件、socket、实例颜色打包 |
+| `SpineVatRenderResources.ts` | 3D：共享的网格、材质、贴图（按引用计数），`SpineVatRenderHandle`；以及两个组件共用的 `compilePages` / `singleLayout` / `vatChannelDefines` |
+| `SpineVatSkeleton.ts` | 3D 组件 `spinevat.Skeleton`（继承 `MeshRenderer`） |
+| `SpineVatUiSkeleton.ts` | 2D 组件 `spinevat.UiSkeleton`：分槽位、分组、写入 UBO |
+| `SpineVatUiLane.ts` | 2D 的 lane 提交：`UIRenderer` + 自定义 assembler |
+| `../spine-vat-v2.effect`、`../spine-vat-ui.effect` | 3D / 2D shader。帧计算、插值、剪裁两边写法相同，改一处要同步另一处 |
 
-## 1. 本阶段解决的问题
+导入器（`dist/asset-db.js`，扩展版本 1.5.0）把 `manifest.spinevat` 导入成 `spinevat.SkeletonData`，并把两个 effect 挂成它的依赖（`effectAsset` / `uiEffectAsset`），所以组件只需要赋 `skeletonData`。
 
-M2 已经能把官方 Spine Runtime 的最终几何烘焙为 VAT，并让同一 Lane 的多个角色进入 GPU Instancing；但动画状态保存在材质 uniform 中，所有实例只能共享动画、相位和速度。
+## 播放状态机（`SpineVatPlayback`）
 
-M3 把以下状态移到 Cocos 自定义 Instanced Attribute：
-
-- 每实例动画和帧区间；
-- 每实例起始相位、速度和循环方式；
-- `play / pause / resume / seek / setSpeed / setManualFrame`；
-- 每实例 RGBA 颜色；
-- Straight Alpha 与 PMA 不同的实例颜色打包。
-
-动画正常推进时由 vertex shader 使用 `cc_time.x` 计算当前帧。CPU 只在播放状态改变时更新实例属性，不会每帧上传动画顶点，也不需要每帧更新实例帧号。
-
-## 2. 实例属性布局
-
-每个逻辑角色的所有 Render Lane 使用相同的三组属性：
-
-```glsl
-in vec4 a_vatAnim0;
-in vec4 a_vatAnim1;
-in vec4 a_vatColor;
-```
-
-字段语义：
-
-| 属性 | 分量 | 含义 |
-| --- | --- | --- |
-| `a_vatAnim0` | `x` | clip 的全局 `frameOffset` |
-|  | `y` | clip 的 `frameCount` |
-|  | `z` | clip 的 `fps` |
-|  | `w` |本次播放段的引擎时间锚点 |
-| `a_vatAnim1` | `x` | 时间锚点对应的 clip 内浮点帧 |
-|  | `y` | 播放速度；暂停时写 0 |
-|  | `z` | `1=loop`，`0=clamp` |
-|  | `w` | 手动固定帧；小于 0 表示自动播放 |
-| `a_vatColor` | `rgba` | 已按 Straight/PMA 语义打包的实例整体色 |
-
-材质 uniform 只保留所有实例共享的布局：
+不累加每帧的 dt，只保存「时间锚点 + 浮点帧锚点」，由 shader 按引擎时间现算：
 
 ```text
-vatLayout = [frameStride, pageTexels, pageCount, reserved]
+rawFrame = anchorFrame + (cc_time.x - anchorTime) × fps × speed
+frame    = manualFrame ≥ 0 ? manualFrame
+         : loop ? mod(rawFrame, frameCount)
+         : clamp(rawFrame, 0, frameCount - 1)
 ```
 
-shader 的线性地址为：
-
-```text
-linear = (clip.frameOffset + frame) * frameStride
-       + lane.vertexOffset
-       + localVertexId
-```
-
-## 3. 播放状态为什么不会跳帧
-
-播放器不累计每帧 `dt`，而是保存“时间锚点 + 浮点帧锚点”：
-
-```text
-rawFrame = anchorFrame
-         + (engineTime - anchorTime) * clipFps * speed
-```
-
-- `pause()` 先把当前浮点帧固化到 `anchorFrame`，再把 GPU speed 写成 0；
-- `resume()` 只重置 `anchorTime`，从暂停时的亚帧位置继续；
-- `seek()` 把 `anchorFrame` 改为 `seconds * fps`；
-- `setSpeed()` 先固化旧速度下的当前浮点帧，再切换速度；
-- `setManualFrame(null)` 从最后固定帧继续自动播放，不跳回旧时间线。
-
-loop 使用双重 `mod`，因此负速度越过第 0 帧也能正确回绕；非 loop 动画会限制在 `[0, frameCount - 1]`。
-
-## 4. 对外 API
-
-运行时类：
-
-```ts
-const instance = population.instances[0];
-
-instance.play('animation-name', {
-  loop: true,
-  speed: 1.25,
-  startTime: 0.4,
-});
-instance.pause();
-instance.resume();
-instance.seek(0.8);
-instance.setSpeed(0.75);
-instance.setLoop(false);
-instance.setColor([1, 0.8, 0.7, 1]);
-instance.setManualFrame(15);
-instance.setManualFrame(null);
-```
-
-Web 调试页同时提供：
-
-```js
-window.__SPINE_VAT_V2_INSTANCES__
-window.__SPINE_VAT_V2_STATES__()
-window.__SPINE_VAT_V2_PLAY__(index, animation, options)
-window.__SPINE_VAT_V2_PAUSE__(index)
-window.__SPINE_VAT_V2_RESUME__(index)
-window.__SPINE_VAT_V2_SEEK__(index, seconds)
-window.__SPINE_VAT_V2_SPEED__(index, speed)
-window.__SPINE_VAT_V2_LOOP__(index, loop)
-window.__SPINE_VAT_V2_COLOR__(index, r, g, b, a)
-window.__SPINE_VAT_V2_DEMO_INDEPENDENT__()
-```
-
-原有 population 级 `SET_CLIP` 和 `SET_FRAME` 接口仍保留，会把操作广播到全部实例。
-
-## 5. 单元测试
-
-`SpineVatPlayerCore.test.ts` 覆盖：
-
-- loop 正向回绕、负速回绕和 non-loop clamp；
-- clip 的 `frameOffset / frameCount / fps`；
-- pause/resume 保留亚帧位置；
-- seek 和改速不跳帧；
-- manual frame 裁剪及恢复自动播放；
-- Straight/PMA 实例颜色打包；
-- 颜色范围保护。
-
-加入 HYBRID event/socket 后，与 M1/M2 一起执行结果为 `22/22 PASS`。
-
-## 6. Web 真运行验证
-
-### 6.1 复现
-
-先构建 `web-fruit42` 并启动服务器：
-
-```powershell
-node tools/static-server.mjs build/web-fruit42 18089
-```
-
-测试页：
-
-```text
-http://127.0.0.1:18089/?vat2=1&count=20&pma=straight&analyzeFps=30&independent=1
-```
-
-自动验证：
-
-```powershell
-node tools/verify-vat-m3.mjs
-```
-
-脚本会启动隔离的 Headless Edge，通过 CDP 读取浏览器状态，验证播放中的实例会前进、暂停实例不前进，并保存截图和完整结果。
-
-### 6.2 环境
-
-```text
-ANGLE (Intel, Intel(R) Graphics (0x00007D67)
-Direct3D11 vs_5_0 ps_5_0, D3D11)
-```
-
-本轮使用 Intel 集显 D3D11，不是 SwiftShader 软件 GPU。但 Headless 浏览器 FPS 仍只用于确认测试稳定运行，不作为 Android 性能结论。
-
-### 6.3 结果
-
-| 指标 | 结果 |
-| --- | ---: |
-| 逻辑实例 | 20 |
-| 已烘焙动画 | 3 |
-| Render Lane | 4 |
-| GPU Instances | 80 |
-| Draw Call | 8 |
-| 不同当前帧 | 20 |
-| 暂停实例 | 3 |
-| VAT 精确纹理数据 | 11,468,800 B（10.94 MiB） |
-| Cocos GFX Texture Memory | 19.25 MiB |
-| Cocos GFX Buffer Memory | 0.119 MiB |
-
-`80 = 20 实例 × 4 Lane`，说明不同动画、相位、速度、暂停状态和颜色没有破坏 GPU Instancing。Draw Call 仍是同一页面和 HUD 条件下的固定 8，没有退化成 `20 × Lane`。
-
-截图中 20 个角色处于明显不同的动画姿态和缩放阶段，没有出现全黑、破面或所有实例同帧。产物位于：
-
-```text
-artifacts/vat-m3/independent-20.png
-artifacts/vat-m3/result.json
-```
-
-## 7. Android Native 真运行验证
-
-### 7.1 构建与环境
-
-使用 Creator 3.8.7 构建独立的 x86_64 Debug APK：
-
-```powershell
-powershell -File tools/build-android.ps1 `
-  -Profile low `
-  -Asset fruitvat42 `
-  -Abi x86_64 `
-  -AllowExistingEditor
-```
-
-包名为 `com.corekit.spineruntimelab.fruitvat42`。测试设备为 Android 14 模拟器，2,534,120 KB RAM、1080x2400；Native 图形后端为 GLES 3.0，但渲染器是 `Android Emulator OpenGL ES Translator (Google SwiftShader)`。因此本节能验证 JSB、GLES、离线资源加载和实例属性路径，不能代表移动真机 GPU 的绝对 CPU/GPU 性能。
-
-Native 不在设备上执行 Web/WASM 烘焙，而是从 `assets/resources/fruit-machine-vat-v2/` 加载 Web 导出的文件：
-
-```text
-manifest.spinevat  46,317 B（含 r1_lian socket；无 socket 时 3,641 B）
-position-0.bin      9,175,040 B
-light-0.bin         2,293,760 B
-VAT 精确数据合计   11,468,800 B（10.94 MiB）
-```
-
-该样本的 dark 通道全零，因此 manifest 声明 `dark=false`，没有生成无意义的 `dark-0.bin`。
-
-### 7.2 Native 结果
-
-| 指标 | 结果 |
-| --- | ---: |
-| 逻辑实例 | 20 |
-| 动画 / Render Lane | 3 / 4 |
-| GPU Instances | 80 |
-| Draw Call 当前 / 平均 / 峰值 | 8 / 8.00 / 8 |
-| 引擎 FPS / P50 / P95 | 58.80 / 16.78 ms / 18.75 ms |
-| SurfaceFlinger FPS / P50 / P95 | 59.48 / 16.689 ms / 18.268 ms |
-| SurfaceFlinger 超过 25 ms | 2 / 126 |
-| 进程 PSS / RSS | 153.99 / 244.71 MiB |
-| Native Heap PSS | 51.27 MiB |
-| GFX Texture / Buffer Memory | 19.24 / 2.35 MiB |
-| 进程 CPU | 95.2% |
-
-CPU 高的主要背景是 SwiftShader 软件光栅化，不能用该值判断 VAT 在真机上能节省多少 CPU。PSS/RSS 也是整个 Debug 进程，不是 VAT 独占内存；可精确归属给 VAT 的数据仍是 10.94 MiB 离线纹理净数据。
-
-日志先后打印 `[SpineVatV2Demo]` 和两秒后的 `[SpineVatV2State]`：索引 `0 / 9 / 18` 的暂停实例保持原帧，其余 17 个实例按各自 clip、相位和速度推进。Native shader 编译包含 `USE_INSTANCING1`，没有出现 VAT 加载、JSB、shader、`TypeError` 或 `ReferenceError`。两张相隔约 0.8 秒的截图中，播放实例姿势明显变化，暂停实例保持原姿势，且没有全黑、破面或透明混合异常。
-
-采集产物位于：
-
-```text
-temp/android-run/m3-vat2-emulator-20260921/summary.json
-temp/android-run/m3-vat2-emulator-20260921/logcat.txt
-temp/android-run/m3-vat2-emulator-20260921/screen.png
-temp/android-run/m3-vat2-emulator-20260921/screen-second.png
-```
-
-结论：Creator 3.8.7 Native JSB 的 `MeshRenderer.setInstancedAttribute()` 在本测试中可正确传递三组自定义实例属性；每实例独立播放没有破坏 GPU Instancing，也没有把 20 个实例退化为逐实例 Draw Call。
-
-## 8. HYBRID event / socket
-
-### 8.1 event 轨道
-
-编译器直接读取 Spine JSON 的事件定义和动画 event timeline，把以下字段写入对应 clip：
-
-```text
-time, name, intValue, floatValue, stringValue,
-audioPath, volume, balance
-```
-
-播放器使用上次检查帧到当前浮点帧之间的开闭区间派发事件，支持正放、倒放、跨多个 loop、pause/resume；`seek()` 和 manual frame 只移动游标，不补发跳过区间。单次更新最多派发 4,096 个事件，防止后台恢复后的异常大时间跨度卡死主线程。
-
-事件仍是轻量 CPU 逻辑，GPU 不可能主动调用 JavaScript。`SpineVatPopulationV2.updateHybrid()` 每帧只检查 manifest 中的事件表，不执行骨骼、约束或顶点计算。调用方式：
-
-```ts
-const off = instance.onEvent((event) => {
-  console.log(event.clip, event.name, event.intValue);
-});
-
-population.updateHybrid();
-off();
-```
-
-水果机样本本身没有 authored event，因此本轮用纯逻辑单测覆盖事件默认值、顺序、loop、倒放和 seek 语义；尚不能把它写成真实 event 资产回归通过。
-
-### 8.2 指定 socket
-
-Web 烘焙时通过 `socketNames` 显式选择骨骼，只导出需要的轨道。每帧保存 Spine world transform 的完整 2D 仿射矩阵：
-
-```text
-[a, b, c, d, worldX, worldY]
-x' = a*x + b*y + worldX
-y' = c*x + d*y + worldY
-```
-
-运行时 `instance.socket(name)` 使用与 GPU 当前离散帧相同的帧号读取矩阵，不重新运行 Spine Runtime。返回完整矩阵而不是强制分解为 position/rotation/scale，是为了不丢失 shear 和镜像语义。
-
-浏览器测试参数：
-
-```text
-/?vat2=1&count=20&pma=straight&analyzeFps=30&independent=1&sockets=r1_lian
-```
-
-自动验证：
-
-```powershell
-node tools/verify-vat-m3.mjs `
-  'http://127.0.0.1:18091/?vat2=1&count=20&pma=straight&analyzeFps=30&independent=1&sockets=r1_lian' `
-  artifacts/vat-m4-hybrid `
-  --socket=r1_lian
-```
-
-真实结果：
-
-| 平台 | socket before | socket after | GPU Instances | Draw Call | 错误 |
-| --- | --- | --- | ---: | ---: | ---: |
-| Web / Intel D3D11 | `x=-9.51, y=-40.84` | `x=13.92, y=-39.60` | 80 | 8 | 0 |
-| Android / GLES3 / SwiftShader | `x=13.57, y=-16.64` | `x=-22.82, y=-22.21` | 80 | 8 | 0 |
-
-两端的 `a/b/c/d` 也同步变化，证明读取的是动画骨骼轨道，不是只更新位置的伪数据。启用 socket 不增加 VAT 纹理、GPU Instances 或 Draw Call。
-
-当前每个矩阵使用 6 个 float。该样本为 `3 clip × 60 frame × 1 socket`，原始 float 数据约 4.22 KiB；直接嵌入 JSON 后 manifest 从 3,641 B 增至 46,317 B。少量大厅挂点可接受，但正式多 socket/长动画必须改为二进制轨道和量化，不能继续堆 JSON 数字。
-
-## 9. CPU 上传量和边界
-
-每次状态变化，每个实例每个 Lane 写三组 `vec4`，即 48 字节。水果机 4 Lane 时，一次实例状态更新写 192 字节；20 个实例全部改变状态时共 3,840 字节。正常播放不持续写这些属性。
-
-这不等于播放器已经覆盖全部 Spine Runtime API：
-
-- event 和指定 socket 已实现；真实 event 资产、socket follower 组件和二进制压缩仍待补齐；
-- crossfade 尚未实现；
-- clip 必须使用当前 renderer 的同一 layout，跨 layout 播放会明确报错；
-- GPU Instancing 仍遵循 Cocos 的透明排序和连续批次规则，中间穿插其他 Renderer 会拆批；
-- PMA shader/颜色路径已实现并有纯逻辑单测，但仍缺真实 PMA Spine 资产的固定帧/Web/Native 回归；
-- Native 自定义实例属性已在 Android x86_64 / GLES3 / SwiftShader 上跑通；ARM64 实体机仍需用同一 `spine-vat-2` 包复测，不能拿早期 `spine-vat-1` 真机数据代替。
-
-## 10. 当前判断
-
-M3 已在 Web 和 Android Native 模拟器上证明“每实例独立播放”和“同批 GPU Instancing”可以同时成立。对于大厅约 20 个入口，不需要为了不同动画或错峰播放拆成 20 套材质，也不需要 CPU 每帧更新动画顶点。
-
-下一步优先级应是：真实 PMA/多 atlas 资产回归、ARM64 真机 M3 A/B、真实 event 资产回归，以及 socket 二进制压缩/follower 组件；crossfade 只有在顶点语义兼容时才能直接双帧插值，否则必须使用预烘焙 transition clip 或回退官方 Runtime。
+| API | 做法 |
+|---|---|
+| `play(name, { loop, speed, startTime })` | 换 clip，锚点重置为 `startTime × fps` |
+| `pause()` / `resume()` | 暂停时把当前浮点帧存进锚点、speed 写 0；恢复时只重置时间锚点，从暂停时的亚帧位置继续 |
+| `seek(seconds)` | 锚点帧改为 `seconds × fps`，并清掉手动帧 |
+| `setTimeScale(speed)` | 先把旧速度下的当前帧存进锚点，再换速度，画面不跳 |
+| `setLoop(loop)` | 只改标志 |
+| `setManualFrame(frame \| null)` | 固定到某帧（可带小数，开启插值时 shader 会在两帧之间插值）；传 `null` 从固定帧继续播放 |
+| `setColor([r, g, b, a])` | 实例整体颜色；premultiplied 资源会先把 rgb 乘上 a 再上传 |
+
+每次调用都会把三个 vec4 写给 GPU：
+
+| 字段 | x | y | z | w |
+|---|---|---|---|---|
+| `anim0` | clip.frameOffset | clip.frameCount | clip.fps | anchorTime |
+| `anim1` | anchorFrame | speed（暂停为 0） | loop 1/0 | 手动帧（< 0 表示自动播放） |
+| `color` | r | g | b | a |
+
+shader 细节：
+
+- 循环取模后再 `min(…, frameCount - 1)` 一次。GPU 上 `mod` 的商有误差，恰好是整数倍时可能返回 `frameCount`，落到下一段动画的第 0 帧，表现为每圈回绕闪一帧（Mali / Adreno 上出现过）。
+- `VAT_LERP`：取相邻两帧插值；末帧循环时插回第 0 帧，不循环时不插。两帧 uv 不同（换了附件或是空槽）就退回阶跃。剪裁多边形用同一个 t 插值；剪裁生效状态切换的那一帧不插。
+
+## 3D：`spinevat.Skeleton`
+
+- 继承 `MeshRenderer`，一个组件就是一个实例；节点的变换就是实例的变换，组件不创建子节点。
+- 同一份 `SkeletonData` 且插值开关相同的实例，共享同一个网格（每条 lane 一个 submesh，顶点 `a_position.x` = 帧内顶点号，索引取自 `lane.indices`）、每条 lane 一个材质（technique = alpha mode × blend，共 8 个），以及全部数据贴图。按引用计数，最后一个实例销毁时一起释放。
+- 逐实例参数走 instanced attribute（`a_vatAnim0/1`、`a_vatColor`，`setInstancedAttribute`），所以不同动画、相位、速度、颜色的实例仍在同一个 instancing batch 里。天玑 700 实测 30 / 150 / 600 个实例的 DC 都是 6。
+- 加载是异步的（`reload()`）。`await` 返回后，若组件已失效、禁用，或期间又发起了新的加载（代号 `loadGeneration` 变了），就丢弃这次的结果。
+- 编辑器里 `Preview In Editor` 为真时直接预览。
+
+## 2D：`spinevat.UiSkeleton`
+
+- 挂在 UI 节点上，运行时为每段「相邻、同材质、同 atlas」的 lane 各建一个 `spinevat.UiLane` 子节点（`DontSave`，不会存进场景），所以绘制顺序就是兄弟顺序，可以和 Sprite、`sp.Skeleton` 穿插、互相遮挡。编辑器里不预览。
+- **分组**：每组一套材质，UBO 数组 `vatInstances` 里放 48 个实例，每个实例 5 个 vec4（anim0、anim1、color、2×2 变换、平移）。实例按创建顺序占槽，满 48 个再开新组；不同组的材质不同，组之间必然断批。插值开关不同的实例不会进同一组。某组最后一个实例释放时销毁这组的材质，最后一组也释放时再销毁贴图。
+- **顶点**：每个顶点只有一个 float，`a_vatVertex = (槽位 + additive ? 64 : 0) × 16384 + 帧内顶点号`，只在建 chunk 时写一次；每帧 native 整块重传的 UI 顶点因此最小。单帧顶点数（`frameStride`）必须 ≤ 16384。
+- **混合**：normal 和 additive 共用 merged technique（one / one_minus_src_alpha），additive 顶点在 FS 里把 a 置 0，结果为 rgb + dst。这和官方 Spine 让 additive 同批的做法相同。multiply 和 screen 各用自己的 technique。
+- **上传**：
+  - `lateUpdate` 只在世界矩阵真的变了时才标脏；组在 `EVENT_BEFORE_DRAW` 时整组 `setUniformArray` 一次。
+  - web 端改写了这批 MeshBuffer 的 `uploadBuffers`，顶点、索引没变就不传。
+  - native 在 dirty 标记上额外置一个高位。只有打了引擎补丁（`CCK_VAT_UI_STATIC_VB`，`native/engine/common/Classes/engine-patches/UIMeshBuffer.cpp`）的引擎才认这个高位；原版引擎行为不变。
+- VAT 专用的 `StaticVBAccessor` 首次创建时，临时把 `BATCHER2D_MEM_INCREMENT` 调到 255 KB（65280 顶点）。默认的 144 KB 只装得下大约 11 个实例，一换 buffer 就断批。
+
+## 事件与 socket
+
+- `onVatEvent(cb)`：3D 组件每帧的 `update` 调用 `drainEvents`，派发上次检查位置到当前浮点帧之间的事件。支持正放、倒放、跨多圈循环、暂停/恢复。`seek` 和手动帧只移动游标，不补发跳过的事件。一次更新最多派发 4096 个，超出就抛错。
+- `socket(name)`：按当前离散帧从 manifest 的 socket 轨道读取 `[a, b, c, d, worldX, worldY]`，不需要运行 Spine Runtime。
+- 这两个接口以及 `snapshot()` 目前只有 3D 组件提供，2D 组件还没有。
+
+## 插值开关
+
+两个组件各有一个静态开关 `interpolate`（默认 true），对应编译期宏 `VAT_LERP`。开启后 VS 采样次数翻倍，CPU 开销不变。它只影响之后创建的实例，建议启动时按机型档位设定一次。
+
+## 已知行为与坑
+
+- 透明实例在一个 instancing batch 内不会逐实例排序（Cocos 的行为）。3D 实例重叠、又要求严格的前后关系时，要按层拆开；2D 靠兄弟顺序，没有这个问题。
+- 2D 每 48 个实例一组，DC 随实例数线性增长（天玑 700：30 / 150 / 600 实例分别是 3 / 8 / 23 个 DC）。
+- 没有 crossfade，切动画是硬切。固定槽位下各动画的顶点一一对应，技术上可以直接做淡入淡出，但还没实现。
+- 只能播放烘焙过的动画和默认 skin，不支持运行时换装或 `setAttachment`。
+- `VAT_CLIP` 额外占用 5 行 varying，只支持 WebGL1 的机器可能编不过（见总览）。
+- 实验室的 web 调试入口（`?vat2=1&count=…&independent=1`，`window.__SPINE_VAT_V2_*`）在 `assets/perf/SpineLabDriver.ts` 里，测试用的实例群在 `SpineVatRuntimePopulation.ts`，不属于组件 API。
