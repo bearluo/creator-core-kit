@@ -33,7 +33,7 @@ import type { SpineVatBlendMode, SpineVatManifest, SpineVatSocketMatrix } from '
 import { SpineVatSkeletonData } from './SpineVatSkeletonData';
 import { SLOT_SHIFT, SpineVatUiLane, type SpineVatUiLaneInfo as Lane } from './SpineVatUiLane';
 
-const { ccclass, menu, property } = _decorator;
+const { ccclass, executeInEditMode, menu, playOnFocus, property } = _decorator;
 const DEFAULT_ANIMATIONS = Enum({ '<Default>': 0 });
 
 // VAT 走 2D UI 提交流程。一个实例 = 一个 SpineVatUiSkeleton（槽位/播放/变换）
@@ -201,6 +201,8 @@ function releaseSlot(group: UiGroup, slot: number): void {
  * 用法同 spinevat.Skeleton：挂到 UI 节点上，赋 Skeleton Data，选 Initial Clip。
  */
 @ccclass('spinevat.UiSkeleton')
+@executeInEditMode
+@playOnFocus
 @menu('Spine/VAT UI Skeleton')
 export class SpineVatUiSkeleton extends Component {
   /**
@@ -255,12 +257,17 @@ export class SpineVatUiSkeleton extends Component {
   @property({ displayName: 'Time Scale', tooltip: '动画播放速度', min: 0 })
   timeScale = 1;
 
+  @property({ displayName: 'Preview In Editor', tooltip: '编辑模式下直接播放 VAT 预览' })
+  previewInEditor = true;
+
   private group: UiGroup | null = null;
   private slot = -1;
   private playback: SpineVatPlayback | null = null;
   private laneNodes: Node[] = [];
   /** 挂在组件上而不是 playback 上：换 skeletonData / initialClip 重建时监听不丢。 */
   private readonly listeners = new Set<(event: SpineVatRuntimeEvent) => void>();
+  /** 编辑器里 Inspector 改 loop / timeScale / previewInEditor、撤销恢复都不走 setter，靠比对签名发现。 */
+  private editorSignature = '';
 
   onLoad(): void {
     this.refreshAnimationEnum();
@@ -268,6 +275,16 @@ export class SpineVatUiSkeleton extends Component {
 
   onEnable(): void {
     if (!this.group) this.rebuild();
+  }
+
+  /** lane 是独立的 UIRenderer 子节点，不拆掉的话组件禁用了它们照样画。 */
+  onDisable(): void {
+    this.teardown();
+  }
+
+  onRestore(): void {
+    this.refreshAnimationEnum();
+    this.rebuild();
   }
 
   get vertexCount(): number {
@@ -297,12 +314,14 @@ export class SpineVatUiSkeleton extends Component {
 
   setLoop(loop: boolean): void {
     this.loop = loop;
+    this.editorSignature = this.signature();
     this.playback?.setLoop(loop);
     this.upload();
   }
 
   setTimeScale(timeScale: number): void {
     this.timeScale = timeScale;
+    this.editorSignature = this.signature();
     this.playback?.setSpeed(timeScale, now());
     this.upload();
   }
@@ -331,6 +350,10 @@ export class SpineVatUiSkeleton extends Component {
   }
 
   update(): void {
+    if (EDITOR_NOT_IN_PREVIEW && this.editorSignature !== this.signature()) {
+      this.refreshAnimationEnum();
+      this.rebuild();
+    }
     if (!this.playback) return;
     for (const event of this.playback.drainEvents(now())) {
       for (const listener of this.listeners) listener(event);
@@ -338,7 +361,11 @@ export class SpineVatUiSkeleton extends Component {
   }
 
   lateUpdate(): void {
-    if (this.group) this.writeTransform();
+    if (!this.group) return;
+    this.writeTransform();
+    // lane 只在创建时抄一次 layer；节点换层（Inspector 或脚本）后要跟上，否则相机按旧层剔除。
+    const layer = this.node.layer;
+    for (const node of this.laneNodes) if (node.layer !== layer) node.layer = layer;
   }
 
   onDestroy(): void {
@@ -351,11 +378,13 @@ export class SpineVatUiSkeleton extends Component {
     setPropertyEnumType(this, 'initialClipIndex', animations);
   }
 
-  /** 按当前 skeletonData / initialClip 重建；编辑器里不建（lane 节点会被存进场景）。 */
+  /** 按当前属性重建。lane 节点 DontSave（不进场景 / prefab）、HideInHierarchy（层级面板里不出现）。 */
   private rebuild(): void {
     this.teardown();
+    this.editorSignature = this.signature();
     const data = this.skeletonDataBacking;
-    if (EDITOR_NOT_IN_PREVIEW || !data || !this.isValid || !this.enabledInHierarchy) return;
+    if (!data || !this.isValid || !this.enabledInHierarchy) return;
+    if (EDITOR_NOT_IN_PREVIEW && !this.previewInEditor) return;
     const { group, slot } = acquireSlot(data);
     this.group = group;
     this.slot = slot;
@@ -377,7 +406,7 @@ export class SpineVatUiSkeleton extends Component {
     });
     for (const segment of segments) {
       const node = new Node(`${this.node.name}-lane${segment.join('')}`);
-      node.hideFlags |= CCObject.Flags.DontSave;
+      node.hideFlags |= CCObject.Flags.DontSave | CCObject.Flags.HideInHierarchy;
       node.parent = this.node;
       node.layer = this.node.layer;
       const lanes = segment.map((index) => layout.lanes[index]);
@@ -385,6 +414,16 @@ export class SpineVatUiSkeleton extends Component {
       node.addComponent(SpineVatUiLane).init(lanes, atlases[segment[0]], material, slot);
       this.laneNodes.push(node);
     }
+  }
+
+  private signature(): string {
+    return [
+      this.previewInEditor,
+      this.skeletonDataBacking?.uuid ?? '',
+      this.initialClip,
+      this.loop,
+      this.timeScale,
+    ].join('|');
   }
 
   private teardown(): void {

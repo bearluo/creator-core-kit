@@ -7,7 +7,10 @@ temp/
 local/
 build/
 profiles/
-native
+# native/ 入库（引擎补丁 engine-patches/ 在里面，见根 .gitignore 与 ADR-0021）。
+# 只忽略构建时拷进去的资源和本机配置；本机配置的样例是 localCfg.cmake.example。
+/native/engine/android/**/*/assets
+/native/engine/common/localCfg.cmake
 
 #//////////////////////////
 # 本地 dev 工具:funplay MCP 扩展不入库(对齐 apps/demo)

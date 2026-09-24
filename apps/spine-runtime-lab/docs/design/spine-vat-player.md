@@ -64,7 +64,8 @@ shader 细节：
 
 ## 2D：`spinevat.UiSkeleton`
 
-- 挂在 UI 节点上，运行时为每段「相邻、同材质、同 atlas」的 lane 各建一个 `spinevat.UiLane` 子节点（`DontSave`，不会存进场景），所以绘制顺序就是兄弟顺序，可以和 Sprite、`sp.Skeleton` 穿插、互相遮挡。编辑器里不预览。
+- 挂在 UI 节点上，为每段「相邻、同材质、同 atlas」的 lane 各建一个 `spinevat.UiLane` 子节点（`DontSave` 不存进场景 / prefab，`HideInHierarchy` 不出现在层级面板），所以绘制顺序就是兄弟顺序，可以和 Sprite、`sp.Skeleton` 穿插、互相遮挡。组件禁用时拆掉这些子节点、释放槽位。
+- 编辑器里 `Preview In Editor` 为真时直接预览（`executeInEditMode` + `playOnFocus`）。Inspector 改 `Loop` / `Time Scale` / `Preview In Editor` 和撤销不走 setter，`update` 里比对属性签名发现后重建。
 - **分组**：每组一套材质，UBO 数组 `vatInstances` 里放 48 个实例，每个实例 5 个 vec4（anim0、anim1、color、2×2 变换、平移）。实例按创建顺序占槽，满 48 个再开新组；不同组的材质不同，组之间必然断批。插值开关不同的实例不会进同一组。某组最后一个实例释放时销毁这组的材质，最后一组也释放时再销毁贴图。
 - **顶点**：每个顶点只有一个 float，`a_vatVertex = (槽位 + additive ? 64 : 0) × 16384 + 帧内顶点号`，只在建 chunk 时写一次；每帧 native 整块重传的 UI 顶点因此最小。单帧顶点数（`frameStride`）必须 ≤ 16384。
 - **混合**：normal 和 additive 共用 merged technique（one / one_minus_src_alpha），additive 顶点在 FS 里把 a 置 0，结果为 rgb + dst。这和官方 Spine 让 additive 同批的做法相同。multiply 和 screen 各用自己的 technique。
@@ -87,6 +88,7 @@ shader 细节：
 ## 已知行为与坑
 
 - 透明实例在一个 instancing batch 内不会逐实例排序（Cocos 的行为）。3D 实例重叠、又要求严格的前后关系时，要按层拆开；2D 靠兄弟顺序，没有这个问题。
+- 2D 组件所在节点的 layer 必须在渲染它的相机的 visibility 里（通常是 UI_2D）。编辑器的场景视图所有层都看得见，放错层只会在预览 / 运行时看不见。lane 子节点每帧跟随父节点的 layer。
 - 2D 每 48 个实例一组，DC 随实例数线性增长（天玑 700：30 / 150 / 600 实例分别是 3 / 8 / 23 个 DC）。
 - 没有 crossfade，切动画是硬切。固定槽位下各动画的顶点一一对应，技术上可以直接做淡入淡出，但还没实现。
 - 只能播放烘焙过的动画和默认 skin，不支持运行时换装或 `setAttachment`。

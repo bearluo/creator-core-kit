@@ -1,0 +1,6 @@
+## 本机配置样例：复制为 localCfg.cmake（不入库）后按需修改，覆盖 cfg.cmake 的选项。
+# set(NODE_EXECUTABLE /opt/...)
+
+# VAT UI MeshBuffer 按需上传的引擎补丁（engine-patches/UIMeshBuffer.cpp，见 CMakeLists.txt）。
+# 关掉 = 原版引擎行为；2D 组件在两种引擎下都能跑，开了 native 端少一次整块顶点重传。
+set(CCK_VAT_UI_STATIC_VB ON)

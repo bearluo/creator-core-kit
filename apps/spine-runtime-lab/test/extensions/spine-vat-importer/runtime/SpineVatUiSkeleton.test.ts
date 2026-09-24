@@ -89,14 +89,14 @@ vi.mock('cc', () => {
   return {
     _decorator: {
       ccclass: identityDecorator,
-      executeInEditMode: identityDecorator,
+      executeInEditMode: (target: unknown) => target, // 不带括号的装饰器
       menu: identityDecorator,
-      playOnFocus: identityDecorator,
+      playOnFocus: (target: unknown) => target,
       property: propertyDecorator,
     },
     Asset,
     BufferAsset,
-    CCObject: { Flags: { DontSave: 1 } },
+    CCObject: { Flags: { DontSave: 1, HideInHierarchy: 2 } },
     Component,
     director: {
       root: { get cumulativeTime() { return runtime.time; }, device: { gfxAPI: 0 } },
@@ -266,6 +266,26 @@ describe('SpineVatUiSkeleton 事件 / socket / snapshot', () => {
     expect(received).toEqual([]); // 当前在 0.0 → 0.1 之间，未越过 0.25
     step(skeleton, 0.2);
     expect(received).toEqual(['hit']);
+  });
+
+  it('禁用时拆掉 lane、释放槽位，重新启用后恢复', () => {
+    const skeleton = createSkeleton();
+    expect(skeleton.snapshot()).not.toBeNull();
+    (skeleton as unknown as { enabledInHierarchy: boolean }).enabledInHierarchy = false;
+    skeleton.onDisable();
+    expect(skeleton.snapshot()).toBeNull();
+    (skeleton as unknown as { enabledInHierarchy: boolean }).enabledInHierarchy = true;
+    skeleton.onEnable();
+    expect(skeleton.snapshot()).toMatchObject({ clip: 'idle' });
+  });
+
+  it('节点换层后 lane 跟着换（否则相机按旧层剔除，预览里看不见）', () => {
+    const skeleton = createSkeleton();
+    const lanes = (skeleton as unknown as { laneNodes: Array<{ layer: number }> }).laneNodes;
+    expect(lanes.length).toBeGreaterThan(0);
+    skeleton.node.layer = 1 << 25;
+    skeleton.lateUpdate();
+    expect(lanes.every((lane) => lane.layer === 1 << 25)).toBe(true);
   });
 
   it('重建（换 initialClip）后监听保留', () => {

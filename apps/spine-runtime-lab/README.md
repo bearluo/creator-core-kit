@@ -43,6 +43,12 @@ node tools/static-server.mjs build/web-bake 18093 assets/resources/vat/nanwuzhe
 
 测试里的实例都是按业务用法建的：`addComponent` → 赋 `skeletonData` / `initialClipIndex` / `loop`，每个实例一个节点。
 
+## 打包工程
+
+`powershell -File tools/pack-project.ps1 [-Out <zip>]`：把工程打成 zip（默认 `build/spine-runtime-lab-<时间>.zip`），解压后 Creator 3.8.7 直接打开。内容是 git 视角的工程文件（含未提交改动），生成物和本机的 `localCfg.cmake` 不打。
+
+`native/` 入库（引擎补丁在 `native/engine/common/Classes/engine-patches/`）；本机 native 配置从 `native/engine/common/localCfg.cmake.example` 复制成 `localCfg.cmake` 再改。
+
 ## 文档
 
 见 [docs/README.md](docs/README.md)。

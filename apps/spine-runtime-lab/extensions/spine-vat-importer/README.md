@@ -25,7 +25,7 @@
 
 ## 2D 版：`spinevat.UiSkeleton`
 
-UI 界面里用 `Spine/VAT UI Skeleton`（`spinevat.UiSkeleton`）：挂在 UI 节点（Canvas 下、`UI_2D` 层）上，同样赋 `Skeleton Data`、选 `Initial Clip`、设 `Loop` / `Time Scale`。它走 UI batch，和 Sprite、`sp.Skeleton` 按兄弟顺序穿插和遮挡；同一份资源的相邻实例合成一批（每 48 个实例一组材质）。运行时会在节点下建几个 lane 子节点（不存进场景），编辑器里不预览。
+UI 界面里用 `Spine/VAT UI Skeleton`（`spinevat.UiSkeleton`）：挂在 UI 节点（Canvas 下、`UI_2D` 层）上，同样赋 `Skeleton Data`、选 `Initial Clip`、设 `Loop` / `Time Scale` / `Preview In Editor`。它走 UI batch，和 Sprite、`sp.Skeleton` 按兄弟顺序穿插和遮挡；同一份资源的相邻实例合成一批（每 48 个实例一组材质）。组件会在节点下建几个 lane 子节点（不存进场景、层级面板里隐藏），编辑器里可直接预览。
 
 脚本接口与 3D 版相同：`play` / `pause` / `resume` / `seek` / `setLoop` / `setTimeScale` / `setColor` / `setManualFrame` / `socket` / `snapshot` / `onVatEvent`。
 
@@ -53,4 +53,5 @@ skeleton.setManualFrame(12); // 传 null 恢复按时间播放
 - 当前转换器输入为 Spine 4.2 JSON、atlas 和对应纹理页，不支持 `.skel`。
 - VAT 只能还原转换时烘焙的动画、皮肤组合和渲染 Lane。运行时换装、任意骨骼约束修改和未烘焙的动态附件不属于该运行时能力。
 - 不再支持旧组件的 `Resource Root`、手填资源数组、`instanceCount`、`columns` 或批量布局参数。
+- 启动时编辑器会提示 `contribution.importer 已在 3.8.3 版本废弃，请更换为 contribution.asset-handler`，可以忽略，**不要删 `package.json` 里的 `importer`**：在 3.8.7 上，工程扩展只声明 `asset-handler` 不会注册进资源数据库的工作进程，`manifest.spinevat` 会退回默认导入器（`*` / `cc.Asset`），组件拿不到资源。实测过（2026-09-24）。
 
