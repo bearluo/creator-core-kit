@@ -1216,7 +1216,9 @@ function assertRuntimeCanParse(data) {
   for (let i = 0; ok && i < count; i += 1) ok = Boolean(animations[i]);
   if (ok) return;
   const version = data.skeletonJson?.skeleton?.spine ?? "\u672A\u77E5\u7248\u672C";
-  throw new Error(`\u5F15\u64CE\u7684 Spine \u8FD0\u884C\u65F6\u89E3\u6790\u4E0D\u4E86\u8FD9\u4EFD Spine ${version} \u6570\u636E\uFF1A\u9879\u76EE\u8BBE\u7F6E \u2192 \u529F\u80FD\u88C1\u526A \u2192 Spine \u9009 4.2\uFF0C\u91CD\u542F\u7F16\u8F91\u5668\u540E\u518D\u70D8\u7119`);
+  throw new Error(
+    `\u5F15\u64CE\u7684 Spine \u8FD0\u884C\u65F6\u89E3\u6790\u4E0D\u4E86\u8FD9\u4EFD Spine ${version} \u6570\u636E\uFF1A\u70D8\u7119\u8981\u5728 Spine \u9009 4.2 \u7684\u5DE5\u7A0B\u91CC\u505A\uFF08\u9879\u76EE\u8BBE\u7F6E \u2192 \u529F\u80FD\u88C1\u526A \u2192 Spine\uFF0C\u6539\u5B8C\u91CD\u542F\u7F16\u8F91\u5668\uFF09\u3002\u6E38\u620F\u5DE5\u7A0B\u8981\u7559\u5728 3.8 \u7684\u8BDD\uFF0C\u6362\u4E2A 4.2 \u7684\u5DE5\u7A0B\u70D8\u7119\uFF0C\u518D\u628A <\u540D>-vat/ \u76EE\u5F55\u62F7\u8FC7\u6765\uFF0C\u64AD\u653E\u4E0D\u4F9D\u8D56 Spine \u6A21\u5757`
+  );
 }
 function bytes(view) {
   return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);

@@ -51,7 +51,10 @@ function assertRuntimeCanParse(data: sp.SkeletonData): void {
   for (let i = 0; ok && i < count; i += 1) ok = Boolean(animations[i]);
   if (ok) return;
   const version = (data.skeletonJson as any)?.skeleton?.spine ?? '未知版本';
-  throw new Error(`引擎的 Spine 运行时解析不了这份 Spine ${version} 数据：项目设置 → 功能裁剪 → Spine 选 4.2，重启编辑器后再烘焙`);
+  throw new Error(
+    `引擎的 Spine 运行时解析不了这份 Spine ${version} 数据：烘焙要在 Spine 选 4.2 的工程里做（项目设置 → 功能裁剪 → Spine，改完重启编辑器）。`
+    + '游戏工程要留在 3.8 的话，换个 4.2 的工程烘焙，再把 <名>-vat/ 目录拷过来，播放不依赖 Spine 模块',
+  );
 }
 
 function bytes(view: ArrayBufferView): Uint8Array {
