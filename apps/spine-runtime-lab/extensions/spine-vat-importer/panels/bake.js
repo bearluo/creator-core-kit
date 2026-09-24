@@ -20,9 +20,7 @@ module.exports = Editor.Panel.define({
     <div class="bake">
       <header><b id="title">未选择 Spine 资源</b><div id="notice" class="notice"></div></header>
       <section class="row"><ui-label>输出目录</ui-label><ui-input id="outDir"></ui-input></section>
-      <section class="row"><ui-label>Alpha</ui-label>
-        <ui-select id="alphaMode"><option value="straight">straight</option><option value="premultiplied">premultiplied</option></ui-select>
-      </section>
+      <section class="row"><ui-label>Alpha</ui-label><span id="alphaMode"></span></section>
       <section class="row"><ui-label>帧率</ui-label><ui-num-input id="frameRate" min="1" max="120" step="1" preci="0"></ui-num-input></section>
       <section class="group"><div class="head"><span>动画</span><ui-button id="allAnims" class="mini">全选</ui-button><ui-button id="noAnims" class="mini">全不选</ui-button></div>
         <div id="animations" class="list"></div></section>
@@ -67,7 +65,11 @@ module.exports = Editor.Panel.define({
         this.source = source;
         this.selectedAnims = new Set(options.animations);
         this.selectedBones = new Set(options.socketNames);
-        this.$.alphaMode.value = options.alphaMode;
+        this.$.alphaMode.textContent = {
+          straight: 'straight（atlas 未声明预乘）',
+          premultiplied: 'premultiplied（atlas 声明了 pma: true）',
+          unknown: '无法判断（atlas 各页的 pma 声明不一致）',
+        }[source.alphaMode];
         this.$.frameRate.value = options.frameRate;
         const notices = [];
         if (source.runtimeError) notices.push(source.runtimeError);
@@ -104,7 +106,6 @@ module.exports = Editor.Panel.define({
 
     async bake() {
       const options = {
-        alphaMode: this.$.alphaMode.value,
         frameRate: Number(this.$.frameRate.value),
         animations: this.source.animations.filter((name) => this.selectedAnims.has(name)),
         socketNames: this.source.bones.filter((name) => this.selectedBones.has(name)),

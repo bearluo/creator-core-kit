@@ -314,12 +314,12 @@ let registered = false;
 exports.methods = {
   /**
    * 烘焙面板打开时：骨架的动画 / 骨骼、能不能烘，以及从已有产物 manifest 读回的默认参数。
-   * manifestPath 不存在就用默认值（straight、30、全部动画、不选 socket）。
+   * manifestPath 不存在就用默认值（30、全部动画、不选 socket）；alpha 模式按 atlas 自动判断，不是参数。
    */
   async describeBakeSource(uuid, manifestPath) {
     const { bakeDefaultsFromManifest, describeSpineVatSource } = require('./bake/dist/bake.js');
     const source = describeSpineVatSource(await loadAsset(uuid));
-    const fallback = { alphaMode: 'straight', frameRate: 30, animations: source.animations, socketNames: [] };
+    const fallback = { frameRate: 30, animations: source.animations, socketNames: [] };
     let manifest = null;
     try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch {}
     return { source, ...bakeDefaultsFromManifest(manifest, fallback, source) };

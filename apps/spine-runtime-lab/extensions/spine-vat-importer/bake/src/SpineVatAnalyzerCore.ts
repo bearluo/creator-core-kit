@@ -58,11 +58,11 @@ function parseAtlasPages(atlasText: string): SpineVatAtlasPageInfo[] {
   }).filter((page) => page.name.length > 0);
 }
 
+/** Spine 4.x 导出勾了「Premultiply alpha」才在每页写 pma: true，没写就是 straight；各页不一致返回 unknown。 */
 function inferAlphaMode(pages: SpineVatAtlasPageInfo[]): SpineVatAlphaMode {
-  const declared = pages.map((page) => page.pma).filter((value): value is boolean => value !== null);
-  if (declared.length !== pages.length || declared.length === 0) return 'unknown';
-  if (declared.every(Boolean)) return 'premultiplied';
-  if (declared.every((value) => !value)) return 'straight';
+  if (pages.length === 0) return 'unknown';
+  if (pages.every((page) => page.pma === true)) return 'premultiplied';
+  if (pages.every((page) => page.pma !== true)) return 'straight';
   return 'unknown';
 }
 
@@ -116,7 +116,7 @@ export function analyzeSpineJson(json: JsonRecord, atlasText: string): SpineVatS
   const inferredAlphaMode = inferAlphaMode(pages);
   if (runtimeFamily !== '4.2') warnings.push(`目标 worker 是 Spine 4.2，源数据版本为 ${spineVersion}`);
   if (pages.length === 0) warnings.push('Atlas 中没有识别到纹理页');
-  if (inferredAlphaMode === 'unknown') warnings.push('Atlas 未提供一致的 pma 声明，需要 recipe 明确指定 alpha mode');
+  if (inferredAlphaMode === 'unknown') warnings.push('Atlas 各页的 pma 声明不一致（有的预乘有的没有），无法判断 alpha 模式');
 
   return {
     spineVersion,

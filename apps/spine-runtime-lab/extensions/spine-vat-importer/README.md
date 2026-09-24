@@ -11,10 +11,10 @@
 
 1. 资源管理器里右键 Spine 的 `.json`（`sp.SkeletonData`，需要同目录的 atlas 与图集 PNG），选「烘焙 Spine VAT…」，打开烘焙面板：
    - **输出目录**：默认同目录的 `<名>-vat/`，可改成 `db://assets` 下任意目录；
-   - **Alpha**：图集是否预乘 alpha。Spine 导出时勾了「Premultiply alpha」（`.atlas` 里有 `pma: true`）选 premultiplied，否则 straight；选错会发暗 / 黑边或发亮 / 白边；
+   - **Alpha**：自动判断，只显示结果。`.atlas` 每页都写了 `pma: true`（导出时勾了「Premultiply alpha」）按 premultiplied，没写按 straight；各页不一致时无法烘焙，要重新统一导出；
    - **帧率**：1～120，默认 30；
    - **动画**：勾要烘的，默认全部；
-   - **Socket 骨骼**：勾要在运行时用 `socket()` 取变换的骨骼（可搜索），默认不选——不勾的骨骼运行时取不到。
+   - **Socket 骨骼**：勾要挂东西的骨骼（可搜索），默认不选——不勾的骨骼运行时取不到。挂法：组件的 **Sockets** 里加一项，填骨骼名，Target 拖一个放在 VAT 节点下面的子节点，它就会每帧跟着骨骼动；脚本里也可以用 `socket()` 自己取矩阵。
    输出目录里已有 `manifest.spinevat` 时，面板用它读回上次的参数当默认值（产物本身就是参数记录）；骨架里已经没有的动画 / 骨骼会被去掉并提示。
 2. 点「烘焙」，产物写到输出目录：`manifest.spinevat`、`position-N.bin`、`light-N.bin` / `dark-N.bin`（有才出）和图集 PNG，已存在的同名文件会被覆盖。写完自动导入，`manifest.spinevat` 成为 `spinevat.SkeletonData` 资源。
 3. 结果与报错显示在面板里，控制台也打 `[Spine VAT Bake]`。过不了固定槽位规则的动画会让烘焙报错并写明是哪个动画、哪条规则。
@@ -69,4 +69,5 @@ skeleton.setManualFrame(12); // 传 null 恢复按时间播放
 - VAT 只能还原转换时烘焙的动画、皮肤组合和渲染 Lane。运行时换装、任意骨骼约束修改和未烘焙的动态附件不属于该运行时能力。
 - 不再支持旧组件的 `Resource Root`、手填资源数组、`instanceCount`、`columns` 或批量布局参数。
 - 启动时编辑器会提示 `contribution.importer 已在 3.8.3 版本废弃，请更换为 contribution.asset-handler`，可以忽略，**不要删 `package.json` 里的 `importer`**：在 3.8.7 上，工程扩展只声明 `asset-handler` 不会注册进资源数据库的工作进程，`manifest.spinevat` 会退回默认导入器（`*` / `cc.Asset`），组件拿不到资源。实测过（2026-09-24）。
+- 替换或升级扩展文件后，不重启 Creator 的话，Inspector 里 Skeleton Data 一栏可能显示「未知类型」（多半是资源类在导入进程和场景进程各注册一份，热重载只更新了一边），**重启 Creator 即可**；日常使用、不改扩展时不会出现。
 

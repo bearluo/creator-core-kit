@@ -79,6 +79,7 @@ shader 细节：
 
 - `onVatEvent(cb)`：两个组件都在每帧的 `update` 里调用 `drainEvents`（没有监听时也照常推进游标，免得后加的监听一次补发积压的事件），派发上次检查位置到当前浮点帧之间的事件。支持正放、倒放、跨多圈循环、暂停/恢复。`seek` 和手动帧只移动游标，不补发跳过的事件。一次更新最多派发 4096 个，超出就抛错。
 - `socket(name)`：按当前离散帧从 manifest 的 socket 轨道读取 `[a, b, c, d, worldX, worldY]`，不需要运行 Spine Runtime。
+- `sockets` 属性（`SpineVatSocket.ts`，同官方 `sp.Skeleton` 的 Sockets）：每项是骨骼名 + 目标节点，`lateUpdate` 把该骨骼的矩阵写成目标节点的本地矩阵。骨骼矩阵在骨架空间，也就是 VAT 节点的本地空间，所以目标节点要放在 VAT 节点下面；骨骼的缩放也会带到目标节点上。骨骼没有烘焙 socket 数据时跳过，并在控制台警告一次。
 - 两个组件都提供这两个接口和 `snapshot()`。监听挂在组件上，不随内部资源走：资源加载完成前就能注册，3D 的 `reload()`、2D 换 `skeletonData` / `initialClip` 重建都不会清掉，组件销毁时才清空。
 
 ## 插值开关

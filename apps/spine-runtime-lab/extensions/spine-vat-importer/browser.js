@@ -201,6 +201,17 @@ async function onDrop(kind, args) {
 
 let bakeTarget = '';
 
+/** 装好扩展后第一次启动编辑器自动弹一次新手指导（按本机记，不跟工程走）。 */
+async function openGuideOnFirstRun() {
+  try {
+    if (await Editor.Profile.getConfig('spine-vat-importer', 'guideShown', 'global')) return;
+    await Editor.Profile.setConfig('spine-vat-importer', 'guideShown', true, 'global');
+    await Editor.Panel.open('spine-vat-importer.guide');
+  } catch (error) {
+    console.warn(`${LOG_PREFIX} 新手指导没能自动打开，可从菜单「扩展 → Spine VAT 新手指导」打开`, error);
+  }
+}
+
 module.exports = {
   methods: {
     // 烘焙面板要烘的资源：面板打开时来取；面板已开着就直接通知它换资源。
@@ -209,12 +220,14 @@ module.exports = {
       Editor.Message.send('spine-vat-importer', 'bake-target-changed', uuid);
     },
     queryBakeTarget() { return bakeTarget; },
+    openGuide() { return Editor.Panel.open('spine-vat-importer.guide'); },
     dropHierarchy(...args) { return onDrop('hierarchy', args); },
     dropScene(...args) { return onDrop('scene', args); },
   },
 
   load() {
     startupTimer = setTimeout(() => void runStartupImport(), 500);
+    void openGuideOnFirstRun();
   },
 
   unload() {

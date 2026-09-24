@@ -76,6 +76,6 @@ texel(帧, i) = (clip.frameOffset + 帧) × frameStride + i
 
 ## 已知行为与坑
 
-- 烘焙驱动目前不传 `socketNames`，要导出 socket 需要改驱动或直接调用入口。
+- 烘焙面板里勾选的 Socket 骨骼会作为 `socketNames` 传入。
 - socket 数据以 JSON 数字直接写进 manifest。多个 socket 或长动画会让 manifest 明显变大；需要时再改成二进制、量化存储。
 - 图集 PNG 不在导出内容里，需要手动拷进导出目录（见工程 README）。

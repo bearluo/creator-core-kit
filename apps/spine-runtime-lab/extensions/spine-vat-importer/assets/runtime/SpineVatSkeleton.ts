@@ -14,6 +14,7 @@ import type {
 import { SpineVatRenderHandle } from './SpineVatRenderResources';
 import type { SpineVatSocketMatrix } from './SpineVatSchema';
 import { SpineVatSkeletonData } from './SpineVatSkeletonData';
+import { SpineVatSocket, syncSockets } from './SpineVatSocket';
 
 const { ccclass, executeInEditMode, menu, playOnFocus, property } = _decorator;
 const DEFAULT_ANIMATIONS = Enum({ '<Default>': 0 });
@@ -80,6 +81,9 @@ export class SpineVatSkeleton extends MeshRenderer {
 
   @property({ displayName: 'Preview In Editor', tooltip: '编辑模式下直接播放 VAT 预览' })
   previewInEditor = true;
+
+  @property({ type: [SpineVatSocket], displayName: 'Sockets', tooltip: '挂点：目标节点每帧跟随骨骼。骨骼要在烘焙面板里勾过' })
+  sockets: SpineVatSocket[] = [];
 
   private handle: SpineVatRenderHandle | null = null;
   private loadGeneration = 0;
@@ -191,6 +195,10 @@ export class SpineVatSkeleton extends MeshRenderer {
   onVatEvent(listener: (event: SpineVatRuntimeEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  lateUpdate(): void {
+    if (this.handle) syncSockets(this.sockets, (bone) => this.socket(bone));
   }
 
   onRestore(): void {

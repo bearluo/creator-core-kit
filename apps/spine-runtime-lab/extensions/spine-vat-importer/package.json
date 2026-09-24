@@ -16,6 +16,25 @@
         "min-width": 360,
         "min-height": 420
       }
+    },
+    "guide": {
+      "title": "Spine VAT 新手指导",
+      "type": "simple",
+      "main": "./panels/guide.js",
+      "size": {
+        "width": 620,
+        "height": 560,
+        "min-width": 480,
+        "min-height": 420
+      }
+    }
+  },
+  "profile": {
+    "editor": {
+      "guideShown": {
+        "default": false,
+        "label": "新手指导已显示过"
+      }
     }
   },
   "contributions": {
@@ -106,7 +125,19 @@
         "methods": [
           "bake.setTarget"
         ]
+      },
+      "open-guide": {
+        "methods": [
+          "openGuide"
+        ]
       }
-    }
+    },
+    "menu": [
+      {
+        "path": "i18n:menu.extension",
+        "label": "Spine VAT 新手指导",
+        "message": "open-guide"
+      }
+    ]
   }
 }

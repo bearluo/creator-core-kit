@@ -1,7 +1,7 @@
 # 改造提案：烘焙参数面板（socket / 动画 / 帧率可选）
 
 状态：已实施
-摘要：右键 Spine 资源由「直接烘焙」改为打开烘焙面板：可选 alpha 模式、帧率、要烘的动画、socket 骨骼和输出目录；上次的参数从已有的 `manifest.spinevat` 读回当默认值，不新增配置文件。
+摘要：右键 Spine 资源由「直接烘焙」改为打开烘焙面板：可选帧率、要烘的动画、socket 骨骼和输出目录；上次的参数从已有的 `manifest.spinevat` 读回当默认值，不新增配置文件。
 何时读：评审本改造，或实施时对照步骤。
 依赖：[烘焙搬进扩展](2026-09-24-spine-vat-bake-v2-proposal.md)（已实施）、[Compiler](spine-vat-compiler.md)
 
@@ -99,3 +99,5 @@ bake(uuid, options, outDir, sourceDir) -> { manifest, summary }   // 写盘方�
 - 按 §3 实现；与草案的出入：`bakeDefaultsFromManifest` 多收一个骨架信息参数并返回 `dropped`，放在不依赖 `cc` 的 `SpineVatBakeOptions.ts`；默认值在场景进程的 `describeBakeSource` 里算（面板是纯 JS，加载不了依赖 `cc` 的 `bake.js`）。面板自己完成烘焙调用、写 manifest 与刷新，主进程只转交目标资源。
 - 编辑器实测（空工程）：读回默认值、选 2 段动画 + 1 根 socket 骨骼 + 60fps + premultiplied（manifest 只含 2 段、fps 60、每段 120 帧、socket 每帧都有）、再次读回与上次一致、不选动画被拒；straight / 30 / 全部 / 无 socket 与原产物 `.bin` 逐字节一致。
 - 顺带修正：premultiplied 烘焙会多出一张全无用的 `dark-0.bin`（RGB 全 0，只有 alpha 是 PMA 标记 255），dark 通道改为只看 RGB，premultiplied 下不再输出。
+- 实施后又改：alpha 模式不再作为参数（§3 的 `alphaMode`、§4 从 manifest 读回 alpha 都已去掉），改为按 atlas 各页的 `pma` 声明自动判断——全部 `pma: true` 为 premultiplied，全部没写或 false 为 straight，各页不一致则拒绝烘焙；面板只读显示判断结果。
+- 实施后又加：组件的 `sockets` 属性（骨骼名 + 目标节点，每帧把目标节点贴到骨骼上），见 [player](spine-vat-player.md#事件与-socket)。

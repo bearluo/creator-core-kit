@@ -1,5 +1,6 @@
 import { CCObject, Node, director, sp } from 'cc';
 import { analyzeSpineVatSkeletonData } from './SpineVatAnalyzer';
+import { analyzeSpineJson } from './SpineVatAnalyzerCore';
 import { bakeAndCompileSpineVatV2 } from './SpineVatCompilerV2';
 import { assertBakeOptions, type SpineSkeletonInfo, type SpineVatBakeOptions } from './SpineVatBakeOptions';
 
@@ -21,6 +22,8 @@ export async function bakeSpineVat(data: sp.SkeletonData, options: SpineVatBakeO
   assertBakeOptions(options, skeleton);
   const runtimeError = runtimeProblem(data);
   if (runtimeError) throw new Error(runtimeError);
+  const alphaMode = atlasAlphaMode(data);
+  if (alphaMode === 'unknown') throw new Error(ALPHA_UNKNOWN);
   const scene = director.getScene();
   if (!scene) throw new Error('烘焙需要一个打开的场景，先打开任意场景');
   const parent = new Node('Spine VAT Bake');
@@ -28,7 +31,7 @@ export async function bakeSpineVat(data: sp.SkeletonData, options: SpineVatBakeO
   parent.parent = scene;
   try {
     const report = await analyzeSpineVatSkeletonData(parent, data, {
-      alphaMode: options.alphaMode,
+      alphaMode,
       frameRate: options.frameRate,
       animations: skeleton.animations.filter((name) => options.animations.includes(name)),
       textureProfile: 'balanced',
@@ -51,8 +54,25 @@ export async function bakeSpineVat(data: sp.SkeletonData, options: SpineVatBakeO
 }
 
 /** 面板用：骨架里的动画名、骨骼名（都按骨架顺序），以及当前引擎能不能烘这份数据（不能时是原因，能时为空串）。 */
-export function describeSpineVatSource(data: sp.SkeletonData): SpineSkeletonInfo & { spineVersion: string; runtimeError: string } {
-  return { ...describeSkeleton(data), spineVersion: skeletonJson(data)?.skeleton?.spine ?? '', runtimeError: runtimeProblem(data) };
+export function describeSpineVatSource(data: sp.SkeletonData): SpineSkeletonInfo & {
+  spineVersion: string;
+  runtimeError: string;
+  alphaMode: 'straight' | 'premultiplied' | 'unknown';
+} {
+  const alphaMode = atlasAlphaMode(data);
+  return {
+    ...describeSkeleton(data),
+    spineVersion: skeletonJson(data)?.skeleton?.spine ?? '',
+    runtimeError: runtimeProblem(data) || (alphaMode === 'unknown' ? ALPHA_UNKNOWN : ''),
+    alphaMode,
+  };
+}
+
+const ALPHA_UNKNOWN = 'atlas 各页的 pma 声明不一致（有的预乘有的没有），无法判断 alpha 模式：导出时所有页统一勾或不勾「Premultiply alpha」';
+
+/** alpha 模式看 atlas：Spine 4.x 勾了「Premultiply alpha」每页都写 pma: true，没写就是 straight。 */
+function atlasAlphaMode(data: sp.SkeletonData): 'straight' | 'premultiplied' | 'unknown' {
+  return analyzeSpineJson(skeletonJson(data) ?? {}, data.atlasText ?? '').inferredAlphaMode as 'straight' | 'premultiplied' | 'unknown';
 }
 
 function skeletonJson(data: sp.SkeletonData): any {

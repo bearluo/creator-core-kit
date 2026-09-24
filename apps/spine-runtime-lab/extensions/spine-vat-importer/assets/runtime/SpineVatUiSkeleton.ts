@@ -31,6 +31,7 @@ import {
 } from './SpineVatRenderResources';
 import type { SpineVatBlendMode, SpineVatManifest, SpineVatSocketMatrix } from './SpineVatSchema';
 import { SpineVatSkeletonData } from './SpineVatSkeletonData';
+import { SpineVatSocket, syncSockets } from './SpineVatSocket';
 import { SLOT_SHIFT, SpineVatUiLane, type SpineVatUiLaneInfo as Lane } from './SpineVatUiLane';
 
 const { ccclass, executeInEditMode, menu, playOnFocus, property } = _decorator;
@@ -260,6 +261,9 @@ export class SpineVatUiSkeleton extends Component {
   @property({ displayName: 'Preview In Editor', tooltip: '编辑模式下直接播放 VAT 预览' })
   previewInEditor = true;
 
+  @property({ type: [SpineVatSocket], displayName: 'Sockets', tooltip: '挂点：目标节点每帧跟随骨骼。骨骼要在烘焙面板里勾过' })
+  sockets: SpineVatSocket[] = [];
+
   private group: UiGroup | null = null;
   private slot = -1;
   private playback: SpineVatPlayback | null = null;
@@ -363,6 +367,7 @@ export class SpineVatUiSkeleton extends Component {
   lateUpdate(): void {
     if (!this.group) return;
     this.writeTransform();
+    syncSockets(this.sockets, (bone) => this.socket(bone));
     // lane 只在创建时抄一次 layer；节点换层（Inspector 或脚本）后要跟上，否则相机按旧层剔除。
     const layer = this.node.layer;
     for (const node of this.laneNodes) if (node.layer !== layer) node.layer = layer;

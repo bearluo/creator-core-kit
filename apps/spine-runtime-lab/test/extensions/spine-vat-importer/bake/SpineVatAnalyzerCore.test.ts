@@ -50,7 +50,7 @@ describe('SpineVatAnalyzerCore', () => {
     expect(result.spineVersion).toBe('4.2.43');
     expect(result.runtimeFamily).toBe('4.2');
     expect(result.atlasPages.map((page) => page.name)).toEqual(['letsparty_tuan_nanwuzhe.png']);
-    expect(result.inferredAlphaMode).toBe('unknown');
+    expect(result.inferredAlphaMode).toBe('straight'); // atlas 没写 pma = 导出时没勾预乘
     expect(result.features.attachments.clipping).toBe(1);
     expect(result.features.attachments.mesh).toBeGreaterThan(0);
     expect(result.features.timelines.attachment).toBe(true);
@@ -77,6 +77,13 @@ describe('SpineVatAnalyzerCore', () => {
       ['page/additive', 'page/normal'],
     );
     expect(lanes).toEqual(['page/normal', 'page/additive', 'page/normal']);
+  });
+
+  it('按 atlas 的 pma 声明判断 alpha：全 true 预乘，没写或 false 是 straight，各页不一致是 unknown', () => {
+    const json = { skeleton: { spine: '4.2.43' }, bones: [{}], slots: [], skins: [], animations: {} };
+    expect(analyzeSpineJson(json, 'a.png\npma: true\n\nb.png\npma:true\n').inferredAlphaMode).toBe('premultiplied');
+    expect(analyzeSpineJson(json, 'a.png\nsize: 2,2\n\nb.png\npma: false\n').inferredAlphaMode).toBe('straight');
+    expect(analyzeSpineJson(json, 'a.png\npma: true\n\nb.png\n').inferredAlphaMode).toBe('unknown');
   });
 
   it('变化拓扑使用 triangle soup，并把重复材质映射到不同 lane', () => {

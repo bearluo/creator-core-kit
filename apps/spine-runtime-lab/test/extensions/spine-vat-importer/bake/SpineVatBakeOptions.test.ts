@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { assertBakeOptions, bakeDefaultsFromManifest, type SpineVatBakeOptions } from '../../../../extensions/spine-vat-importer/bake/src/SpineVatBakeOptions';
 
-const fallback: SpineVatBakeOptions = { alphaMode: 'straight', frameRate: 30, animations: ['idle', 'run', 'hit'], socketNames: [] };
+const fallback: SpineVatBakeOptions = { frameRate: 30, animations: ['idle', 'run', 'hit'], socketNames: [] };
 const skeleton = { animations: ['idle', 'run', 'hit'], bones: ['root', 'hand', 'head'] };
 
 function manifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -22,9 +22,9 @@ describe('bakeDefaultsFromManifest', () => {
     expect(bakeDefaultsFromManifest({ format: 'other' }, fallback, skeleton).options).toEqual(fallback);
   });
 
-  it('读回 alpha、帧率、动画与 socket 并集，按骨架顺序排', () => {
+  it('读回帧率、动画与 socket 并集，按骨架顺序排', () => {
     expect(bakeDefaultsFromManifest(manifest(), fallback, skeleton)).toEqual({
-      options: { alphaMode: 'premultiplied', frameRate: 60, animations: ['idle', 'run'], socketNames: ['hand', 'head'] },
+      options: { frameRate: 60, animations: ['idle', 'run'], socketNames: ['hand', 'head'] },
       dropped: [],
     });
   });
@@ -42,7 +42,7 @@ describe('bakeDefaultsFromManifest', () => {
 
   it('非法字段回落到 fallback', () => {
     const result = bakeDefaultsFromManifest(
-      manifest({ alphaMode: 'unknown', clips: [{ name: 'gone', fps: 0 }] }),
+      manifest({ clips: [{ name: 'gone', fps: 0 }] }),
       fallback,
       skeleton,
     );

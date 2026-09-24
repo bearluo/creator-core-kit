@@ -102,6 +102,7 @@ vi.mock('cc', () => {
   };
 
   return {
+    Mat4: class {},
     _decorator: {
       ccclass: identityDecorator,
       executeInEditMode: (target: unknown) => target, // 不带括号的装饰器

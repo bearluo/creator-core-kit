@@ -71,10 +71,9 @@ function parseAtlasPages(atlasText) {
   }).filter((page) => page.name.length > 0);
 }
 function inferAlphaMode(pages) {
-  const declared = pages.map((page) => page.pma).filter((value) => value !== null);
-  if (declared.length !== pages.length || declared.length === 0) return "unknown";
-  if (declared.every(Boolean)) return "premultiplied";
-  if (declared.every((value) => !value)) return "straight";
+  if (pages.length === 0) return "unknown";
+  if (pages.every((page) => page.pma === true)) return "premultiplied";
+  if (pages.every((page) => page.pma !== true)) return "straight";
   return "unknown";
 }
 function skinEntries(skins) {
@@ -119,7 +118,7 @@ function analyzeSpineJson(json, atlasText) {
   const inferredAlphaMode = inferAlphaMode(pages);
   if (runtimeFamily !== "4.2") warnings.push(`\u76EE\u6807 worker \u662F Spine 4.2\uFF0C\u6E90\u6570\u636E\u7248\u672C\u4E3A ${spineVersion}`);
   if (pages.length === 0) warnings.push("Atlas \u4E2D\u6CA1\u6709\u8BC6\u522B\u5230\u7EB9\u7406\u9875");
-  if (inferredAlphaMode === "unknown") warnings.push("Atlas \u672A\u63D0\u4F9B\u4E00\u81F4\u7684 pma \u58F0\u660E\uFF0C\u9700\u8981 recipe \u660E\u786E\u6307\u5B9A alpha mode");
+  if (inferredAlphaMode === "unknown") warnings.push("Atlas \u5404\u9875\u7684 pma \u58F0\u660E\u4E0D\u4E00\u81F4\uFF08\u6709\u7684\u9884\u4E58\u6709\u7684\u6CA1\u6709\uFF09\uFF0C\u65E0\u6CD5\u5224\u65AD alpha \u6A21\u5F0F");
   return {
     spineVersion,
     runtimeFamily,
@@ -1199,7 +1198,6 @@ function bakeDefaultsFromManifest(manifest, fallback, skeleton) {
   const fps = m.clips[0]?.fps;
   return {
     options: {
-      alphaMode: m.alphaMode === "straight" || m.alphaMode === "premultiplied" ? m.alphaMode : fallback.alphaMode,
       frameRate: Number.isInteger(fps) && fps >= 1 && fps <= 120 ? fps : fallback.frameRate,
       animations: animations.length > 0 ? animations : fallback.animations,
       socketNames: sockets
@@ -1208,7 +1206,6 @@ function bakeDefaultsFromManifest(manifest, fallback, skeleton) {
   };
 }
 function assertBakeOptions(options, skeleton) {
-  if (options.alphaMode !== "straight" && options.alphaMode !== "premultiplied") throw new Error(`alpha \u6A21\u5F0F\u65E0\u6548\uFF1A${options.alphaMode}`);
   if (!Number.isInteger(options.frameRate) || options.frameRate < 1 || options.frameRate > 120) throw new Error(`\u5E27\u7387\u8981\u5728 1~120\uFF1A${options.frameRate}`);
   if (options.animations.length === 0) throw new Error("\u81F3\u5C11\u9009\u4E00\u6BB5\u52A8\u753B");
   const missing = [
@@ -1224,6 +1221,8 @@ async function bakeSpineVat(data, options) {
   assertBakeOptions(options, skeleton);
   const runtimeError = runtimeProblem(data);
   if (runtimeError) throw new Error(runtimeError);
+  const alphaMode = atlasAlphaMode(data);
+  if (alphaMode === "unknown") throw new Error(ALPHA_UNKNOWN);
   const scene = import_cc5.director.getScene();
   if (!scene) throw new Error("\u70D8\u7119\u9700\u8981\u4E00\u4E2A\u6253\u5F00\u7684\u573A\u666F\uFF0C\u5148\u6253\u5F00\u4EFB\u610F\u573A\u666F");
   const parent = new import_cc5.Node("Spine VAT Bake");
@@ -1231,7 +1230,7 @@ async function bakeSpineVat(data, options) {
   parent.parent = scene;
   try {
     const report = await analyzeSpineVatSkeletonData(parent, data, {
-      alphaMode: options.alphaMode,
+      alphaMode,
       frameRate: options.frameRate,
       animations: skeleton.animations.filter((name) => options.animations.includes(name)),
       textureProfile: "balanced"
@@ -1253,7 +1252,17 @@ async function bakeSpineVat(data, options) {
   }
 }
 function describeSpineVatSource(data) {
-  return { ...describeSkeleton(data), spineVersion: skeletonJson(data)?.skeleton?.spine ?? "", runtimeError: runtimeProblem(data) };
+  const alphaMode = atlasAlphaMode(data);
+  return {
+    ...describeSkeleton(data),
+    spineVersion: skeletonJson(data)?.skeleton?.spine ?? "",
+    runtimeError: runtimeProblem(data) || (alphaMode === "unknown" ? ALPHA_UNKNOWN : ""),
+    alphaMode
+  };
+}
+var ALPHA_UNKNOWN = "atlas \u5404\u9875\u7684 pma \u58F0\u660E\u4E0D\u4E00\u81F4\uFF08\u6709\u7684\u9884\u4E58\u6709\u7684\u6CA1\u6709\uFF09\uFF0C\u65E0\u6CD5\u5224\u65AD alpha \u6A21\u5F0F\uFF1A\u5BFC\u51FA\u65F6\u6240\u6709\u9875\u7EDF\u4E00\u52FE\u6216\u4E0D\u52FE\u300CPremultiply alpha\u300D";
+function atlasAlphaMode(data) {
+  return analyzeSpineJson(skeletonJson(data) ?? {}, data.atlasText ?? "").inferredAlphaMode;
 }
 function skeletonJson(data) {
   const source = data.skeletonJson;

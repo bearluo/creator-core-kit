@@ -104,7 +104,7 @@ Spine JSON + atlas（Creator 导入为 sp.SkeletonData）
 | two-color tint | dark 贴图（全零时省掉） | — |
 | skin | 只烘默认 skin | 不能运行时换装 |
 | event | `HYBRID`：manifest 里存事件表，CPU 派发 | — |
-| socket | `HYBRID`：指定骨骼的逐帧仿射矩阵 | 烘焙驱动还没提供参数 |
+| socket | `HYBRID`：指定骨骼的逐帧仿射矩阵 | 烘焙面板勾选；组件的 `sockets` 属性让节点跟随 |
 | bounding box / 碰撞 | 未实现 | — |
 | 多轨叠加、mix / crossfade | 未实现，切动画是硬切 | — |
 | vertex effect | 不支持 | — |
