@@ -132,7 +132,79 @@ async function runStartupImport(attempt = 0) {
   }
 }
 
+// ---- 拖 VAT 资源进层级面板 / 场景视图生成节点 ----
+// 内置的「拖资源出节点」只认场景进程里写死的类型表，扩展类型要经 contributions.hierarchy|scene.drop 自己建。
+// 回调参数没有文档，这里按形状找：带 uuid/value 的是资源，带 target/parent/to 的是父节点。
+
+const UI_2D = 1 << 25;
+
+function collectDropped(args) {
+  const assets = [];
+  let parent = '';
+  let position = null;
+  const seen = new Set();
+  const visit = (value, depth) => {
+    if (!value || typeof value !== 'object' || depth > 4 || seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      value.forEach((item) => visit(item, depth + 1));
+      return;
+    }
+    const uuid = value.value || value.uuid;
+    if (typeof uuid === 'string' && value.type === ASSET_TYPE) assets.push(uuid);
+    const target = value.target || value.parent || value.to;
+    if (!parent && typeof target === 'string') parent = target;
+    if (!position && typeof value.x === 'number' && typeof value.y === 'number') position = value;
+    for (const key of Object.keys(value)) visit(value[key], depth + 1);
+  };
+  args.forEach((arg) => visit(arg, 0));
+  return { assets: Array.from(new Set(assets)), parent, position };
+}
+
+async function createVatNode(assetUuid, target, position) {
+  const request = Editor.Message.request;
+  const info = await request('asset-db', 'query-asset-info', assetUuid);
+  const name = info ? path.basename(path.dirname(info.file)) : 'Spine VAT';
+  // 只建 2D（UiSkeleton），挂在落点下；没有落点挂场景根（不传的话编辑器会挂到当前选中节点下）。
+  const parent = target || (await request('scene', 'query-node-tree')).uuid;
+  const uuid = await request('scene', 'create-node', { parent, name });
+  let dump = await request('scene', 'query-node', uuid);
+  if (!dump.__comps__.some((comp) => comp.type === 'cc.UITransform')) {
+    await request('scene', 'create-component', { uuid, component: 'cc.UITransform' });
+  }
+  await request('scene', 'create-component', { uuid, component: 'spinevat.UiSkeleton' });
+  dump = await request('scene', 'query-node', uuid);
+  const index = dump.__comps__.findIndex((comp) => comp.type === 'spinevat.UiSkeleton');
+  const set = (propertyPath, type, value) => request('scene', 'set-property', { uuid, path: propertyPath, dump: { type, value } });
+  await set(`__comps__.${index}.skeletonData`, ASSET_TYPE, { uuid: assetUuid });
+  await set(`__comps__.${index}.initialClipIndex`, 'Enum', 1);
+  await set('layer', 'Enum', UI_2D);
+  // ponytail: 落点按本地坐标写，父节点有变换时会偏；要准再改成在场景进程里 setWorldPosition。
+  if (position) await set('position', 'cc.Vec3', { x: position.x, y: position.y, z: 0 });
+  return uuid;
+}
+
+async function onDrop(kind, args) {
+  const { assets, parent, position } = collectDropped(args);
+  if (!assets.length) {
+    console.warn(`${LOG_PREFIX} ${kind} drop 没认出资源，参数：${JSON.stringify(args).slice(0, 800)}`);
+    return;
+  }
+  for (const uuid of assets) {
+    try {
+      await createVatNode(uuid, parent, kind === 'scene' ? position : null);
+    } catch (error) {
+      console.error(`${LOG_PREFIX} 拖入创建节点失败，参数：${JSON.stringify(args).slice(0, 800)}`, error);
+    }
+  }
+}
+
 module.exports = {
+  methods: {
+    dropHierarchy(...args) { return onDrop('hierarchy', args); },
+    dropScene(...args) { return onDrop('scene', args); },
+  },
+
   load() {
     startupTimer = setTimeout(() => void runStartupImport(), 500);
   },

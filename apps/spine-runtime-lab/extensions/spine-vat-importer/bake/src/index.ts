@@ -18,6 +18,7 @@ export async function bakeSpineVat(
   data: sp.SkeletonData,
   alphaMode: Exclude<SpineVatAlphaMode, 'unknown'>,
 ): Promise<BakedSpineVat> {
+  assertRuntimeCanParse(data);
   const scene = director.getScene();
   if (!scene) throw new Error('烘焙需要一个打开的场景，先打开任意场景');
   const parent = new Node('Spine VAT Bake');
@@ -40,6 +41,17 @@ export async function bakeSpineVat(
   } finally {
     parent.destroy();
   }
+}
+
+/** 新建工程默认用 Spine 3.8 模块，解析 4.2 的 JSON 不报错，但动画全是 null。 */
+function assertRuntimeCanParse(data: sp.SkeletonData): void {
+  const animations = (data.getRuntimeData(true) as any)?.animations;
+  const count = animations?.length ?? 0;
+  let ok = count > 0;
+  for (let i = 0; ok && i < count; i += 1) ok = Boolean(animations[i]);
+  if (ok) return;
+  const version = (data.skeletonJson as any)?.skeleton?.spine ?? '未知版本';
+  throw new Error(`引擎的 Spine 运行时解析不了这份 Spine ${version} 数据：项目设置 → 功能裁剪 → Spine 选 4.2，重启编辑器后再烘焙`);
 }
 
 function bytes(view: ArrayBufferView): Uint8Array {

@@ -46,12 +46,38 @@
       }
     },
     "scene": {
-      "script": "./scene.js"
+      "script": "./scene.js",
+      "drop": [
+        {
+          "type": "spinevat.SkeletonData",
+          "message": "drop-vat-scene"
+        }
+      ]
     },
     "assets": {
       "menu": {
         "methods": "./assets-menu.js",
         "assetMenu": "onAssetMenu"
+      }
+    },
+    "hierarchy": {
+      "drop": [
+        {
+          "type": "spinevat.SkeletonData",
+          "message": "drop-vat-hierarchy"
+        }
+      ]
+    },
+    "messages": {
+      "drop-vat-hierarchy": {
+        "methods": [
+          "dropHierarchy"
+        ]
+      },
+      "drop-vat-scene": {
+        "methods": [
+          "dropScene"
+        ]
       }
     }
   }

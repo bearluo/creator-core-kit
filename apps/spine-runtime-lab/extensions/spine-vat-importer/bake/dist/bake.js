@@ -1185,6 +1185,7 @@ async function bakeAndCompileSpineVatV2(parent, skeletonData, analysis, options 
 
 // apps/spine-runtime-lab/extensions/spine-vat-importer/bake/src/index.ts
 async function bakeSpineVat(data, alphaMode) {
+  assertRuntimeCanParse(data);
   const scene = import_cc5.director.getScene();
   if (!scene) throw new Error("\u70D8\u7119\u9700\u8981\u4E00\u4E2A\u6253\u5F00\u7684\u573A\u666F\uFF0C\u5148\u6253\u5F00\u4EFB\u610F\u573A\u666F");
   const parent = new import_cc5.Node("Spine VAT Bake");
@@ -1207,6 +1208,15 @@ async function bakeSpineVat(data, alphaMode) {
   } finally {
     parent.destroy();
   }
+}
+function assertRuntimeCanParse(data) {
+  const animations = data.getRuntimeData(true)?.animations;
+  const count = animations?.length ?? 0;
+  let ok = count > 0;
+  for (let i = 0; ok && i < count; i += 1) ok = Boolean(animations[i]);
+  if (ok) return;
+  const version = data.skeletonJson?.skeleton?.spine ?? "\u672A\u77E5\u7248\u672C";
+  throw new Error(`\u5F15\u64CE\u7684 Spine \u8FD0\u884C\u65F6\u89E3\u6790\u4E0D\u4E86\u8FD9\u4EFD Spine ${version} \u6570\u636E\uFF1A\u9879\u76EE\u8BBE\u7F6E \u2192 \u529F\u80FD\u88C1\u526A \u2192 Spine \u9009 4.2\uFF0C\u91CD\u542F\u7F16\u8F91\u5668\u540E\u518D\u70D8\u7119`);
 }
 function bytes(view) {
   return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);

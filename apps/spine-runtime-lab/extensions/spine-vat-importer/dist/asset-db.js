@@ -196,6 +196,9 @@ exports.registerSpineVatHandler = function registerSpineVatHandler() {
     name: 'spine-vat',
     displayName: 'Spine VAT SkeletonData',
     assetType: 'spinevat.SkeletonData',
+    iconInfo: {
+      default: { type: 'image', value: 'packages://spine-vat-importer/static/icon.svg' },
+    },
 
     async validate(asset) {
       if (asset.isDirectory()) return false;
