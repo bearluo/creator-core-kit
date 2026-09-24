@@ -23,6 +23,12 @@ const DEFAULT_ANIMATIONS = Enum({ '<Default>': 0 });
 @playOnFocus
 @menu('Spine/VAT Skeleton')
 export class SpineVatSkeleton extends MeshRenderer {
+  /**
+   * 帧间插值总开关：VS 在相邻两帧间插位置与颜色（多一倍 VS 采样，CPU 不变）。
+   * 启动时按机型档位定一次；只影响之后加载的实例。
+   */
+  static interpolate = true;
+
   @property({ type: SpineVatSkeletonData, visible: false })
   private skeletonDataBacking: SpineVatSkeletonData | null = null;
 
@@ -118,7 +124,7 @@ export class SpineVatSkeleton extends MeshRenderer {
     if (!data) return;
 
     try {
-      const handle = await SpineVatRenderHandle.create(this, data, this.initialClip || undefined);
+      const handle = await SpineVatRenderHandle.create(this, data, SpineVatSkeleton.interpolate, this.initialClip || undefined);
       if (!this.isValid || generation !== this.loadGeneration || !this.enabledInHierarchy) {
         handle.destroy();
         return;

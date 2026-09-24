@@ -4,7 +4,7 @@ import { extname, join, normalize, resolve } from 'node:path';
 
 const root = resolve(process.argv[2] ?? 'build/web-tuan42');
 const port = Number(process.argv[3] ?? 18087);
-const vatExportRoot = resolve(process.argv[4] ?? 'assets/resources/fruit-machine-vat-v2');
+const vatExportRoot = resolve(process.argv[4] ?? 'assets/resources/vat/nanwuzhe');
 const host = process.argv[5] ?? '127.0.0.1';
 const mime = {
   '.css': 'text/css',

@@ -6,7 +6,7 @@ const path = require('path');
 const LOG_PREFIX = '[Spine VAT Importer]';
 const IMPORTER_NAME = 'spine-vat';
 const ASSET_TYPE = 'spinevat.SkeletonData';
-const IMPORTER_VERSION = '1.4.1';
+const IMPORTER_VERSION = '1.5.0';
 const VAT_EXTENSION = '.spinevat';
 let startupTimer = null;
 

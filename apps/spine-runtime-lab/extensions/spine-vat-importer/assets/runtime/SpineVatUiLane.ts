@@ -153,7 +153,7 @@ const assembler: IAssembler = {
 export class SpineVatUiLane extends UIRenderer {
   lanes: SpineVatUiLaneInfo[] = [];
   vertexCount = 0;
-  /** chunk 内顶点号：indexed-stable lane 用 lane 自带的三角形，三角形汤按顶点顺序。 */
+  /** chunk 内顶点号：lane 自带的三角形（lane 内局部号）加上 lane 在 chunk 里的起点。 */
   indices = new Uint16Array(0);
   atlas: Texture2D | null = null;
   slot = -1;
@@ -169,8 +169,7 @@ export class SpineVatUiLane extends UIRenderer {
     const indices: number[] = [];
     let base = 0;
     for (const lane of lanes) {
-      if (lane.indices) for (const index of lane.indices) indices.push(base + index);
-      else for (let index = 0; index < lane.vertexCapacity; index += 1) indices.push(base + index);
+      for (const index of lane.indices) indices.push(base + index);
       base += lane.vertexCapacity;
     }
     this.indices = Uint16Array.from(indices);

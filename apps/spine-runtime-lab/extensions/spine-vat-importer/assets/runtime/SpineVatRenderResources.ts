@@ -21,6 +21,27 @@ import type { SpineVatBlendMode, SpineVatManifest, SpineVatSocketMatrix } from '
 import { SpineVatSkeletonData } from './SpineVatSkeletonData';
 
 const MAX_TEXTURE_PAGES = 4;
+/** 每个剪裁在帧内占的 texel 数，与 compiler 的 MAX_CLIP_VERTICES、effect 的 VAT_CLIP 一致。 */
+export const CLIP_TEXELS = 8;
+
+type Layout = SpineVatManifest['layouts'][number];
+
+/** 两个 effect 共用的 uniform：寻址（vatLayout.w 由调用方填）与剪裁区位置。 */
+export function vatClipUniform(layout: Layout): Vec4 {
+  return new Vec4(layout.staticFrame, layout.frameStride - layout.clipCount * CLIP_TEXELS, 0, 0);
+}
+
+/** manifest 只有一个 layout（固定槽位）；所有 clip 都指向它。 */
+export function singleLayout(manifest: SpineVatManifest): Layout {
+  const layout = manifest.layouts[0];
+  if (!layout || manifest.layouts.length !== 1) {
+    throw new Error(`VAT manifest 需要且只能有一个 layout，实际 ${manifest.layouts.length} 个；请用新版工具重新烘焙`);
+  }
+  for (const lane of layout.lanes) {
+    if (!lane.indices) throw new Error('VAT lane 缺少 indices；请用新版工具重新烘焙');
+  }
+  return layout;
+}
 
 export interface CompiledPage {
   width: number;
@@ -166,40 +187,42 @@ export function createTexture(
   return texture;
 }
 
-function createCombinedMesh(layout: SpineVatManifest['layouts'][number]): Mesh {
+/** 顶点 a_position.x = 帧内顶点序号；每个 lane 一个 submesh，索引取 lane.indices（lane 内局部号）。 */
+function createCombinedMesh(layout: Layout): Mesh {
   const vertexCount = layout.lanes.reduce((sum, lane) => sum + lane.vertexCapacity, 0);
   if (vertexCount < 1) throw new Error('VAT layout contains no vertices');
+  const indexCount = layout.lanes.reduce((sum, lane) => sum + lane.indices.length, 0);
   const vertexStride = 12;
   const indexStride = vertexCount > 0xffff ? 4 : 2;
   const vertexBytes = vertexCount * vertexStride;
-  const buffer = new ArrayBuffer(vertexBytes + vertexCount * indexStride);
+  const buffer = new ArrayBuffer(vertexBytes + indexCount * indexStride);
   const view = new DataView(buffer);
   const primitives: Mesh.ISubMesh[] = [];
   let globalVertex = 0;
   let indexOffset = vertexBytes;
 
   for (const lane of layout.lanes) {
+    const laneStart = globalVertex;
     for (let laneVertex = 0; laneVertex < lane.vertexCapacity; laneVertex += 1) {
-      const vertexOffset = globalVertex * vertexStride;
-      view.setFloat32(vertexOffset, lane.vertexOffset + laneVertex, true);
-      view.setFloat32(vertexOffset + 4, 0, true);
-      view.setFloat32(vertexOffset + 8, 0, true);
-      const target = indexOffset + laneVertex * indexStride;
-      if (indexStride === 4) view.setUint32(target, globalVertex, true);
-      else view.setUint16(target, globalVertex, true);
+      view.setFloat32(globalVertex * vertexStride, lane.vertexOffset + laneVertex, true);
       globalVertex += 1;
     }
+    lane.indices.forEach((local, index) => {
+      const target = indexOffset + index * indexStride;
+      if (indexStride === 4) view.setUint32(target, laneStart + local, true);
+      else view.setUint16(target, laneStart + local, true);
+    });
     primitives.push({
       primitiveMode: gfx.PrimitiveMode.TRIANGLE_LIST,
       vertexBundelIndices: [0],
       indexView: {
         offset: indexOffset,
-        length: lane.vertexCapacity * indexStride,
-        count: lane.vertexCapacity,
+        length: lane.indices.length * indexStride,
+        count: lane.indices.length,
         stride: indexStride,
       },
     });
-    indexOffset += lane.vertexCapacity * indexStride;
+    indexOffset += lane.indices.length * indexStride;
   }
 
   const mesh = new Mesh();
@@ -224,7 +247,7 @@ function techniqueIndex(alphaMode: SpineVatManifest['alphaMode'], blendMode: Spi
   return (alphaMode === 'premultiplied' ? 4 : 0) + blendOffset;
 }
 
-function cacheKey(data: SpineVatSkeletonData): string {
+function cacheKey(data: SpineVatSkeletonData, interpolate: boolean): string {
   const dependencies = [
     ...data.positionPages,
     ...data.lightPages,
@@ -232,23 +255,15 @@ function cacheKey(data: SpineVatSkeletonData): string {
     ...data.atlasPages,
     data.effectAsset,
   ].filter(Boolean).map((asset) => `${asset!.uuid}:${asset!.nativeUrl}`).join('|');
-  return `${data.uuid}|${JSON.stringify(data.manifest)}|${dependencies}`;
+  return `${data.uuid}|${interpolate}|${JSON.stringify(data.manifest)}|${dependencies}`;
 }
 
-async function createResources(data: SpineVatSkeletonData, key: string): Promise<SharedRenderResources> {
+async function createResources(data: SpineVatSkeletonData, key: string, interpolate: boolean): Promise<SharedRenderResources> {
   if (!data.effectAsset) {
     throw new Error('Spine VAT SkeletonData lacks its Effect dependency; reimport manifest.spinevat');
   }
   const manifest = data.manifest;
-  const layout = manifest.layouts[0];
-  if (!layout) throw new Error('VAT manifest has no render layout');
-  const incompatibleClip = manifest.clips.find((clip) => clip.layout !== layout.id);
-  if (incompatibleClip) {
-    throw new Error(
-      `VAT clip ${incompatibleClip.name} uses layout ${incompatibleClip.layout}; `
-      + `spinevat.Skeleton currently requires one shared layout (${layout.id})`,
-    );
-  }
+  const layout = singleLayout(manifest);
   const atlasPages = assertAssets('atlas pages', data.atlasPages, manifest.atlasPages.length);
   const pages = compilePages(data);
   const positionTextures = pages.map((page) => createTexture(
@@ -274,7 +289,12 @@ async function createResources(data: SpineVatSkeletonData, key: string): Promise
     material.initialize({
       effectAsset: data.effectAsset!,
       technique: techniqueIndex(manifest.alphaMode, lane.blendMode),
-      defines: { USE_INSTANCING: true, ...vatChannelDefines(pages) },
+      defines: {
+        USE_INSTANCING: true,
+        VAT_LERP: interpolate,
+        VAT_CLIP: layout.clipCount > 0,
+        ...vatChannelDefines(pages),
+      },
     });
     material.setProperty('mainTexture', atlas);
     for (let page = 0; page < MAX_TEXTURE_PAGES; page += 1) {
@@ -284,6 +304,7 @@ async function createResources(data: SpineVatSkeletonData, key: string): Promise
       material.setProperty(`vatPageSize${page}`, pageSizes[page]);
     }
     material.setProperty('vatLayout', new Vec4(layout.frameStride, manifest.pageTexels, pages.length, 0));
+    material.setProperty('vatClip', vatClipUniform(layout));
     return material;
   });
 
@@ -297,11 +318,11 @@ async function createResources(data: SpineVatSkeletonData, key: string): Promise
   };
 }
 
-async function acquireResources(data: SpineVatSkeletonData): Promise<SharedRenderResources> {
-  const key = cacheKey(data);
+async function acquireResources(data: SpineVatSkeletonData, interpolate: boolean): Promise<SharedRenderResources> {
+  const key = cacheKey(data, interpolate);
   let slot = resourceCache.get(key);
   if (!slot) {
-    slot = { promise: createResources(data, key) };
+    slot = { promise: createResources(data, key, interpolate) };
     resourceCache.set(key, slot);
   }
   try {
@@ -342,9 +363,10 @@ export class SpineVatRenderHandle {
   static async create(
     renderer: MeshRenderer,
     data: SpineVatSkeletonData,
+    interpolate: boolean,
     initialClip?: string,
   ): Promise<SpineVatRenderHandle> {
-    const resources = await acquireResources(data);
+    const resources = await acquireResources(data, interpolate);
     try {
       return new SpineVatRenderHandle(renderer, resources, initialClip);
     } catch (error) {

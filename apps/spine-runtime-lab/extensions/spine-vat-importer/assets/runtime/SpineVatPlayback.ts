@@ -40,7 +40,8 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, finite(value, 'color channel')));
 }
 
-function resolveFrame(rawFrame: number, frameCount: number, loop: boolean): number {
+/** 连续帧号 → clip 内离散帧：循环取模，非循环夹到首末帧。 */
+export function resolveSpineVatFrame(rawFrame: number, frameCount: number, loop: boolean): number {
   if (frameCount <= 0) return 0;
   const frame = Math.floor(rawFrame);
   if (!loop) return Math.max(0, Math.min(frameCount - 1, frame));
@@ -234,7 +235,7 @@ export class SpineVatPlayback {
   }
 
   private frame(now: number): number {
-    return resolveFrame(this.frameFloat(now), this.currentClip.frameCount, this.shouldLoop);
+    return resolveSpineVatFrame(this.frameFloat(now), this.currentClip.frameCount, this.shouldLoop);
   }
 
   private rawFrame(now: number): number {

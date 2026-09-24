@@ -59,6 +59,7 @@ function applyPropertyMetadata(target: any): void {
   property({ type: [BufferAsset], visible: false })(target.prototype, 'darkPages');
   property({ type: [Texture2D], visible: false })(target.prototype, 'atlasPages');
   property({ type: EffectAsset, visible: false })(target.prototype, 'effectAsset');
+  property({ type: EffectAsset, visible: false })(target.prototype, 'uiEffectAsset');
 }
 
 function createRuntimeAssetClass(): typeof SpineVatSkeletonDataBase {
@@ -78,7 +79,10 @@ function createRuntimeAssetClass(): typeof SpineVatSkeletonDataBase {
     readonly lightPages: BufferAsset[] = [];
     readonly darkPages: BufferAsset[] = [];
     readonly atlasPages: Texture2D[] = [];
+    /** spinevat.Skeleton（MeshRenderer）用。 */
     readonly effectAsset: EffectAsset | null = null;
+    /** spinevat.UiSkeleton（UI batch）用。 */
+    readonly uiEffectAsset: EffectAsset | null = null;
   }
 
   applyPropertyMetadata(DefinedSpineVatSkeletonData);
@@ -86,4 +90,18 @@ function createRuntimeAssetClass(): typeof SpineVatSkeletonDataBase {
   return DefinedSpineVatSkeletonData;
 }
 
-export const SpineVatSkeletonData = createRuntimeAssetClass();
+/** 导入器写入的字段（序列化属性由 applyPropertyMetadata 声明）。 */
+interface SpineVatSkeletonDataFields {
+  readonly positionPages: BufferAsset[];
+  readonly lightPages: BufferAsset[];
+  readonly darkPages: BufferAsset[];
+  readonly atlasPages: Texture2D[];
+  /** spinevat.Skeleton（MeshRenderer）用。 */
+  readonly effectAsset: EffectAsset | null;
+  /** spinevat.UiSkeleton（UI batch）用。 */
+  readonly uiEffectAsset: EffectAsset | null;
+}
+
+export type SpineVatSkeletonData = SpineVatSkeletonDataBase & SpineVatSkeletonDataFields;
+export const SpineVatSkeletonData = createRuntimeAssetClass() as unknown as
+  (new () => SpineVatSkeletonData) & typeof SpineVatSkeletonDataBase;

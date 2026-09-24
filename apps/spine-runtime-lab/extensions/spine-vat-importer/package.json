@@ -2,7 +2,7 @@
   "name": "spine-vat-importer",
   "title": "Spine VAT Importer",
   "package_version": 2,
-  "version": "1.4.2",
+  "version": "1.5.0",
   "description": "Imports spine-vat-2 manifests and provides the spinevat.Skeleton runtime.",
   "main": "./browser.js",
   "contributions": {

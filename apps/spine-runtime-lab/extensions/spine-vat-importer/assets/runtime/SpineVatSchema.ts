@@ -42,9 +42,9 @@ export interface SpineVatManifest {
     id: string;
     frameStride: number;
     bounds: [number, number, number, number];
-    /** 固定槽位 layout：剪裁数（每帧顶点区之后各占 8 个 texel）与静态区所在帧。 */
-    clipCount?: number;
-    staticFrame?: number;
+    /** 剪裁数（每帧顶点区之后各占 8 个 texel）与静态区（每顶点所属剪裁）所在帧。 */
+    clipCount: number;
+    staticFrame: number;
     lanes: Array<{
       atlasPage: number;
       textureId: string;
@@ -52,9 +52,9 @@ export interface SpineVatManifest {
       vertexOffset: number;
       vertexCapacity: number;
       logicalLane: number;
-      geometryMode: 'indexed-stable' | 'triangle-soup-dynamic';
-      /** indexed-stable：lane 内局部顶点号的三角形列表。 */
-      indices?: number[];
+      geometryMode: 'indexed-stable';
+      /** lane 内局部顶点号的三角形列表。 */
+      indices: number[];
     }>;
   }>;
   variants: Array<{ name: string; skins: string[]; layout: string }>;

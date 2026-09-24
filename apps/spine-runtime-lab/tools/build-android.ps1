@@ -1,12 +1,7 @@
+# 出 VAT 测试包（spine-vat-ui-ab 场景：保真 → A/B 性能 → 穿插/遮挡），arm64 真机。
 param(
-    [ValidateSet('low', 'mid')]
-    [string]$Profile = 'low',
-    [ValidateSet('spine38', 'tuan42', 'fruit42', 'fruitvat42', 'vatui42')]
-    [string]$Asset = 'spine38',
-    [ValidateSet('x86_64', 'arm64-v8a')]
-    [string]$Abi = 'x86_64',
     [switch]$AllowExistingEditor,
-    # Release: Creator debug=false + gradle assembleRelease (native -O2), for CPU/frame-time runs. vatui42 only.
+    # Release: Creator debug=false + gradle assembleRelease (native -O2)，测 CPU / 帧时间用。
     [switch]$Release
 )
 
@@ -15,28 +10,13 @@ $project = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $cc = if ($env:COCOS_CREATOR) { $env:COCOS_CREATOR } else { 'C:\ProgramData\cocos\editors\Creator\3.8.7\CocosCreator.exe' }
 $sdk = if ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { 'E:\android-sdk' }
 $javaHome = 'C:\Program Files\Microsoft\jdk-17.0.19.10-hotspot'
-$baseName = if ($Asset -eq 'vatui42') {
-    'android-vatui42'
-} elseif ($Asset -eq 'fruitvat42') {
-    'android-fruitvat42'
-} elseif ($Asset -eq 'fruit42') {
-    'android-fruit42'
-} elseif ($Asset -eq 'tuan42') {
-    'android-tuan42'
-} else {
-    "android-$Profile"
-}
-if ($Abi -eq 'arm64-v8a' -and $Asset -eq 'spine38') {
-    throw 'The spine38 baseline does not have an arm64 build config.'
-}
-$abiSuffix = if ($Abi -eq 'arm64-v8a') { '-arm64' } else { '' }
 $releaseSuffix = if ($Release) { '-release' } else { '' }
-$outputName = "$baseName$abiSuffix$releaseSuffix"
+$outputName = "android-vatui42-arm64$releaseSuffix"
 $configName = "$outputName.json"
 $buildPath = Join-Path $project "build\$outputName"
 $configPath = Join-Path $project "build-configs\$configName"
 $logDir = Join-Path $project 'temp\android-build'
-$logStem = "$Profile-$Asset-$Abi$releaseSuffix"
+$logStem = "vatui42-arm64$releaseSuffix"
 $stdoutLog = Join-Path $logDir "$logStem.stdout.log"
 $stderrLog = Join-Path $logDir "$logStem.stderr.log"
 
@@ -63,7 +43,7 @@ $creatorArgs = @(
     '--build', "configPath=$configPath"
 )
 
-Write-Host "Building Android $(if ($Release) { 'release' } else { 'debug' }) package for $Profile ($Asset, $Abi)..."
+Write-Host "Building Android $(if ($Release) { 'release' } else { 'debug' }) package (vatui42, arm64-v8a)..."
 $process = Start-Process -FilePath $cc -ArgumentList $creatorArgs -PassThru `
     -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -WindowStyle Hidden
 # Start-Process -Wait can wait forever on orphaned Electron renderer children.

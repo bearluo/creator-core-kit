@@ -20,6 +20,7 @@ function registerAssetClass() {
   property({ type: [cc.BufferAsset], visible: false })(SpineVatSkeletonData.prototype, 'darkPages');
   property({ type: [cc.Texture2D], visible: false })(SpineVatSkeletonData.prototype, 'atlasPages');
   property({ type: cc.EffectAsset, visible: false })(SpineVatSkeletonData.prototype, 'effectAsset');
+  property({ type: cc.EffectAsset, visible: false })(SpineVatSkeletonData.prototype, 'uiEffectAsset');
   cc._decorator.ccclass(ASSET_CLASS)(SpineVatSkeletonData);
 }
 

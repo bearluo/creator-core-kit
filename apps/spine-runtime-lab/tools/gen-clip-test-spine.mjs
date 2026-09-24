@@ -2,7 +2,7 @@
 // 用法：node tools/gen-clip-test-spine.mjs   （产物入库，改了本脚本重跑一次）
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const dir = new URL('../assets/resources/fruit-machine/', import.meta.url);
+const dir = new URL('../assets/resources/spine/nanwuzhe/', import.meta.url);
 const src = JSON.parse(readFileSync(new URL('letsparty_tuan_nanwuzhe.json', dir), 'utf8'));
 const base = src.animations.letsparty_tuan_nanwuzhe_tigger;
 const clip = src.skins[0].attachments.zz.zz;

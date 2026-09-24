@@ -1,3 +1,7 @@
+// VAT 走 MeshRenderer（3D 提交流程，GPU instancing）。逐实例参数是 instanced attribute a_vatAnim0/1、a_vatColor；
+// 顶点 a_position.x = 帧内顶点序号，索引来自 manifest lane.indices（固定槽位）。
+// VAT_LERP：相邻两帧在 VS 里插值；VAT_CLIP：GPU 剪裁（见 docs/spine-vat-fixed-slot-gpu-clip.md）。
+//   vatClip.x = 静态区所在帧；vatClip.y = 帧内剪裁区起点。帧计算、插值、剪裁与 spine-vat-ui.effect 保持一致。
 CCEffect %{
   techniques:
   - name: straight-normal
@@ -29,6 +33,7 @@ CCEffect %{
         darkTexture2:     { value: black }
         darkTexture3:     { value: black }
         vatLayout:        { value: [1, 1, 1, 0] }
+        vatClip:          { value: [0, 0, 0, 0] }
         vatPageSize0:     { value: [1, 1, 1, 1] }
         vatPageSize1:     { value: [1, 1, 1, 1] }
         vatPageSize2:     { value: [1, 1, 1, 1] }
@@ -174,6 +179,7 @@ CCProgram spine-vat-v2-vs %{
   #endif
   uniform SpineVatV2Constants {
     vec4 vatLayout;
+    vec4 vatClip;
     vec4 vatPageSize0;
     vec4 vatPageSize1;
     vec4 vatPageSize2;
@@ -184,6 +190,14 @@ CCProgram spine-vat-v2-vs %{
   out lowp vec4 v_light;
   out lowp vec4 v_dark;
   out lowp vec4 v_instanceColor;
+  #if VAT_CLIP
+    // 骨骼空间坐标 + 是否裁；多边形 8 个点两两一组。
+    out vec3 v_clipPos;
+    out vec4 v_clip0;
+    out vec4 v_clip1;
+    out vec4 v_clip2;
+    out vec4 v_clip3;
+  #endif
 
   vec2 pageUV(float localIndex, vec4 pageSize) {
     float x = mod(localIndex, pageSize.x);
@@ -216,41 +230,115 @@ CCProgram spine-vat-v2-vs %{
   }
   #endif
 
-  vec4 vert () {
-    float rawFrame = a_vatAnim1.x
-      + (cc_time.x - a_vatAnim0.w) * a_vatAnim0.z * a_vatAnim1.y;
-    // 循环取模后再 min 一次：GLSL 的 mod(x, N) = x - N * floor(x / N)，而 x / N 在 GPU 上只保证
-    // 2.5 ULP —— x 恰好是 N 的整数倍时商可能算成 k - ε，floor 掉一档，mod 就返回 N 而不是 0。
-    // 少这一道 min，localFrame == N 会越过本 clip 落到 frameOffset + N —— 正是下一个动画的第 0 帧
-    //（最后一个 clip 则落到 VAT 末尾之外、CLAMP_TO_EDGE 采到脏 texel），每圈回绕闪一帧。
-    // 桌面 GPU 除法基本是正确舍入的所以看不到；Mali / Adreno 上会现形。
-    // mod 对负数已经按除数符号取值（floor 语义），不需要再 + N 一次。
-    float localFrame = a_vatAnim1.w >= 0.0
-      ? a_vatAnim1.w
-      : a_vatAnim1.z > 0.5
-        ? min(mod(floor(rawFrame), a_vatAnim0.y), a_vatAnim0.y - 1.0)
-        : clamp(floor(rawFrame), 0.0, a_vatAnim0.y - 1.0);
-    float globalFrame = a_vatAnim0.x + localFrame;
-    float linearIndex = globalFrame * vatLayout.x + a_position.x;
+  #if VAT_CLIP
+  vec4 positionAt(float linearIndex) {
+    float page = min(floor(linearIndex / vatLayout.y), vatLayout.z - 1.0);
+    return samplePosition(page, linearIndex - page * vatLayout.y);
+  }
+
+  // 一帧里第 clipIndex 个剪裁的 8 个点；返回是否生效。
+  float fetchClip(float globalFrame, float clipIndex, out vec4 c0, out vec4 c1, out vec4 c2, out vec4 c3) {
+    float base = globalFrame * vatLayout.x + vatClip.y + clipIndex * 8.0;
+    vec4 p0 = positionAt(base);
+    c0 = vec4(p0.xy, positionAt(base + 1.0).xy);
+    c1 = vec4(positionAt(base + 2.0).xy, positionAt(base + 3.0).xy);
+    c2 = vec4(positionAt(base + 4.0).xy, positionAt(base + 5.0).xy);
+    c3 = vec4(positionAt(base + 6.0).xy, positionAt(base + 7.0).xy);
+    return p0.z;
+  }
+  #endif
+
+  // 取一帧：xy = 位置，zw = 图集 uv；light / dark 按通道宏裁剪。
+  void fetchFrame(float globalFrame, float vertexIndex, out vec4 positionUV, out vec4 light, out vec4 dark) {
+    float linearIndex = globalFrame * vatLayout.x + vertexIndex;
     float page = min(floor(linearIndex / vatLayout.y), vatLayout.z - 1.0);
     float localIndex = linearIndex - page * vatLayout.y;
-    vec4 positionUV = samplePosition(page, localIndex);
-    v_atlasUV = positionUV.zw;
+    positionUV = samplePosition(page, localIndex);
     #if VAT_NO_LIGHT
-      v_light = vec4(1.0);
+      light = vec4(1.0);
     #else
       #if VAT_LIGHT_ALPHA
-        v_light = vec4(1.0, 1.0, 1.0, sampleLight(page, localIndex).r);
+        light = vec4(1.0, 1.0, 1.0, sampleLight(page, localIndex).r);
       #else
-        v_light = sampleLight(page, localIndex);
+        light = sampleLight(page, localIndex);
       #endif
     #endif
     #if VAT_NO_DARK
-      v_dark = vec4(0.0);
+      dark = vec4(0.0);
     #else
-      v_dark = sampleDark(page, localIndex);
+      dark = sampleDark(page, localIndex);
     #endif
+  }
+
+  vec4 vert () {
+    vec4 anim0 = a_vatAnim0;
+    vec4 anim1 = a_vatAnim1;
+    float vertexIndex = a_position.x;
+
+    // 帧计算与 spine-vat-ui.effect 保持一致。
+    // 循环取模后再 min 一次：GLSL 的 mod(x, N) = x - N * floor(x / N)，而 x / N 在 GPU 上只保证
+    // 2.5 ULP —— x 恰好是 N 的整数倍时商可能算成 k - ε，floor 掉一档，mod 就返回 N 而不是 0，
+    // 越过本 clip 落到下一个动画的第 0 帧，每圈回绕闪一帧（Mali / Adreno 上会现形）。
+    // 连续帧号：手动帧 anim1.w 可带小数（插值用）；循环取模，非循环夹到末帧。
+    float rawFrame = anim1.x + (cc_time.x - anim0.w) * anim0.z * anim1.y;
+    bool looping = anim1.w < 0.0 && anim1.z > 0.5;
+    float frameF = anim1.w >= 0.0
+      ? anim1.w
+      : looping
+        ? mod(rawFrame, anim0.y)
+        : clamp(rawFrame, 0.0, anim0.y - 1.0);
+    float localFrame = min(floor(frameF), anim0.y - 1.0);
+    vec4 positionUV;
+    vec4 light;
+    vec4 dark;
+    fetchFrame(anim0.x + localFrame, vertexIndex, positionUV, light, dark);
+    #if VAT_CLIP
+      float clipIndex = positionAt(vatClip.x * vatLayout.x + vertexIndex).x;
+      float clipActive = 0.0;
+      if (clipIndex > -0.5) {
+        clipActive = fetchClip(anim0.x + localFrame, clipIndex, v_clip0, v_clip1, v_clip2, v_clip3);
+      }
+    #endif
+    #if VAT_LERP
+      // 帧间插值：相邻两帧 uv 相同（同一附件同一角）才插；uv 变了 = 换附件 / 空槽，保持阶跃。
+      // 末帧：循环回 0，非循环不插。
+      float t = clamp(frameF - localFrame, 0.0, 1.0); // mod 精度可能让 frameF 略超末帧
+      float nextFrame = localFrame + 1.0 >= anim0.y ? (looping ? 0.0 : localFrame) : localFrame + 1.0;
+      #if VAT_CLIP
+        // 剪裁多边形与内容用同一个 t；生效状态切换那一帧不插（官方也是阶跃）。
+        if (clipActive > 0.5) {
+          vec4 n0; vec4 n1; vec4 n2; vec4 n3;
+          float nextActive = fetchClip(anim0.x + nextFrame, clipIndex, n0, n1, n2, n3);
+          float clipT = t * step(0.5, nextActive);
+          v_clip0 = mix(v_clip0, n0, clipT);
+          v_clip1 = mix(v_clip1, n1, clipT);
+          v_clip2 = mix(v_clip2, n2, clipT);
+          v_clip3 = mix(v_clip3, n3, clipT);
+        }
+      #endif
+      vec4 nextPositionUV;
+      vec4 nextLight;
+      vec4 nextDark;
+      fetchFrame(anim0.x + nextFrame, vertexIndex, nextPositionUV, nextLight, nextDark);
+      vec2 uvDelta = abs(nextPositionUV.zw - positionUV.zw);
+      t *= step(max(uvDelta.x, uvDelta.y), 1e-5);
+      positionUV.xy = mix(positionUV.xy, nextPositionUV.xy, t);
+      light = mix(light, nextLight, t);
+      dark = mix(dark, nextDark, t);
+    #endif
+    v_light = light;
+    v_dark = dark;
+    v_atlasUV = positionUV.zw;
     v_instanceColor = a_vatColor;
+    #if VAT_CLIP
+      v_clipPos = vec3(positionUV.xy, clipActive);
+      if (clipActive < 0.5) {
+        v_clip0 = vec4(0.0);
+        v_clip1 = vec4(0.0);
+        v_clip2 = vec4(0.0);
+        v_clip3 = vec4(0.0);
+      }
+    #endif
 
     mat4 matWorld;
     CCGetWorldMatrix(matWorld);
@@ -267,8 +355,35 @@ CCProgram spine-vat-v2-fs %{
   in lowp vec4 v_dark;
   in lowp vec4 v_instanceColor;
   uniform sampler2D mainTexture;
+  #if VAT_CLIP
+    in vec3 v_clipPos;
+    in vec4 v_clip0;
+    in vec4 v_clip1;
+    in vec4 v_clip2;
+    in vec4 v_clip3;
+
+    // 奇偶交叉：p 向 +x 的射线穿过边 a→b 就翻转一次。长度为 0 的补齐边两端 y 相同，不计数。
+    bool crosses(vec2 p, vec2 a, vec2 b) {
+      return (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x;
+    }
+  #endif
 
   vec4 frag () {
+    #if VAT_CLIP
+      if (v_clipPos.z > 0.5) {
+        vec2 p = v_clipPos.xy;
+        bool inside = false;
+        if (crosses(p, v_clip0.xy, v_clip0.zw)) inside = !inside;
+        if (crosses(p, v_clip0.zw, v_clip1.xy)) inside = !inside;
+        if (crosses(p, v_clip1.xy, v_clip1.zw)) inside = !inside;
+        if (crosses(p, v_clip1.zw, v_clip2.xy)) inside = !inside;
+        if (crosses(p, v_clip2.xy, v_clip2.zw)) inside = !inside;
+        if (crosses(p, v_clip2.zw, v_clip3.xy)) inside = !inside;
+        if (crosses(p, v_clip3.xy, v_clip3.zw)) inside = !inside;
+        if (crosses(p, v_clip3.zw, v_clip0.xy)) inside = !inside;
+        if (!inside) discard;
+      }
+    #endif
     vec4 texColor = texture(mainTexture, v_atlasUV);
     vec4 outputColor;
     outputColor.a = texColor.a * v_light.a;

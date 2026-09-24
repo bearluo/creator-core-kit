@@ -18,6 +18,7 @@ function ensureAssetClass() {
   property({ type: [cc.BufferAsset], visible: false })(SpineVatSkeletonData.prototype, 'darkPages');
   property({ type: [cc.Texture2D], visible: false })(SpineVatSkeletonData.prototype, 'atlasPages');
   property({ type: cc.EffectAsset, visible: false })(SpineVatSkeletonData.prototype, 'effectAsset');
+  property({ type: cc.EffectAsset, visible: false })(SpineVatSkeletonData.prototype, 'uiEffectAsset');
   cc._decorator.ccclass(ASSET_CLASS)(SpineVatSkeletonData);
 }
 
@@ -68,16 +69,16 @@ function effectReference(uuid) {
   };
 }
 
-function resolveRuntimeEffect(asset) {
-  const absolute = path.resolve(__dirname, '..', 'assets', 'spine-vat-v2.effect');
+function resolveRuntimeEffect(asset, fileName) {
+  const absolute = path.resolve(__dirname, '..', 'assets', fileName);
   let meta;
   try {
     meta = JSON.parse(fs.readFileSync(`${absolute}.meta`, 'utf8'));
   } catch {
-    throw new Error('找不到 VAT Runtime Effect: db://spine-vat-importer/spine-vat-v2.effect');
+    throw new Error(`找不到 VAT Runtime Effect: db://spine-vat-importer/${fileName}`);
   }
   if (meta.importer !== 'effect' || typeof meta.uuid !== 'string' || !meta.uuid) {
-    throw new Error('VAT Runtime Effect 的 .meta 无效');
+    throw new Error(`VAT Runtime Effect 的 .meta 无效: ${fileName}`);
   }
   return { absolute, dependency: { uuid: meta.uuid } };
 }
@@ -111,8 +112,10 @@ async function importSpineVatAsset(asset) {
     const darkPages = [];
     const atlasPages = [];
     const depends = new Set();
-    const effectInfo = resolveRuntimeEffect(asset);
+    const effectInfo = resolveRuntimeEffect(asset, 'spine-vat-v2.effect');
     addDependency(asset, effectInfo, depends);
+    const uiEffectInfo = resolveRuntimeEffect(asset, 'spine-vat-ui.effect');
+    addDependency(asset, uiEffectInfo, depends);
 
     for (const page of manifest.texturePages || []) {
       const dependencyInfo = resolveSibling(asset, page.path);
@@ -148,6 +151,7 @@ async function importSpineVatAsset(asset) {
       darkPages,
       atlasPages,
       effectAsset: effectReference(effectInfo.dependency.uuid),
+      uiEffectAsset: effectReference(uiEffectInfo.dependency.uuid),
     }, null, 2);
 
     await asset.saveToLibrary('.json', `${serialized}\n`);
@@ -166,7 +170,7 @@ class SpineVatImporter380 extends Importer {
   }
 
   get version() {
-    return '1.4.1';
+    return '1.5.0';
   }
 
   get name() {
@@ -203,7 +207,7 @@ exports.registerSpineVatHandler = function registerSpineVatHandler() {
     },
 
     importer: {
-      version: '1.4.1',
+      version: '1.5.0',
       import: importSpineVatAsset,
     },
   };

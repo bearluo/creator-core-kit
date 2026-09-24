@@ -1,97 +1,48 @@
 # Spine Runtime Lab（Cocos Creator 3.8.7）
 
-该工程用于验证 Cocos Creator 3.8.7 中 Spine 的运行时内存、缓存模式、2D 合批，以及受限功能集下的 VAT + GPU Instancing 方案。目标场景是水果机大厅同屏约 20 个入口。
+Spine VAT 的转换工具与运行时性能测试工程。Spine 4.2 动画离线烘成顶点动画纹理（固定槽位 + GPU 剪裁 + 帧间插值），运行时两种渲染方式任选：
 
-## 场景
+| 组件 | 提交流程 | 用途 |
+|---|---|---|
+| `spinevat.UiSkeleton`（`Spine/VAT UI Skeleton`） | UI batch（UIRenderer），和 Sprite / `sp.Skeleton` 按兄弟顺序穿插 | 2D UI 里的 Spine |
+| `spinevat.Skeleton`（`Spine/VAT Skeleton`） | MeshRenderer + GPU instancing | 3D 场景里的 Spine |
 
-- `assets/scenes/main.scene`：Spine 3.8 `spineboy-pro` 基线。
-- `assets/scenes/main42.scene`：用户提供的 Spine 4.2.43 `tuan` 复杂资源，测试官方 `REALTIME` / `SHARED_CACHE`。
-- `assets/scenes/fruit-machine-vat.scene`：水果机通用 VAT v2/M3，验证 20 个实例的独立动画、相位、速度、暂停、颜色和 GPU Instancing。
+两者读同一份 `spinevat.SkeletonData`（`manifest.spinevat` 导入后的资源），用法相同：挂组件 → 赋 `Skeleton Data` → 选 `Initial Clip`。组件和导入器都在 `extensions/spine-vat-importer`，安装与 API 见 [扩展 README](extensions/spine-vat-importer/README.md)。
 
-`cacheMode`：`0=REALTIME`、`1=SHARED_CACHE`、`2=PRIVATE_CACHE`。多个实例共享同一份 `SkeletonData`。
+## 目录
 
-## 运行与构建
+```
+extensions/spine-vat-importer/   导入器 + 两个组件 + 两个 effect（可整体拷到别的工程）
+assets/bake/                     转换：Analyzer / Baker / FixedBaker / FixedLayout / CompilerV2 + 烘焙场景与驱动
+assets/perf/                     性能测试：保真 → A/B 性能 → 穿插/遮挡（场景 spine-vat-ui-ab + SpineLabDriver），只依赖扩展
+assets/resources/spine/          源 Spine（nanwuzhe；_cliptest 是剪裁动画测试资源，tools/gen-clip-test-spine.mjs 生成）
+assets/resources/vat/            烘焙产物（nanwuzhe、nanwuzhe-cliptest）
+assets/resources/sprites/        穿插测试用图
+tools/                           出包、静态服务器、保真 / 遮挡比对
+test/                            vitest，路径镜像 assets/ 与扩展（仓库根目录 `npx vitest run apps/spine-runtime-lab/test`）
+docs/                            文档，入口 docs/README.md
+```
 
-1. 使用 Cocos Creator 3.8.7 打开本目录。
-2. 选择对应场景预览，或使用 `build-configs` 下的配置构建。
-3. Android AVD、构建和采集脚本位于 `tools/`。
+## 转换（烘焙）
 
-Web 构建后可启动本地服务：
+用 Creator 构建 `build-configs/web-bake.json`（启动场景 `assets/bake/spine-vat-bake.scene`），然后：
 
 ```powershell
-node tools/static-server.mjs build/web-tuan42 18088
+node tools/static-server.mjs build/web-bake 18093 assets/resources/vat/nanwuzhe
 ```
 
-独立 Spine VAT 转换工作台：
+打开 `http://127.0.0.1:18093/`，状态显示完成后在控制台调用 `__SPINE_VAT_V2_EXPORT__()`，静态服务器把 `manifest.spinevat` 和各 `.bin` 写进导出目录（图集纹理手动拷一份进去）。URL 参数：`spine=spine/nanwuzhe/letsparty_tuan_nanwuzhe_cliptest`（换资源，导出目录相应换成 `vat/nanwuzhe-cliptest`）、`pma=straight|premultiplied`、`fps=30`、`profile=balanced|exact|compact`。过不了固定槽位规则的动画会让烘焙直接报错并写明原因（规则见 [设计文档](docs/design/spine-vat-overview.md)）。
 
-```powershell
-powershell -ExecutionPolicy Bypass -File tools/build-vat-workbench.ps1
-node tools/static-server.mjs build/web-vat-workbench 18120
-```
+## 性能测试
 
-打开 `http://127.0.0.1:18120/`，拖入 Spine 4.2 JSON、atlas 和全部纹理页即可分析、双预览并下载可拖入 Creator `assets/resources/` 的资源包。完整说明见 [Spine VAT Web 转换工作台](docs/spine-vat-workbench.md)。
+`tools/build-android.ps1 [-Release]` 出 `spine-vat-ui-ab` 场景的 arm64 包（先关掉本工程的 Creator）。启动后依次：
 
-页面中的“下载 CC 组件”会提供 `spine-vat-runtime.zip`，其中包含完整的 `spine-vat-importer` 扩展。安装扩展后使用新的 `spinevat.SkeletonData` 和 `spinevat.Skeleton`；不再向项目复制旧 `SpineVatComponent`，也不提供旧类兼容层。
+1. **保真**：2D、3D 各跑一遍，每页左 VAT / 右官方 REALTIME 同帧并排，打 `[SpineFidelity]` 行；截图后 `py tools/check-fidelity.py logcat.txt p0.png ... --out diff`。
+2. **A/B**：实例数 30 / 150 / 600，每档轮换 2D 插值、2D 阶跃、3D 插值、官方 `SHARED_CACHE`，每阶段 20 秒，打 `[SpineAB]` / `[SpinePerf]` 行。
+3. **穿插 / 遮挡**：2D 与官方各一轮，截图后 `py tools/check-occlusion.py shot.png logcat.txt --mode VAT_UI_LERP|SHARED_CACHE`。
 
-浏览器参数示例：
+测试里的实例都是按业务用法建的：`addComponent` → 赋 `skeletonData` / `initialClipIndex` / `loop`，每个实例一个节点。
 
-```text
-/?count=20&mode=realtime&batch=1
-/?count=20&mode=shared&batch=1
-/?vat=1&count=20
-/?vatAnalyze=1&pma=straight&analyzeFps=30&vatProfile=balanced
-/?vat2=1&count=20&pma=straight&analyzeFps=30
-/?vat2=1&count=20&pma=straight&analyzeFps=30&independent=1
-/?vat2=1&count=1&compare=1&pma=straight&analyzeFps=30
-```
+## 文档
 
-Analyzer 完成后可从 `window.__SPINE_VAT_ANALYSIS__` 读取报告；静态服务器配置输出目录后，调用 `window.__SPINE_VAT_ANALYSIS_EXPORT__()` 可写出 `analysis.json`。
-
-VAT v2 完成后可使用：
-
-```js
-window.__SPINE_VAT_V2__                 // manifest 与纹理页内存数据
-window.__SPINE_VAT_V2_READY__           // clip、Lane、字节和实例数摘要
-window.__SPINE_VAT_V2_SET_CLIP__(name)  // 切换已烘焙动画
-window.__SPINE_VAT_V2_SET_FRAME__(15)   // 固定到第 15 帧，null 恢复自动播放
-window.__SPINE_VAT_V2_STATES__()        // 读取全部实例当前播放状态
-window.__SPINE_VAT_V2_PLAY__(0, name, { loop: true, speed: 1.2, startTime: 0.5 })
-window.__SPINE_VAT_V2_PAUSE__(0)
-window.__SPINE_VAT_V2_RESUME__(0)
-window.__SPINE_VAT_V2_SEEK__(0, 0.8)
-window.__SPINE_VAT_V2_LOOP__(0, false)
-window.__SPINE_VAT_V2_COLOR__(0, 1, 0.8, 0.7, 1)
-window.__SPINE_VAT_V2_ON_EVENT__(0, event => console.log(event))
-window.__SPINE_VAT_V2_SOCKET__(0, 'r1_lian')
-window.__SPINE_VAT_V2_EXPORT__()        // 导出 manifest.spinevat 与各语义 bin
-```
-
-通用 VAT v2/M3 x86_64 验证包：
-
-```powershell
-powershell -File tools/build-android.ps1 -Profile low -Asset fruitvat42 -Abi x86_64 -AllowExistingEditor
-```
-
-## 当前结论
-
-- 官方 `SHARED_CACHE + enableBatch=true` 是约 20 个大厅入口的默认方案。
-- `SHARED_CACHE` 按动画名、按实际采样帧懒创建缓存，不会在启动时按“全部动画中的最大帧”一次性为每个实例预分配。
-- 官方 `sp.Skeleton` 的 `enableBatch` 是 2D middleware 合批，不是 GPU Instancing。
-- Native VAT 必须使用 Web/WASM 离线烘焙数据；Android Native 的 `updateRenderData()` 不返回 Web 烘焙所依赖的 WASM 顶点指针。
-- 通用 VAT v2/M3 已在 Web 和 Android Native 模拟器跑通：20 个逻辑实例、3 个动画、4 个 Lane 保持 80 GPU Instances 和 8 Draw Call，暂停实例保持原帧、其余实例独立推进。模拟器为 SwiftShader，只证明 JSB/GLES 功能链路，不代表 ARM64 真机性能。
-- HYBRID event/socket 已进入播放器：事件表不保留 Spine Runtime，指定 socket 按 VAT 帧读取完整 2D 仿射矩阵；`r1_lian` 已通过 Web 和 Native 动态变化回归，且不增加 Draw Call。当前 socket 放在 manifest JSON，正式多挂点版本仍需二进制压缩。
-- 两台 OPPO 实体机均证明：VAT 可将 20 个复杂实例从 `SHARED_CACHE` 的约 54-55 FPS 提到稳定 60 FPS，30 实例时缓存路径约 39-42 FPS、VAT 仍约 60 FPS；平均 Draw Call 从约 23/32 降至固定 6。CPU 收益依设备不同，K9x 约下降 58%，CPH2823 约下降 14%，不能跨设备外推。VAT 已具备复杂固定拓扑资源的专项立项依据，但仍需用真实大厅资源验证功能、纹理总量、功耗和温升后再决定上线。
-
-详细资料：
-
-- [Spine Runtime 与 VAT 验证汇总报告（建议先读）](docs/spine-runtime-vat-summary-report.md)
-- [Spine 播放与缓存的源码级内存流程](docs/spine-runtime-memory-flow.md)
-- [Android 模拟器与实体机完整测试](docs/android-test-results.md)
-- [Web 对照测试](docs/spine-vat-web-results.md)
-- [VAT 上线决策](docs/spine-vat-decision.md)
-- [通用 Spine 转 VAT 工具设计](docs/general-spine-vat-tool-design.md)
-- [Spine VAT Web 转换工作台](docs/spine-vat-workbench.md)
-- [Spine VAT Analyzer M1 使用与实测](docs/spine-vat-analyzer-m1.md)
-- [Spine VAT Compiler/Renderer M2 使用与实测](docs/spine-vat-compiler-m2.md)
-- [Spine VAT Player M3 每实例播放与 Web 实测](docs/spine-vat-player-m3.md)
-- [测试配置与采集口径](docs/performance-test-plan.md)
+见 [docs/README.md](docs/README.md)。
