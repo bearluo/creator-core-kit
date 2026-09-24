@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_CLIP_VERTICES, planFixedLayout, writeFixedFrame } from '../../assets/bake/SpineVatFixedLayout';
-import type { FixedFrame, FixedKeyRange } from '../../assets/bake/SpineVatFixedBaker';
+import { MAX_CLIP_VERTICES, planFixedLayout, writeFixedFrame } from '../../../../extensions/spine-vat-importer/bake/src/SpineVatFixedLayout';
+import type { FixedFrame, FixedKeyRange } from '../../../../extensions/spine-vat-importer/bake/src/SpineVatFixedBaker';
 
 const STRIDE = 28;
 

@@ -79,11 +79,11 @@ Spine JSON + atlas（Creator 导入为 sp.SkeletonData）
 
 | 环节 | 位置 | 文档 |
 |---|---|---|
-| Analyzer | `assets/bake/SpineVatAnalyzer*.ts` | [spine-vat-analyzer](spine-vat-analyzer.md) |
-| Compiler | `assets/bake/SpineVat{Baker,FixedBaker,FixedLayout,CompilerV2}.ts` | [spine-vat-compiler](spine-vat-compiler.md) |
+| Analyzer | `extensions/spine-vat-importer/bake/src/SpineVatAnalyzer*.ts` | [spine-vat-analyzer](spine-vat-analyzer.md) |
+| Compiler | `extensions/spine-vat-importer/bake/src/SpineVat{Baker,FixedBaker,FixedLayout,CompilerV2}.ts` | [spine-vat-compiler](spine-vat-compiler.md) |
 | 导入器 + Player | `extensions/spine-vat-importer/` | [spine-vat-player](spine-vat-player.md) |
 
-烘焙只在 Creator Web/WASM 里跑，由烘焙场景驱动，浏览器里导出结果；Native 端只加载产物。
+烘焙在编辑器场景进程里跑（资源右键菜单），用的是编辑器内置的同一份 Spine wasm；源码不在扩展挂载的 `assets/` 下，不进游戏包。Native 端只加载产物。
 
 「骨骼矩阵纹理 + GPU 蒙皮」不作为后端：对纯 weighted mesh 来说它的数据更省，但 deform、attachment、clipping、draw order、slot blend 和约束的语义都得重新实现一遍，能覆盖的功能反而比直接采集官方 Runtime 的最终顶点少。
 
@@ -115,7 +115,7 @@ Spine JSON + atlas（Creator 导入为 sp.SkeletonData）
 - **压缩档位**：`balanced`（RGBA16F）和 `compact`（定点）只停留在 Analyzer 的估算里，产物一律是 `exact`。
 - **多 skin**、`.skel` 输入、Physics 预热、PNG 半透明像素的 PMA 启发式判断。
 - **crossfade**：固定槽位下各动画顶点一一对应，可以在 shader 里对两帧做混合。
-- **编辑器面板**（Analyze / Preview / Bake）、CI 批量烘焙、按源文件 hash 做增量。
+- **参数面板**（fps、动画白名单）、CI 批量烘焙、按源文件 hash 做增量。
 - **真实 PMA / 多 atlas / multiply / screen 资产的像素对照**：technique 都已实现，但只有 straight 单页的资源实测过。
 
 ## 7. 资料

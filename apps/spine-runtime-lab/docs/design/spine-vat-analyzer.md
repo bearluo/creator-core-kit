@@ -9,19 +9,19 @@
 
 | 文件 | 内容 |
 |---|---|
-| `assets/bake/SpineVatTypes.ts` | 报告（`SpineVatAnalysisReport`）与 manifest 的类型 |
-| `assets/bake/SpineVatAnalyzerCore.ts` | 纯逻辑：解析 JSON / atlas、材质超序列、按动画估算与定级，不依赖 `cc`，可在 node 下单测 |
-| `assets/bake/SpineVatAnalyzer.ts` | 入口 `analyzeSpineVatSkeletonData(parent, skeletonData, options)`：在 Creator Web/WASM 里逐帧试跑 |
-| `test/bake/SpineVatAnalyzerCore.test.ts` | 用真实资源测静态分析和超序列 |
+| `extensions/spine-vat-importer/bake/src/SpineVatTypes.ts` | 报告（`SpineVatAnalysisReport`）与 manifest 的类型 |
+| `extensions/spine-vat-importer/bake/src/SpineVatAnalyzerCore.ts` | 纯逻辑：解析 JSON / atlas、材质超序列、按动画估算与定级，不依赖 `cc`，可在 node 下单测 |
+| `extensions/spine-vat-importer/bake/src/SpineVatAnalyzer.ts` | 入口 `analyzeSpineVatSkeletonData(parent, skeletonData, options)`：用引擎内置的 Spine wasm 逐帧试跑 |
+| `test/extensions/spine-vat-importer/bake/SpineVatAnalyzerCore.test.ts` | 用真实资源测静态分析和超序列 |
 
-入口由烘焙场景的 `SpineVatBakeDriver` 调用（流程见工程 README），结果挂在 `window.__SPINE_VAT_ANALYSIS__` 上。
+由 `extensions/spine-vat-importer/bake/src/index.ts` 的 `bakeSpineVat` 调用：编辑器里在 Spine 资源上右键「烘焙 Spine VAT」，在场景进程里跑（见扩展 README）。结果摘要（动画数、纹理字节数、警告数）打在编辑器控制台，前缀 `[Spine VAT Bake]`。
 
 ## 选项
 
 | 字段 | 默认 | 含义 |
 |---|---|---|
 | `alphaMode` | atlas 里的 `pma` 声明 | `straight` / `premultiplied`；atlas 各页的声明不一致或缺失时为 `unknown` |
-| `frameRate` | 60 | 采样帧率；烘焙驱动传 30（URL 参数 `fps`） |
+| `frameRate` | 60 | 采样帧率；右键烘焙固定传 30 |
 | `textureProfile` | `balanced` | 只影响估算。实际产物始终按 `exact`（RGBA32F）存 |
 | `animations` | 全部 | 只分析其中几段 |
 | `budget` | `maxRenderLanes 12` / `maxTextureBytes 64 MiB` / `maxTextureSize 4096` | 超出就判 `RUNTIME_FALLBACK` |

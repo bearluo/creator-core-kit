@@ -9,5 +9,5 @@
     "types": ["@cocos/creator-types/engine"],
     "baseUrl": "."
   },
-  "include": ["assets/**/*.ts", "types/**/*.d.ts", "extensions/spine-vat-importer/assets/runtime/**/*.ts"]
+  "include": ["assets/**/*.ts", "types/**/*.d.ts", "extensions/spine-vat-importer/assets/runtime/**/*.ts", "extensions/spine-vat-importer/bake/src/**/*.ts"]
 }

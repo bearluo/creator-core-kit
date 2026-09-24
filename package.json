@@ -22,6 +22,8 @@
     "gen:noise": "node apps/demo/scripts/gen-noise.mjs",
     "check:masks": "node apps/demo/scripts/gen-collision-mask.mjs --check",
     "check:channels": "node apps/demo/scripts/check-channels.mjs",
+    "build:spine-vat-bake": "node apps/spine-runtime-lab/tools/build-bake.mjs",
+    "check:spine-vat-bake": "node apps/spine-runtime-lab/tools/build-bake.mjs --check",
     "tunnel": "node apps/demo/scripts/tunnel.mjs",
     "proto:sync": "node scripts/sync-proto.mjs",
     "docs:api": "typedoc",

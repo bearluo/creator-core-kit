@@ -6,10 +6,10 @@ import {
   buildClipAnalysis,
   DEFAULT_SPINE_VAT_BUDGET,
   mergeMaterialSequences,
-} from '../../assets/bake/SpineVatAnalyzerCore';
-import type { SpineVatFrameProbe } from '../../assets/bake/SpineVatTypes';
+} from '../../../../extensions/spine-vat-importer/bake/src/SpineVatAnalyzerCore';
+import type { SpineVatFrameProbe } from '../../../../extensions/spine-vat-importer/bake/src/SpineVatTypes';
 
-const appRoot = resolve(import.meta.dirname, '../..');
+const appRoot = resolve(import.meta.dirname, '../../../..');
 
 function readJson(relativePath: string): Record<string, any> {
   return JSON.parse(readFileSync(resolve(appRoot, relativePath), 'utf8')) as Record<string, any>;

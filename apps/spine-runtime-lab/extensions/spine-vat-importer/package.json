@@ -47,6 +47,12 @@
     },
     "scene": {
       "script": "./scene.js"
+    },
+    "assets": {
+      "menu": {
+        "methods": "./assets-menu.js",
+        "assetMenu": "onAssetMenu"
+      }
     }
   }
 }

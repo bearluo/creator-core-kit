@@ -19,6 +19,12 @@
 | [spine-vat-compiler](design/spine-vat-compiler.md) | 双骨骼采样、固定槽位、纹理布局、分页与 manifest |
 | [spine-vat-player](design/spine-vat-player.md) | 播放状态机、3D / 2D 两个组件、合批与资源共享、事件与 socket |
 
+## 改造提案
+
+| 文档 | 内容 |
+|---|---|
+| [2026-09-24-spine-vat-bake-v2-proposal](design/2026-09-24-spine-vat-bake-v2-proposal.md) | 已实施：烘焙搬进扩展，编辑器里右键烘焙 |
+
 ## 调研（快照）
 
 | 文档 | 内容 |

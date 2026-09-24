@@ -58,7 +58,7 @@
 
 - `tools/gen-clip-test-spine.mjs` 生成 `spine/nanwuzhe/letsparty_tuan_nanwuzhe_cliptest.json`：在 tigger 上分别叠加剪裁的激活切换（`clip_toggle`）、形变（`clip_deform`）、凹多边形（`clip_concave`）。
 - 烘焙与真机测试流程见工程 README。
-- 单测：`test/bake/SpineVatFixedLayout.test.ts`（槽位 / 退化 / 剪裁区 / 规则）、`test/bake/SpineVatCompilerV2.test.ts`（manifest 与静态区）、`test/extensions/spine-vat-importer/runtime/SpineVatRenderResources.test.ts`（3D 网格索引与材质宏）、同目录 `SpineVatSkeleton.test.ts` / `SpineVatUiSkeleton.test.ts`（两个组件的事件监听、socket、snapshot）。
+- 单测：`test/extensions/spine-vat-importer/bake/SpineVatFixedLayout.test.ts`（槽位 / 退化 / 剪裁区 / 规则）、同目录 `SpineVatCompilerV2.test.ts`（manifest 与静态区）、`test/extensions/spine-vat-importer/runtime/SpineVatRenderResources.test.ts`（3D 网格索引与材质宏）、同目录 `SpineVatSkeleton.test.ts` / `SpineVatUiSkeleton.test.ts`（两个组件的事件监听、socket、snapshot）。
 
 以下对照数据来自三角形汤与固定槽位并存时期（2D 组件），「三角形汤」列是旧格式：
 

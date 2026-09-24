@@ -1,13 +1,20 @@
 # Spine VAT Runtime（Cocos Creator 3.8.7）
 
-该压缩包提供 Spine VAT 转换结果在 Cocos Creator 3.8.7 中使用所需的完整扩展。运行时脚本、资源类型、Importer、Inspector 和 Effect 全部位于同一个扩展内，不需要再向工程的 `assets/scripts` 复制任何脚本。
+把 Spine 转成 VAT 并在 Cocos Creator 3.8.7 中播放所需的完整扩展：烘焙、运行时脚本、资源类型、Importer、Inspector 和 Effect 全部位于同一个扩展内，不需要再向工程复制任何脚本，也不需要别的工具。
 
 ## 安装
 
 1. 解压后，将 `extensions/spine-vat-importer` 整个目录复制到目标 Creator 工程的 `extensions/`。
-2. 回到 Creator，等待扩展和项目脚本编译完成。
-3. 将转换工具导出的完整资源目录拖入工程 `assets/`，其中必须包含 `manifest.spinevat`、所有 `.bin` 和图集纹理。
-4. `manifest.spinevat` 导入成功后会成为 `spinevat.SkeletonData` 资源。
+2. 重启 Creator（右键菜单在启动时注册），等待扩展和项目脚本编译完成。
+
+## 烘焙
+
+1. 资源管理器里右键 Spine 的 `.json`（`sp.SkeletonData`，需要同目录的 atlas 与图集 PNG），选「烘焙 Spine VAT（straight）」或「（premultiplied）」，按图集是否预乘 alpha 选。
+2. 产物写到同目录的 `<名>-vat/`：`manifest.spinevat`、`position-N.bin`、`light-N.bin` / `dark-N.bin`（有才出）和图集 PNG，已存在的同名文件会被覆盖。写完自动导入，`manifest.spinevat` 成为 `spinevat.SkeletonData` 资源。
+3. 进度与结果看控制台的 `[Spine VAT Bake]`。过不了固定槽位规则的动画会让烘焙报错并写明是哪个动画、哪条规则。
+4. 烘焙需要编辑器里打开着一个场景（临时节点挂在它下面，不存盘、不显示）。帧率固定 30。
+
+`<名>-vat/` 可以整体挪到别的目录，里面的文件用相对路径互相引用。烘焙代码在 `bake/`，不在扩展挂载的 `assets/` 下，不会进游戏包。
 
 只安装扩展即可。不要再复制旧的 `SpineVatAsset.ts`、`SpineVatComponent.ts` 或 `SpineVatRendererV2.ts`，新运行时不兼容这些旧类。
 
@@ -50,7 +57,7 @@ skeleton.setManualFrame(12); // 传 null 恢复按时间播放
 ## 限制
 
 - 仅面向 Cocos Creator 3.8.7。
-- 当前转换器输入为 Spine 4.2 JSON、atlas 和对应纹理页，不支持 `.skel`。
+- 烘焙输入为 Spine 4.2 JSON、atlas 和对应纹理页，不支持 `.skel`。
 - VAT 只能还原转换时烘焙的动画、皮肤组合和渲染 Lane。运行时换装、任意骨骼约束修改和未烘焙的动态附件不属于该运行时能力。
 - 不再支持旧组件的 `Resource Root`、手填资源数组、`instanceCount`、`columns` 或批量布局参数。
 - 启动时编辑器会提示 `contribution.importer 已在 3.8.3 版本废弃，请更换为 contribution.asset-handler`，可以忽略，**不要删 `package.json` 里的 `importer`**：在 3.8.7 上，工程扩展只声明 `asset-handler` 不会注册进资源数据库的工作进程，`manifest.spinevat` 会退回默认导入器（`*` / `cc.Asset`），组件拿不到资源。实测过（2026-09-24）。

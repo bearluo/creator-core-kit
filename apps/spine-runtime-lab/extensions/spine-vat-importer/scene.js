@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const {
   Camera,
   Color,
@@ -310,6 +312,20 @@ const preview = new SpineVatPreview();
 let registered = false;
 
 exports.methods = {
+  /** 资源右键「烘焙 Spine VAT」：烘焙结果与图集 PNG 写进 outDir，返回摘要。 */
+  async bake(uuid, alphaMode, outDir, sourceDir) {
+    const { bakeSpineVat } = require('./bake/dist/bake.js');
+    const baked = await bakeSpineVat(await loadAsset(uuid), alphaMode);
+    fs.mkdirSync(outDir, { recursive: true });
+    for (const [name, content] of baked.files) fs.writeFileSync(path.join(outDir, name), content);
+    for (const page of baked.atlasPages) {
+      const source = path.join(sourceDir, page);
+      if (!fs.existsSync(source)) throw new Error(`找不到图集纹理 ${source}，manifest 已写出，请手动拷贝`);
+      fs.copyFileSync(source, path.join(outDir, page));
+    }
+    return baked.summary;
+  },
+
   async initPreview() {
     if (!registered) {
       await cce.Preview.initPreview(PREVIEW_NAME, PREVIEW_QUERY, preview);

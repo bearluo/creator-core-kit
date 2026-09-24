@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('cc', () => ({ Node: class {}, sp: {} }));
 
-import { compileSpineVatV2, extractSpineVatEvents } from '../../assets/bake/SpineVatCompilerV2';
-import type { SpineVatBakeResult } from '../../assets/bake/SpineVatBaker';
-import type { FixedBakeResult, FixedFrame, FixedKeyRange } from '../../assets/bake/SpineVatFixedBaker';
-import type { SpineVatAnalysisReport } from '../../assets/bake/SpineVatTypes';
+import { compileSpineVatV2, extractSpineVatEvents } from '../../../../extensions/spine-vat-importer/bake/src/SpineVatCompilerV2';
+import type { SpineVatBakeResult } from '../../../../extensions/spine-vat-importer/bake/src/SpineVatBaker';
+import type { FixedBakeResult, FixedFrame, FixedKeyRange } from '../../../../extensions/spine-vat-importer/bake/src/SpineVatFixedBaker';
+import type { SpineVatAnalysisReport } from '../../../../extensions/spine-vat-importer/bake/src/SpineVatTypes';
 
 const STRIDE = 28;
 

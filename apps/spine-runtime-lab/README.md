@@ -12,8 +12,7 @@ Spine VAT 的转换工具与运行时性能测试工程。Spine 4.2 动画离线
 ## 目录
 
 ```
-extensions/spine-vat-importer/   导入器 + 两个组件 + 两个 effect（可整体拷到别的工程）
-assets/bake/                     转换：Analyzer / Baker / FixedBaker / FixedLayout / CompilerV2 + 烘焙场景与驱动
+extensions/spine-vat-importer/   转换（右键烘焙）+ 导入器 + 两个组件 + 两个 effect（可整体拷到别的工程）
 assets/perf/                     性能测试：保真 → A/B 性能 → 穿插/遮挡（场景 spine-vat-ui-ab + SpineLabDriver），只依赖扩展
 assets/resources/spine/          源 Spine（nanwuzhe；_cliptest 是剪裁动画测试资源，tools/gen-clip-test-spine.mjs 生成）
 assets/resources/vat/            烘焙产物（nanwuzhe、nanwuzhe-cliptest）
@@ -25,13 +24,9 @@ docs/                            文档，入口 docs/README.md
 
 ## 转换（烘焙）
 
-用 Creator 构建 `build-configs/web-bake.json`（启动场景 `assets/bake/spine-vat-bake.scene`），然后：
+编辑器资源管理器里右键 Spine 的 `.json` →「烘焙 Spine VAT（straight / premultiplied）」，产物写到同目录的 `<名>-vat/` 并自动导入，用法见 [扩展 README](extensions/spine-vat-importer/README.md#烘焙)。本工程的 `assets/resources/vat/` 就是这样烘出来再挪过去的。
 
-```powershell
-node tools/static-server.mjs build/web-bake 18093 assets/resources/vat/nanwuzhe
-```
-
-打开 `http://127.0.0.1:18093/`，状态显示完成后在控制台调用 `__SPINE_VAT_V2_EXPORT__()`，静态服务器把 `manifest.spinevat` 和各 `.bin` 写进导出目录（图集纹理手动拷一份进去）。URL 参数：`spine=spine/nanwuzhe/letsparty_tuan_nanwuzhe_cliptest`（换资源，导出目录相应换成 `vat/nanwuzhe-cliptest`）、`pma=straight|premultiplied`、`fps=30`、`profile=balanced|exact|compact`。过不了固定槽位规则的动画会让烘焙直接报错并写明原因（规则见 [设计文档](docs/design/spine-vat-overview.md)）。
+烘焙源码在 `extensions/spine-vat-importer/bake/src/`，改完在仓库根目录 `pnpm build:spine-vat-bake` 重新打包 `bake/dist/bake.js`（入库）；`pnpm check:spine-vat-bake` 检查两者是否同步。过不了固定槽位规则的动画会让烘焙直接报错并写明原因（规则见 [设计文档](docs/design/spine-vat-overview.md)）。
 
 ## 性能测试
 

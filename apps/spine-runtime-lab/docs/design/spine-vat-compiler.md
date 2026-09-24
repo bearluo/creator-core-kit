@@ -9,12 +9,12 @@
 
 | 文件 | 内容 |
 |---|---|
-| `assets/bake/SpineVatBaker.ts` | 官方（剪裁后）输出的逐帧采样，以及 socket 骨骼矩阵 |
-| `assets/bake/SpineVatFixedBaker.ts` | 去掉剪裁附件的 SkeletonData；逐帧列出画出来的附件和剪裁归属 |
-| `assets/bake/SpineVatFixedLayout.ts` | 纯逻辑：检查规则、分配槽位、切 lane、写帧（`planFixedLayout` / `writeFixedFrame`） |
-| `assets/bake/SpineVatCompilerV2.ts` | 入口 `bakeAndCompileSpineVatV2`，以及纯逻辑的 `compileSpineVatV2`：通道裁剪、分页、生成 manifest |
-| `assets/bake/SpineVatBakeDriver.ts` | 烘焙场景的驱动：加载 → 分析 → 编译 → `__SPINE_VAT_V2_EXPORT__()` 导出 |
-| `test/bake/SpineVatFixedLayout.test.ts`、`SpineVatCompilerV2.test.ts` | 槽位、退化、剪裁区、规则；manifest 与静态区 |
+| `extensions/spine-vat-importer/bake/src/SpineVatBaker.ts` | 官方（剪裁后）输出的逐帧采样，以及 socket 骨骼矩阵 |
+| `extensions/spine-vat-importer/bake/src/SpineVatFixedBaker.ts` | 去掉剪裁附件的 SkeletonData；逐帧列出画出来的附件和剪裁归属 |
+| `extensions/spine-vat-importer/bake/src/SpineVatFixedLayout.ts` | 纯逻辑：检查规则、分配槽位、切 lane、写帧（`planFixedLayout` / `writeFixedFrame`） |
+| `extensions/spine-vat-importer/bake/src/SpineVatCompilerV2.ts` | 入口 `bakeAndCompileSpineVatV2`，以及纯逻辑的 `compileSpineVatV2`：通道裁剪、分页、生成 manifest |
+| `extensions/spine-vat-importer/bake/src/index.ts` | `bakeSpineVat(data, alphaMode)`：挂临时节点 → 分析 → 编译 → 返回 manifest 与各 `.bin`；由 `scene.js` 的 `bake` 写盘 |
+| `test/extensions/spine-vat-importer/bake/SpineVatFixedLayout.test.ts`、`SpineVatCompilerV2.test.ts` | 槽位、退化、剪裁区、规则；manifest 与静态区 |
 
 ## 采样
 
@@ -64,7 +64,7 @@ texel(帧, i) = (clip.frameOffset + 帧) × frameStride + i
 
 ## manifest（`spine-vat-2`）
 
-类型见 `extensions/spine-vat-importer/assets/runtime/SpineVatSchema.ts`（运行时）与 `assets/bake/SpineVatTypes.ts`（编译期），两边字段一致。要点：
+类型见 `extensions/spine-vat-importer/assets/runtime/SpineVatSchema.ts`（运行时）与 `extensions/spine-vat-importer/bake/src/SpineVatTypes.ts`（编译期），两边字段一致。要点：
 
 - `layouts` 只有一个，`id: 'fixed'`，带 `frameStride` / `bounds` / `clipCount` / `staticFrame` / `lanes`（每条带 `indices`，`geometryMode` 恒为 `indexed-stable`）。
 - `variants` 只有 `default`；`textureProfile` 恒为 `exact`。
