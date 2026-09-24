@@ -14,7 +14,13 @@ import {
   Vec4,
 } from 'cc';
 import { EDITOR_NOT_IN_PREVIEW } from 'cc/env';
-import { SpineVatPlayback, type SpineVatColor, type SpineVatPlayOptions } from './SpineVatPlayback';
+import {
+  SpineVatPlayback,
+  type SpineVatColor,
+  type SpineVatPlayOptions,
+  type SpineVatRuntimeEvent,
+  type SpineVatSnapshot,
+} from './SpineVatPlayback';
 import {
   compilePages,
   createLightTexture,
@@ -23,7 +29,7 @@ import {
   vatChannelDefines,
   vatClipUniform,
 } from './SpineVatRenderResources';
-import type { SpineVatBlendMode, SpineVatManifest } from './SpineVatSchema';
+import type { SpineVatBlendMode, SpineVatManifest, SpineVatSocketMatrix } from './SpineVatSchema';
 import { SpineVatSkeletonData } from './SpineVatSkeletonData';
 import { SLOT_SHIFT, SpineVatUiLane, type SpineVatUiLaneInfo as Lane } from './SpineVatUiLane';
 
@@ -253,6 +259,8 @@ export class SpineVatUiSkeleton extends Component {
   private slot = -1;
   private playback: SpineVatPlayback | null = null;
   private laneNodes: Node[] = [];
+  /** 挂在组件上而不是 playback 上：换 skeletonData / initialClip 重建时监听不丢。 */
+  private readonly listeners = new Set<(event: SpineVatRuntimeEvent) => void>();
 
   onLoad(): void {
     this.refreshAnimationEnum();
@@ -309,11 +317,32 @@ export class SpineVatUiSkeleton extends Component {
     this.upload();
   }
 
+  socket(name: string): SpineVatSocketMatrix | null {
+    return this.playback?.socket(name, now()) ?? null;
+  }
+
+  snapshot(): SpineVatSnapshot | null {
+    return this.playback?.snapshot(now()) ?? null;
+  }
+
+  onVatEvent(listener: (event: SpineVatRuntimeEvent) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  update(): void {
+    if (!this.playback) return;
+    for (const event of this.playback.drainEvents(now())) {
+      for (const listener of this.listeners) listener(event);
+    }
+  }
+
   lateUpdate(): void {
     if (this.group) this.writeTransform();
   }
 
   onDestroy(): void {
+    this.listeners.clear();
     this.teardown();
   }
 

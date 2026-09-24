@@ -346,7 +346,6 @@ function releaseResources(resources: SharedRenderResources): void {
 
 export class SpineVatRenderHandle {
   private readonly playback: SpineVatPlayback;
-  private readonly listeners = new Set<(event: SpineVatRuntimeEvent) => void>();
   private destroyed = false;
 
   private constructor(
@@ -427,15 +426,9 @@ export class SpineVatRenderHandle {
     return this.playback.socket(name, now());
   }
 
-  onEvent(listener: (event: SpineVatRuntimeEvent) => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  update(): void {
-    for (const event of this.playback.drainEvents(now())) {
-      for (const listener of this.listeners) listener(event);
-    }
+  /** 取出上次调用以来越过的事件；监听由组件持有（句柄随 reload 重建，监听不能跟着丢）。 */
+  drainEvents(): SpineVatRuntimeEvent[] {
+    return this.playback.drainEvents(now());
   }
 
   destroy(): void {
@@ -443,7 +436,6 @@ export class SpineVatRenderHandle {
     this.destroyed = true;
     this.renderer.mesh = null;
     this.renderer.sharedMaterials = [];
-    this.listeners.clear();
     releaseResources(this.resources);
   }
 

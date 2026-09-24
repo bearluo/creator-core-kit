@@ -76,9 +76,9 @@ shader 细节：
 
 ## 事件与 socket
 
-- `onVatEvent(cb)`：3D 组件每帧的 `update` 调用 `drainEvents`，派发上次检查位置到当前浮点帧之间的事件。支持正放、倒放、跨多圈循环、暂停/恢复。`seek` 和手动帧只移动游标，不补发跳过的事件。一次更新最多派发 4096 个，超出就抛错。
+- `onVatEvent(cb)`：两个组件都在每帧的 `update` 里调用 `drainEvents`（没有监听时也照常推进游标，免得后加的监听一次补发积压的事件），派发上次检查位置到当前浮点帧之间的事件。支持正放、倒放、跨多圈循环、暂停/恢复。`seek` 和手动帧只移动游标，不补发跳过的事件。一次更新最多派发 4096 个，超出就抛错。
 - `socket(name)`：按当前离散帧从 manifest 的 socket 轨道读取 `[a, b, c, d, worldX, worldY]`，不需要运行 Spine Runtime。
-- 这两个接口以及 `snapshot()` 目前只有 3D 组件提供，2D 组件还没有。
+- 两个组件都提供这两个接口和 `snapshot()`。监听挂在组件上，不随内部资源走：资源加载完成前就能注册，3D 的 `reload()`、2D 换 `skeletonData` / `initialClip` 重建都不会清掉，组件销毁时才清空。
 
 ## 插值开关
 

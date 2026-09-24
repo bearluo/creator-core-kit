@@ -27,7 +27,7 @@
 
 UI 界面里用 `Spine/VAT UI Skeleton`（`spinevat.UiSkeleton`）：挂在 UI 节点（Canvas 下、`UI_2D` 层）上，同样赋 `Skeleton Data`、选 `Initial Clip`、设 `Loop` / `Time Scale`。它走 UI batch，和 Sprite、`sp.Skeleton` 按兄弟顺序穿插和遮挡；同一份资源的相邻实例合成一批（每 48 个实例一组材质）。运行时会在节点下建几个 lane 子节点（不存进场景），编辑器里不预览。
 
-脚本接口与 3D 版相同：`play` / `pause` / `resume` / `seek` / `setLoop` / `setTimeScale` / `setColor` / `setManualFrame`。
+脚本接口与 3D 版相同：`play` / `pause` / `resume` / `seek` / `setLoop` / `setTimeScale` / `setColor` / `setManualFrame` / `socket` / `snapshot` / `onVatEvent`。
 
 两个组件都有静态开关 `interpolate`（默认 true）：帧间插值，VS 多一倍采样、CPU 不变；低端机可在创建实例前关掉。
 

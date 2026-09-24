@@ -85,6 +85,8 @@ export class SpineVatSkeleton extends MeshRenderer {
   private loadGeneration = 0;
   private reloadQueued = false;
   private editorSignature = '';
+  /** 挂在组件上而不是 handle 上：加载完成前注册的、reload 前注册的都不能丢。 */
+  private readonly listeners = new Set<(event: SpineVatRuntimeEvent) => void>();
 
   private readonly flushReload = (): void => {
     this.reloadQueued = false;
@@ -111,7 +113,10 @@ export class SpineVatSkeleton extends MeshRenderer {
         this.requestReload();
       }
     }
-    this.handle?.update();
+    if (!this.handle) return;
+    for (const event of this.handle.drainEvents()) {
+      for (const listener of this.listeners) listener(event);
+    }
   }
 
   async reload(): Promise<void> {
@@ -184,7 +189,8 @@ export class SpineVatSkeleton extends MeshRenderer {
   }
 
   onVatEvent(listener: (event: SpineVatRuntimeEvent) => void): () => void {
-    return this.handle?.onEvent(listener) ?? (() => undefined);
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   onRestore(): void {
@@ -200,6 +206,7 @@ export class SpineVatSkeleton extends MeshRenderer {
   }
 
   onDestroy(): void {
+    this.listeners.clear();
     this.stopLoadingAndDispose();
     super.onDestroy();
   }

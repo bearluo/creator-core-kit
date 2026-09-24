@@ -103,8 +103,8 @@ Spine JSON + atlas（Creator 导入为 sp.SkeletonData）
 | slot / attachment 颜色 | light 贴图（RGB 恒白时只存 alpha） | 实例整体颜色可以再乘上去 |
 | two-color tint | dark 贴图（全零时省掉） | — |
 | skin | 只烘默认 skin | 不能运行时换装 |
-| event | `HYBRID`：manifest 里存事件表，CPU 派发 | 仅 3D 组件提供 |
-| socket | `HYBRID`：指定骨骼的逐帧仿射矩阵 | 烘焙驱动还没提供参数；仅 3D 组件提供 |
+| event | `HYBRID`：manifest 里存事件表，CPU 派发 | — |
+| socket | `HYBRID`：指定骨骼的逐帧仿射矩阵 | 烘焙驱动还没提供参数 |
 | bounding box / 碰撞 | 未实现 | — |
 | 多轨叠加、mix / crossfade | 未实现，切动画是硬切 | — |
 | vertex effect | 不支持 | — |
