@@ -1,11 +1,11 @@
-# Spine VAT Analyzer M1
+# Spine VAT Analyzer
 
-状态：已实施（封存，阶段记录）
-摘要：M1：Analyzer 静态分析与逐帧 dry-run 的当时实现与实测。
-何时读：追溯 Analyzer 的设计由来时。
-依赖：[工具设计](2026-09-23-spine-vat-tool-proposal.md)
+状态：已实现（正文待按现状修订）
+摘要：Analyzer：Spine 资源静态分析与逐帧 dry-run，输出兼容性、Render Lane 与 GPU 数据量估算。
+何时读：改 Analyzer 或排查资源为什么不适合 VAT 时。
+依赖：[工具设计](spine-vat-tool-design.md)
 
-> 阶段记录：本文描述的是该阶段当时的实现与实测。当前数据格式（固定槽位 + GPU 剪裁 + 帧间插值，已无三角形汤）与两个运行时组件见 [spine-vat-overview.md](spine-vat-overview.md)。
+> 待更新：正文部分内容（三角形汤、V1 渲染器、旧入口与路径）仍是早期实现，尚未按现状修订；数据格式与两个组件的现状以 [spine-vat-overview.md](spine-vat-overview.md) 为准。
 
 > 目标：在正式烘焙前，用 Cocos Creator 3.8.7 内置 Spine 4.2 Runtime 对资源做静态分析和逐帧 dry-run，输出是否适合 VAT、预计 Render Lane 和 GPU 数据量。
 

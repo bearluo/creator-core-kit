@@ -1,23 +1,23 @@
 # spine-runtime-lab 文档地图
 
 状态：已实现
-摘要：本工程文档入口，按「当前设计 → 阶段记录 → 调研」逐层深入。
+摘要：本工程文档入口，按「总览 → 各环节设计 → 调研」逐层深入。
 何时读：第一次接触 Spine VAT 或要找某篇文档时。
 依赖：工程 [README](../README.md)（目录、烘焙与测试怎么跑）
 
-## 当前设计（现状）
+## 总览
 
 - [design/spine-vat-overview.md](design/spine-vat-overview.md)：固定槽位 + GPU 剪裁 + 帧间插值的数据格式、烘焙规则、两个组件、真机结果。**先读这篇。**
 - 组件安装与 API：[extensions/spine-vat-importer/README.md](../extensions/spine-vat-importer/README.md)
 
-## 阶段记录（已实施、封存）
+## 各环节设计
 
 | 文档 | 内容 |
 |---|---|
-| [2026-09-23-spine-vat-tool-proposal](design/2026-09-23-spine-vat-tool-proposal.md) | 通用 Spine 转 VAT 工具的最初设计 |
-| [2026-09-23-spine-vat-analyzer-m1](design/2026-09-23-spine-vat-analyzer-m1.md) | M1 Analyzer |
-| [2026-09-23-spine-vat-compiler-m2](design/2026-09-23-spine-vat-compiler-m2.md) | M2 Compiler / Renderer（三角形汤时期） |
-| [2026-09-23-spine-vat-player-m3](design/2026-09-23-spine-vat-player-m3.md) | M3 每实例播放与 GPU Instancing |
+| [spine-vat-tool-design](design/spine-vat-tool-design.md) | 工具整体分层：官方 Runtime 求值 + 自研编译打包与播放 |
+| [spine-vat-analyzer](design/spine-vat-analyzer.md) | Analyzer：静态分析与逐帧 dry-run |
+| [spine-vat-compiler](design/spine-vat-compiler.md) | Compiler：采样、编译、分页与 manifest |
+| [spine-vat-player](design/spine-vat-player.md) | Player：每实例播放与 GPU Instancing |
 
 ## 调研（快照）
 

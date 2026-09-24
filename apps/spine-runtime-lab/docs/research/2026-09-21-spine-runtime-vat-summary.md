@@ -263,7 +263,7 @@ M3 使用 Creator 3.8.7 的 `MeshRenderer.setInstancedAttribute()`，把动画�
 
 同一份 `spine-vat-2` 离线数据随后构建为 Creator 3.8.7 Android x86_64 APK，在 Android 14 / GLES3 / Google SwiftShader 模拟器上运行。Native 结果仍为 20 个逻辑实例、4 个 Lane、80 GPU Instances、固定 8 Draw Call；暂停索引 `0 / 9 / 18` 两秒后帧号不变，其他实例独立推进。引擎窗口为 58.80 FPS / P95 18.75 ms，SurfaceFlinger 为 59.48 FPS / P95 18.268 ms；没有 VAT、JSB、shader 或 JavaScript 错误。
 
-该模拟器的 95.2% 进程 CPU 包含 SwiftShader 软件光栅化，不能作为真机 CPU 收益。它证明的是 Native JSB 的自定义实例属性、离线数据加载和 GLES instancing 链路已跑通；早期 `spine-vat-1` 的 ARM64 真机性能数据不能直接冒充 M3 真机回归。完整实现与复现方法见 [Spine VAT Player M3](../design/2026-09-23-spine-vat-player-m3.md)。
+该模拟器的 95.2% 进程 CPU 包含 SwiftShader 软件光栅化，不能作为真机 CPU 收益。它证明的是 Native JSB 的自定义实例属性、离线数据加载和 GLES instancing 链路已跑通；早期 `spine-vat-1` 的 ARM64 真机性能数据不能直接冒充 M3 真机回归。完整实现与复现方法见 [Spine VAT Player M3](../design/spine-vat-player.md)。
 
 ### 7.3 HYBRID event / socket
 
@@ -418,7 +418,7 @@ Creator 3.8.7 的构建脚本会从场景入口和静态 import 图做代码裁�
 - [Spine 播放与缓存的源码级内存流程](2026-09-21-spine-runtime-memory-flow.md)
 - [Runtime 结论摘要](2026-09-21-spine-runtime-findings.md)
 - [VAT 上线决策](2026-09-21-spine-vat-decision.md)
-- [通用 Spine 转 VAT 工具设计](../design/2026-09-23-spine-vat-tool-proposal.md)
-- [Spine VAT Compiler/Renderer M2 使用与实测](../design/2026-09-23-spine-vat-compiler-m2.md)
-- [Spine VAT Player M3 每实例播放与 Web 实测](../design/2026-09-23-spine-vat-player-m3.md)
+- [通用 Spine 转 VAT 工具设计](../design/spine-vat-tool-design.md)
+- [Spine VAT Compiler/Renderer M2 使用与实测](../design/spine-vat-compiler.md)
+- [Spine VAT Player M3 每实例播放与 Web 实测](../design/spine-vat-player.md)
 - [Cocos 论坛 VAT 方案](https://forum.cocos.org/t/topic/176384)

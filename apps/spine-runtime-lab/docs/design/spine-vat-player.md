@@ -1,11 +1,11 @@
-# Spine VAT Player M3：每实例独立播放与 GPU Instancing 实测
+# Spine VAT Player：每实例独立播放与 GPU Instancing
 
-状态：已实施（封存，阶段记录）
-摘要：M3：每实例独立播放与 GPU Instancing 的当时实现与实测。
-何时读：追溯播放参数与 instancing 设计由来时。
-依赖：[Compiler M2](2026-09-23-spine-vat-compiler-m2.md)
+状态：已实现（正文待按现状修订）
+摘要：Player：每实例独立播放参数与 GPU Instancing。
+何时读：改播放参数、实例属性或 instancing 时。
+依赖：[Compiler](spine-vat-compiler.md)
 
-> 阶段记录：本文描述的是该阶段当时的实现与实测。当前数据格式（固定槽位 + GPU 剪裁 + 帧间插值，已无三角形汤）与两个运行时组件见 [spine-vat-overview.md](spine-vat-overview.md)。
+> 待更新：正文部分内容（三角形汤、V1 渲染器、旧入口与路径）仍是早期实现，尚未按现状修订；数据格式与两个组件的现状以 [spine-vat-overview.md](spine-vat-overview.md) 为准。
 
 > Cocos Creator：3.8.7  
 > Spine 数据：4.2.43  

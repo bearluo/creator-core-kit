@@ -1,11 +1,11 @@
-# Spine VAT Compiler/Renderer M2 使用与实测
+# Spine VAT Compiler
 
-状态：已实施（封存，阶段记录）
-摘要：M2：Compiler / Renderer 的当时实现与实测（三角形汤格式，已被固定槽位取代）。
-何时读：追溯 manifest / 分页设计由来时。
-依赖：[Analyzer M1](2026-09-23-spine-vat-analyzer-m1.md)
+状态：已实现（正文待按现状修订）
+摘要：Compiler：多动画采样、编译、通道裁剪、分页与 manifest 生成。
+何时读：改 manifest 格式、分页或编译流程时。
+依赖：[Analyzer](spine-vat-analyzer.md)
 
-> 阶段记录：本文描述的是该阶段当时的实现与实测。当前数据格式（固定槽位 + GPU 剪裁 + 帧间插值，已无三角形汤）与两个运行时组件见 [spine-vat-overview.md](spine-vat-overview.md)。
+> 待更新：正文部分内容（三角形汤、V1 渲染器、旧入口与路径）仍是早期实现，尚未按现状修订；数据格式与两个组件的现状以 [spine-vat-overview.md](spine-vat-overview.md) 为准。
 
 > Cocos Creator：3.8.7
 >

@@ -3,7 +3,7 @@
 状态：已实现
 摘要：VAT 数据格式为「每个附件顶点一个固定槽位 + 带索引 + shader 逐像素剪裁」，帧间插值可用、每帧顶点数约为三角形汤的 1/3；2D（`spinevat.UiSkeleton`）与 3D（`spinevat.Skeleton`）读同一份数据。过不了规则的动画烘焙时报错。
 何时读：改 baker / compiler / 两个 VAT 组件 / 两个 effect 之前。
-依赖：[Compiler M2（阶段记录）](2026-09-23-spine-vat-compiler-m2.md)
+依赖：[Compiler](spine-vat-compiler.md)
 
 ## 为什么
 

@@ -1,8 +1,8 @@
 # 通用 Spine 转 VAT 工具设计
 
-状态：已实施（封存）
-摘要：通用 Spine 转 VAT 工具的最初设计：官方 Runtime 求值、自研编译打包与播放。
-何时读：想了解工具链为什么这样分层时；当前实现见 [spine-vat-overview.md](spine-vat-overview.md)。
+状态：已实现
+摘要：通用 Spine 转 VAT 工具的整体分层：官方 Runtime 负责求值，自研部分负责编译、打包与播放。
+何时读：想了解工具链为什么这样分层时；数据格式现状见 [spine-vat-overview.md](spine-vat-overview.md)。
 依赖：无
 
 > 目标版本：Cocos Creator 3.8.7，优先支持 Spine 4.2.x；3.8 通过独立适配器支持
