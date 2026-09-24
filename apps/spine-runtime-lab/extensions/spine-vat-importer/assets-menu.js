@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
 
 const LOG_PREFIX = '[Spine VAT Bake]';
@@ -10,12 +11,15 @@ async function bake(info, alphaMode) {
   const outUrl = `${path.posix.dirname(info.url)}/${name}-vat`;
   console.log(`${LOG_PREFIX} ${info.url}（${alphaMode}）→ ${outUrl}`);
   try {
-    const summary = await Editor.Message.request('scene', 'execute-scene-script', {
+    const { manifest, summary } = await Editor.Message.request('scene', 'execute-scene-script', {
       name: 'spine-vat-importer',
       method: 'bake',
       args: [info.uuid, alphaMode, outDir, path.dirname(info.file)],
     });
+    // 先导入 .bin 与图集，再写 manifest：导入器要读到图集的 Texture2D 子资源。
     await Editor.Message.request('asset-db', 'refresh-asset', outUrl);
+    fs.writeFileSync(path.join(outDir, 'manifest.spinevat'), manifest);
+    await Editor.Message.request('asset-db', 'refresh-asset', `${outUrl}/manifest.spinevat`);
     console.log(`${LOG_PREFIX} 完成 ${outUrl}/manifest.spinevat ${summary}`);
   } catch (error) {
     console.error(`${LOG_PREFIX} 失败 ${info.url}`, error);
