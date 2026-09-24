@@ -82,12 +82,14 @@ function resolveAtlasPage(textureId: string, atlasTextureIds: string[]): number 
   throw new Error(`VAT texture id does not match an atlas page: ${textureId}`);
 }
 
-function channelIs(frame: VatFrame, offset: number, expected: number): boolean {
+/**
+ * tint black 的 RGB 在每个顶点都是 0：双色公式里 dark 项整体为 0，不用存。
+ * 只看 RGB——PMA 下运行时会在 dark.a 写 255 当标记，它在 dark.rgb 为 0 时不影响结果。
+ */
+function darkRgbIsBlack(frame: VatFrame): boolean {
   for (let vertex = 0; vertex < frame.vertexCount; vertex += 1) {
-    const start = vertex * VERTEX_STRIDE + offset;
-    for (let byte = 0; byte < 4; byte += 1) {
-      if (frame.vertices[start + byte] !== expected) return false;
-    }
+    const start = vertex * VERTEX_STRIDE + 24;
+    if (frame.vertices[start] || frame.vertices[start + 1] || frame.vertices[start + 2]) return false;
   }
   return true;
 }
@@ -167,7 +169,7 @@ export function compileSpineVatV2(
   }
   const frames = ([] as FixedBakeResult['frames']).concat(...fixed.map((bake) => bake.frames));
   const sources = frames.map((frame) => frame.source);
-  const darkAllZero = sources.every((source) => channelIs(source, 24, 0));
+  const darkAllZero = sources.every(darkRgbIsBlack);
   // 没画出来的键 alpha 写 0，light 不可能恒白；RGB 恒白时只存 alpha（a8），运行时以 VAT_LIGHT_ALPHA 还原。
   const lightComponents: 1 | 4 = sources.every(lightRgbIsWhite) ? 1 : 4;
   const stride = plan.frameStride;

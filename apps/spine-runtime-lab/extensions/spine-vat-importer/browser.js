@@ -199,8 +199,16 @@ async function onDrop(kind, args) {
   }
 }
 
+let bakeTarget = '';
+
 module.exports = {
   methods: {
+    // 烘焙面板要烘的资源：面板打开时来取；面板已开着就直接通知它换资源。
+    setBakeTarget(uuid) {
+      bakeTarget = uuid;
+      Editor.Message.send('spine-vat-importer', 'bake-target-changed', uuid);
+    },
+    queryBakeTarget() { return bakeTarget; },
     dropHierarchy(...args) { return onDrop('hierarchy', args); },
     dropScene(...args) { return onDrop('scene', args); },
   },

@@ -132,6 +132,23 @@ describe('SpineVatCompilerV2', () => {
     expect(position[4 * 4 + 2]).toBe(-1);
   });
 
+  it('dark 只看 RGB：PMA 下运行时在 dark.a 写 255 作标记，RGB 全 0 时不出 dark 页', () => {
+    const withDark = (rgb: number): FixedFrame => {
+      const entry = frame([['0/a', 4]]);
+      for (let vertex = 0; vertex < 4; vertex += 1) {
+        entry.source.vertices.fill(rgb, vertex * STRIDE + 24, vertex * STRIDE + 27);
+        entry.source.vertices[vertex * STRIDE + 27] = 255;
+      }
+      return entry;
+    };
+    const flagOnly = compile([clip('idle', [withDark(0), withDark(0)])]);
+    expect(flagOnly.manifest.channels.dark).toBe(false);
+    expect(flagOnly.pages[0].dark).toBeUndefined();
+    const tinted = compile([clip('idle', [withDark(0), withDark(40)])]);
+    expect(tinted.manifest.channels.dark).toBe(true);
+    expect(tinted.pages[0].dark).toBeDefined();
+  });
+
   it('有动画过不了固定槽位规则就整体拒绝，并写明原因', () => {
     expect(() => compile([
       clip('ok', [frame([['0/a', 3]])]),

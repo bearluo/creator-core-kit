@@ -24,6 +24,7 @@
 | 文档 | 内容 |
 |---|---|
 | [2026-09-24-spine-vat-bake-v2-proposal](design/2026-09-24-spine-vat-bake-v2-proposal.md) | 已实施：烘焙搬进扩展，编辑器里右键烘焙 |
+| [2026-09-24-spine-vat-bake-panel-proposal](design/2026-09-24-spine-vat-bake-panel-proposal.md) | 已实施：烘焙参数面板（socket / 动画 / 帧率可选） |
 
 ## 调研（快照）
 

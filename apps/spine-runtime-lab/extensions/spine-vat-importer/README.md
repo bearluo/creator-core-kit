@@ -9,10 +9,16 @@
 
 ## 烘焙
 
-1. 资源管理器里右键 Spine 的 `.json`（`sp.SkeletonData`，需要同目录的 atlas 与图集 PNG），选「烘焙 Spine VAT（straight）」或「（premultiplied）」，按图集是否预乘 alpha 选。
-2. 产物写到同目录的 `<名>-vat/`：`manifest.spinevat`、`position-N.bin`、`light-N.bin` / `dark-N.bin`（有才出）和图集 PNG，已存在的同名文件会被覆盖。写完自动导入，`manifest.spinevat` 成为 `spinevat.SkeletonData` 资源。
-3. 进度与结果看控制台的 `[Spine VAT Bake]`。过不了固定槽位规则的动画会让烘焙报错并写明是哪个动画、哪条规则。
-4. 烘焙需要编辑器里打开着一个场景（临时节点挂在它下面，不存盘、不显示）。帧率固定 30。
+1. 资源管理器里右键 Spine 的 `.json`（`sp.SkeletonData`，需要同目录的 atlas 与图集 PNG），选「烘焙 Spine VAT…」，打开烘焙面板：
+   - **输出目录**：默认同目录的 `<名>-vat/`，可改成 `db://assets` 下任意目录；
+   - **Alpha**：图集是否预乘 alpha。Spine 导出时勾了「Premultiply alpha」（`.atlas` 里有 `pma: true`）选 premultiplied，否则 straight；选错会发暗 / 黑边或发亮 / 白边；
+   - **帧率**：1～120，默认 30；
+   - **动画**：勾要烘的，默认全部；
+   - **Socket 骨骼**：勾要在运行时用 `socket()` 取变换的骨骼（可搜索），默认不选——不勾的骨骼运行时取不到。
+   输出目录里已有 `manifest.spinevat` 时，面板用它读回上次的参数当默认值（产物本身就是参数记录）；骨架里已经没有的动画 / 骨骼会被去掉并提示。
+2. 点「烘焙」，产物写到输出目录：`manifest.spinevat`、`position-N.bin`、`light-N.bin` / `dark-N.bin`（有才出）和图集 PNG，已存在的同名文件会被覆盖。写完自动导入，`manifest.spinevat` 成为 `spinevat.SkeletonData` 资源。
+3. 结果与报错显示在面板里，控制台也打 `[Spine VAT Bake]`。过不了固定槽位规则的动画会让烘焙报错并写明是哪个动画、哪条规则。
+4. 烘焙需要编辑器里打开着一个场景（临时节点挂在它下面，不存盘、不显示）。
 5. 烘焙用的是引擎自带的 Spine 运行时，**烘焙所在的工程**要选 Spine 4.2（项目设置 → 功能裁剪 → Spine，改完重启编辑器）；新建工程默认是 3.8，这时烘焙会直接报错提示。只支持 Spine 4.2 导出的资源。
 6. **播放不依赖 Spine 模块**。游戏工程因为别的 Spine 资源必须留在 3.8 时不用切：在任意一个 4.2 的工程（比如专门建一个烘焙用的空工程）里烘焙，把 `<名>-vat/` 整个目录拷进游戏工程即可。一个工程同时只能启用一个 Spine 版本，别为了烘焙改游戏工程的设置。
 

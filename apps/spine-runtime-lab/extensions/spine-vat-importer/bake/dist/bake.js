@@ -20,7 +20,9 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // apps/spine-runtime-lab/extensions/spine-vat-importer/bake/src/index.ts
 var index_exports = {};
 __export(index_exports, {
-  bakeSpineVat: () => bakeSpineVat
+  bakeDefaultsFromManifest: () => bakeDefaultsFromManifest,
+  bakeSpineVat: () => bakeSpineVat,
+  describeSpineVatSource: () => describeSpineVatSource
 });
 module.exports = __toCommonJS(index_exports);
 var import_cc5 = require("cc");
@@ -922,10 +924,10 @@ function optionalNumber(value) {
 function optionalString(value) {
   return typeof value === "string" ? value : void 0;
 }
-function extractSpineVatEvents(skeletonJson, animationName) {
-  const timeline = skeletonJson?.animations?.[animationName]?.events;
+function extractSpineVatEvents(skeletonJson2, animationName) {
+  const timeline = skeletonJson2?.animations?.[animationName]?.events;
   if (!Array.isArray(timeline)) return [];
-  const definitions = skeletonJson?.events ?? {};
+  const definitions = skeletonJson2?.events ?? {};
   return timeline.map((key) => {
     const name = String(key?.name ?? "");
     if (!name) throw new Error(`Spine event in ${animationName} is missing a name`);
@@ -956,12 +958,10 @@ function resolveAtlasPage(textureId, atlasTextureIds) {
   if (atlasTextureIds.length === 1) return 0;
   throw new Error(`VAT texture id does not match an atlas page: ${textureId}`);
 }
-function channelIs(frame, offset, expected) {
+function darkRgbIsBlack(frame) {
   for (let vertex = 0; vertex < frame.vertexCount; vertex += 1) {
-    const start = vertex * VERTEX_STRIDE2 + offset;
-    for (let byte = 0; byte < 4; byte += 1) {
-      if (frame.vertices[start + byte] !== expected) return false;
-    }
+    const start = vertex * VERTEX_STRIDE2 + 24;
+    if (frame.vertices[start] || frame.vertices[start + 1] || frame.vertices[start + 2]) return false;
   }
   return true;
 }
@@ -1017,7 +1017,7 @@ function compileSpineVatV2(bakes, fixed, atlasTextureIds, analysis, options = {}
   }
   const frames = [].concat(...fixed.map((bake) => bake.frames));
   const sources = frames.map((frame) => frame.source);
-  const darkAllZero = sources.every((source) => channelIs(source, 24, 0));
+  const darkAllZero = sources.every(darkRgbIsBlack);
   const lightComponents = sources.every(lightRgbIsWhite) ? 1 : 4;
   const stride = plan.frameStride;
   const staticFrame = frames.length;
@@ -1183,17 +1183,60 @@ async function bakeAndCompileSpineVatV2(parent, skeletonData, analysis, options 
   });
 }
 
+// apps/spine-runtime-lab/extensions/spine-vat-importer/bake/src/SpineVatBakeOptions.ts
+function bakeDefaultsFromManifest(manifest, fallback, skeleton) {
+  const m = manifest;
+  if (!m || m.format !== "spine-vat-2" || !Array.isArray(m.clips)) return { options: fallback, dropped: [] };
+  const clipNames = m.clips.map((clip) => clip?.name).filter((name) => typeof name === "string");
+  const socketNames = /* @__PURE__ */ new Set();
+  for (const clip of m.clips) for (const socket of clip?.sockets ?? []) if (typeof socket?.name === "string") socketNames.add(socket.name);
+  const animations = skeleton.animations.filter((name) => clipNames.includes(name));
+  const sockets = skeleton.bones.filter((name) => socketNames.has(name));
+  const dropped = [
+    ...clipNames.filter((name) => !skeleton.animations.includes(name)),
+    ...Array.from(socketNames).filter((name) => !skeleton.bones.includes(name))
+  ];
+  const fps = m.clips[0]?.fps;
+  return {
+    options: {
+      alphaMode: m.alphaMode === "straight" || m.alphaMode === "premultiplied" ? m.alphaMode : fallback.alphaMode,
+      frameRate: Number.isInteger(fps) && fps >= 1 && fps <= 120 ? fps : fallback.frameRate,
+      animations: animations.length > 0 ? animations : fallback.animations,
+      socketNames: sockets
+    },
+    dropped
+  };
+}
+function assertBakeOptions(options, skeleton) {
+  if (options.alphaMode !== "straight" && options.alphaMode !== "premultiplied") throw new Error(`alpha \u6A21\u5F0F\u65E0\u6548\uFF1A${options.alphaMode}`);
+  if (!Number.isInteger(options.frameRate) || options.frameRate < 1 || options.frameRate > 120) throw new Error(`\u5E27\u7387\u8981\u5728 1~120\uFF1A${options.frameRate}`);
+  if (options.animations.length === 0) throw new Error("\u81F3\u5C11\u9009\u4E00\u6BB5\u52A8\u753B");
+  const missing = [
+    ...options.animations.filter((name) => !skeleton.animations.includes(name)),
+    ...options.socketNames.filter((name) => !skeleton.bones.includes(name))
+  ];
+  if (missing.length > 0) throw new Error(`\u9AA8\u67B6\u91CC\u6CA1\u6709\uFF1A${missing.join(", ")}`);
+}
+
 // apps/spine-runtime-lab/extensions/spine-vat-importer/bake/src/index.ts
-async function bakeSpineVat(data, alphaMode) {
-  assertRuntimeCanParse(data);
+async function bakeSpineVat(data, options) {
+  const skeleton = describeSkeleton(data);
+  assertBakeOptions(options, skeleton);
+  const runtimeError = runtimeProblem(data);
+  if (runtimeError) throw new Error(runtimeError);
   const scene = import_cc5.director.getScene();
   if (!scene) throw new Error("\u70D8\u7119\u9700\u8981\u4E00\u4E2A\u6253\u5F00\u7684\u573A\u666F\uFF0C\u5148\u6253\u5F00\u4EFB\u610F\u573A\u666F");
   const parent = new import_cc5.Node("Spine VAT Bake");
   parent.hideFlags |= import_cc5.CCObject.Flags.DontSave | import_cc5.CCObject.Flags.HideInHierarchy;
   parent.parent = scene;
   try {
-    const report = await analyzeSpineVatSkeletonData(parent, data, { alphaMode, frameRate: 30, textureProfile: "balanced" });
-    const compiled = await bakeAndCompileSpineVatV2(parent, data, report);
+    const report = await analyzeSpineVatSkeletonData(parent, data, {
+      alphaMode: options.alphaMode,
+      frameRate: options.frameRate,
+      animations: skeleton.animations.filter((name) => options.animations.includes(name)),
+      textureProfile: "balanced"
+    });
+    const compiled = await bakeAndCompileSpineVatV2(parent, data, report, { socketNames: options.socketNames });
     const files = [["manifest.spinevat", JSON.stringify(compiled.manifest, null, 2)]];
     compiled.pages.forEach((page, index) => {
       files.push([`position-${index}.bin`, bytes(page.position)]);
@@ -1209,21 +1252,36 @@ async function bakeSpineVat(data, alphaMode) {
     parent.destroy();
   }
 }
-function assertRuntimeCanParse(data) {
+function describeSpineVatSource(data) {
+  return { ...describeSkeleton(data), spineVersion: skeletonJson(data)?.skeleton?.spine ?? "", runtimeError: runtimeProblem(data) };
+}
+function skeletonJson(data) {
+  const source = data.skeletonJson;
+  return typeof source === "string" ? JSON.parse(source) : source;
+}
+function describeSkeleton(data) {
+  const json = skeletonJson(data);
+  if (!json) throw new Error("\u53EA\u652F\u6301 Spine JSON \u6570\u636E\uFF0C\u4E0D\u652F\u6301 .skel");
+  return {
+    animations: Object.keys(json.animations ?? {}),
+    bones: (json.bones ?? []).map((bone) => bone.name)
+  };
+}
+function runtimeProblem(data) {
   const animations = data.getRuntimeData(true)?.animations;
   const count = animations?.length ?? 0;
   let ok = count > 0;
   for (let i = 0; ok && i < count; i += 1) ok = Boolean(animations[i]);
-  if (ok) return;
-  const version = data.skeletonJson?.skeleton?.spine ?? "\u672A\u77E5\u7248\u672C";
-  throw new Error(
-    `\u5F15\u64CE\u7684 Spine \u8FD0\u884C\u65F6\u89E3\u6790\u4E0D\u4E86\u8FD9\u4EFD Spine ${version} \u6570\u636E\uFF1A\u70D8\u7119\u8981\u5728 Spine \u9009 4.2 \u7684\u5DE5\u7A0B\u91CC\u505A\uFF08\u9879\u76EE\u8BBE\u7F6E \u2192 \u529F\u80FD\u88C1\u526A \u2192 Spine\uFF0C\u6539\u5B8C\u91CD\u542F\u7F16\u8F91\u5668\uFF09\u3002\u6E38\u620F\u5DE5\u7A0B\u8981\u7559\u5728 3.8 \u7684\u8BDD\uFF0C\u6362\u4E2A 4.2 \u7684\u5DE5\u7A0B\u70D8\u7119\uFF0C\u518D\u628A <\u540D>-vat/ \u76EE\u5F55\u62F7\u8FC7\u6765\uFF0C\u64AD\u653E\u4E0D\u4F9D\u8D56 Spine \u6A21\u5757`
-  );
+  if (ok) return "";
+  const version = skeletonJson(data)?.skeleton?.spine ?? "\u672A\u77E5\u7248\u672C";
+  return `\u5F15\u64CE\u7684 Spine \u8FD0\u884C\u65F6\u89E3\u6790\u4E0D\u4E86\u8FD9\u4EFD Spine ${version} \u6570\u636E\uFF1A\u70D8\u7119\u8981\u5728 Spine \u9009 4.2 \u7684\u5DE5\u7A0B\u91CC\u505A\uFF08\u9879\u76EE\u8BBE\u7F6E \u2192 \u529F\u80FD\u88C1\u526A \u2192 Spine\uFF0C\u6539\u5B8C\u91CD\u542F\u7F16\u8F91\u5668\uFF09\u3002\u6E38\u620F\u5DE5\u7A0B\u8981\u7559\u5728 3.8 \u7684\u8BDD\uFF0C\u6362\u4E2A 4.2 \u7684\u5DE5\u7A0B\u70D8\u7119\uFF0C\u518D\u628A <\u540D>-vat/ \u76EE\u5F55\u62F7\u8FC7\u6765\uFF0C\u64AD\u653E\u4E0D\u4F9D\u8D56 Spine \u6A21\u5757`;
 }
 function bytes(view) {
   return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  bakeSpineVat
+  bakeDefaultsFromManifest,
+  bakeSpineVat,
+  describeSpineVatSource
 });

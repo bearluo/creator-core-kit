@@ -13,7 +13,9 @@
 | `extensions/spine-vat-importer/bake/src/SpineVatFixedBaker.ts` | 去掉剪裁附件的 SkeletonData；逐帧列出画出来的附件和剪裁归属 |
 | `extensions/spine-vat-importer/bake/src/SpineVatFixedLayout.ts` | 纯逻辑：检查规则、分配槽位、切 lane、写帧（`planFixedLayout` / `writeFixedFrame`） |
 | `extensions/spine-vat-importer/bake/src/SpineVatCompilerV2.ts` | 入口 `bakeAndCompileSpineVatV2`，以及纯逻辑的 `compileSpineVatV2`：通道裁剪、分页、生成 manifest |
-| `extensions/spine-vat-importer/bake/src/index.ts` | `bakeSpineVat(data, alphaMode)`：挂临时节点 → 分析 → 编译 → 返回 manifest 与各 `.bin`；由 `scene.js` 的 `bake` 写盘 |
+| `extensions/spine-vat-importer/bake/src/index.ts` | `bakeSpineVat(data, options)`：挂临时节点 → 分析 → 编译 → 返回 manifest 与各 `.bin`；`describeSpineVatSource` 给面板列动画 / 骨骼；由 `scene.js` 的 `bake` / `describeBakeSource` 调用 |
+| `extensions/spine-vat-importer/bake/src/SpineVatBakeOptions.ts` | 纯逻辑：烘焙参数校验，从已有 manifest 读回上次的参数 |
+| `extensions/spine-vat-importer/panels/bake.js` | 烘焙面板（资源右键打开）：选参数、调场景进程烘焙、最后写 manifest 并刷新导入 |
 | `test/extensions/spine-vat-importer/bake/SpineVatFixedLayout.test.ts`、`SpineVatCompilerV2.test.ts` | 槽位、退化、剪裁区、规则；manifest 与静态区 |
 
 ## 采样
@@ -57,7 +59,7 @@ texel(帧, i) = (clip.frameOffset + 帧) × frameStride + i
 |---|---|---|
 | position | `rgba32f`（x, y, u, v） | 总是 |
 | light | `a8`（所有顶点的 RGB 都恒白，只存 alpha）或 `rgba8` | 总是（空槽 alpha 为 0，不会恒白） |
-| dark | `rgba8` | dark 不全为零时 |
+| dark | `rgba8` | tint black 的 RGB 不全为零时（alpha 不算：PMA 下运行时在 dark.a 写 255 作标记，dark.rgb 为 0 时它不影响结果） |
 
 - 每页最多 `4096 × 4096` texel，最多 4 页（shader 固定绑 4 页），超了就报错。三个通道分页方式相同，文件名 `position-N.bin` / `light-N.bin` / `dark-N.bin`。
 - 其他硬限制：总 texel 数 < 2^24（shader 里用 float 做整数寻址）；精确字节数不超过 recipe 的 `maxTextureBytes`；alpha mode 必须明确；Spine 版本必须是 4.2；lane 的贴图 uuid 要能对上 atlas page（完全相等 → 前缀匹配 → atlas 只有一页时取第 0 页）。

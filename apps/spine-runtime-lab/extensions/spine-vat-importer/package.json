@@ -5,6 +5,19 @@
   "version": "1.5.0",
   "description": "Imports spine-vat-2 manifests and provides the spinevat.Skeleton runtime.",
   "main": "./browser.js",
+  "panels": {
+    "bake": {
+      "title": "烘焙 Spine VAT",
+      "type": "simple",
+      "main": "./panels/bake.js",
+      "size": {
+        "width": 420,
+        "height": 600,
+        "min-width": 360,
+        "min-height": 420
+      }
+    }
+  },
   "contributions": {
     "asset-db": {
       "mount": {
@@ -77,6 +90,21 @@
       "drop-vat-scene": {
         "methods": [
           "dropScene"
+        ]
+      },
+      "set-bake-target": {
+        "methods": [
+          "setBakeTarget"
+        ]
+      },
+      "query-bake-target": {
+        "methods": [
+          "queryBakeTarget"
+        ]
+      },
+      "bake-target-changed": {
+        "methods": [
+          "bake.setTarget"
         ]
       }
     }

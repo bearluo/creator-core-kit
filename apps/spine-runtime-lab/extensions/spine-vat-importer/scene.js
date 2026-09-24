@@ -313,12 +313,25 @@ let registered = false;
 
 exports.methods = {
   /**
-   * 资源右键「烘焙 Spine VAT」：.bin 与图集 PNG 写进 outDir，manifest 文本返回给调用方。
+   * 烘焙面板打开时：骨架的动画 / 骨骼、能不能烘，以及从已有产物 manifest 读回的默认参数。
+   * manifestPath 不存在就用默认值（straight、30、全部动画、不选 socket）。
+   */
+  async describeBakeSource(uuid, manifestPath) {
+    const { bakeDefaultsFromManifest, describeSpineVatSource } = require('./bake/dist/bake.js');
+    const source = describeSpineVatSource(await loadAsset(uuid));
+    const fallback = { alphaMode: 'straight', frameRate: 30, animations: source.animations, socketNames: [] };
+    let manifest = null;
+    try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch {}
+    return { source, ...bakeDefaultsFromManifest(manifest, fallback, source) };
+  },
+
+  /**
+   * 烘焙：.bin 与图集 PNG 写进 outDir，manifest 文本返回给调用方。
    * manifest 要等 PNG 导入完（Texture2D 子资源生成）再写，否则同批并行导入时导入器找不到纹理。
    */
-  async bake(uuid, alphaMode, outDir, sourceDir) {
+  async bake(uuid, options, outDir, sourceDir) {
     const { bakeSpineVat } = require('./bake/dist/bake.js');
-    const baked = await bakeSpineVat(await loadAsset(uuid), alphaMode);
+    const baked = await bakeSpineVat(await loadAsset(uuid), options);
     fs.mkdirSync(outDir, { recursive: true });
     let manifest = '';
     for (const [name, content] of baked.files) {
@@ -327,7 +340,7 @@ exports.methods = {
     }
     for (const page of baked.atlasPages) {
       const source = path.join(sourceDir, page);
-      if (!fs.existsSync(source)) throw new Error(`找不到图集纹理 ${source}，manifest 已写出，请手动拷贝`);
+      if (!fs.existsSync(source)) throw new Error(`找不到图集纹理 ${source}，请确认它和 Spine 的 .json 在同一目录`);
       fs.copyFileSync(source, path.join(outDir, page));
     }
     return { manifest, summary: baked.summary };
